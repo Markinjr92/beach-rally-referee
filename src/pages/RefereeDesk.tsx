@@ -13,16 +13,16 @@ import {
   Users,
   Flag,
   Zap,
-  Pause
+  Pause,
+  ArrowLeftRight,
+  UserCheck
 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { Game, GameState, PointCategory } from "@/types/volleyball";
 
-const pointCategories: { value: PointCategory; label: string }[] = [
-  { value: 'ATTACK_WINNER', label: 'Ataque Vencedor' },
-  { value: 'ATTACK_DROP', label: 'Largada' },
-  { value: 'ATTACK_SECOND_BALL', label: 'Ataque 2ª Bola' },
+const mainCategories = [
+  { value: 'ATTACK', label: 'Ataque' },
   { value: 'BLOCK_DIRECT', label: 'Bloqueio Direto' },
   { value: 'ACE', label: 'Ace' },
   { value: 'DEFENSE_DIRECT', label: 'Defesa Direta' },
@@ -30,11 +30,18 @@ const pointCategories: { value: PointCategory; label: string }[] = [
   { value: 'ERROR_SERVE', label: 'Erro Saque Adversário' }
 ];
 
+const attackSubcategories: { value: PointCategory; label: string }[] = [
+  { value: 'ATTACK_WINNER', label: 'Super Ataque' },
+  { value: 'ATTACK_DROP', label: 'Largada/Cut' },
+  { value: 'ATTACK_SECOND_BALL', label: 'Bola de 2ª' }
+];
+
 export default function RefereeDesk() {
   const { gameId } = useParams();
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showPointCategories, setShowPointCategories] = useState<'A' | 'B' | null>(null);
+  const [showAttackSubcategories, setShowAttackSubcategories] = useState<'A' | 'B' | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
 
   useEffect(() => {
@@ -66,13 +73,25 @@ export default function RefereeDesk() {
       newScores.teamB[currentSet]++;
     }
 
+    // Auto-rotate server after point (maintaining dynamic rotation)
+    let newGameState = { ...gameState };
+    if (gameState.currentServerTeam === team) {
+      // Same team scored, rotate server within team
+      const maxPlayers = game.modality === 'dupla' ? 2 : 4;
+      newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
+    } else {
+      // Different team scored, change server team and start with player 1
+      newGameState.currentServerTeam = team;
+      newGameState.currentServerPlayer = 1;
+    }
+
     // Check for side switch
     const totalPoints = newScores.teamA[currentSet] + newScores.teamB[currentSet];
     const sideSwitchSum = game.sideSwitchSum[currentSet];
     const shouldSwitch = totalPoints > 0 && totalPoints % sideSwitchSum === 0;
 
     setGameState({
-      ...gameState,
+      ...newGameState,
       scores: newScores,
       leftIsTeamA: shouldSwitch ? !gameState.leftIsTeamA : gameState.leftIsTeamA,
       sidesSwitched: shouldSwitch ? 
@@ -81,6 +100,38 @@ export default function RefereeDesk() {
     });
 
     setShowPointCategories(null);
+    setShowAttackSubcategories(null);
+  };
+
+  const handleCategorySelection = (team: 'A' | 'B', category: string) => {
+    if (category === 'ATTACK') {
+      setShowPointCategories(null);
+      setShowAttackSubcategories(team);
+    } else {
+      addPoint(team, category as PointCategory);
+    }
+  };
+
+  const switchServerTeam = () => {
+    if (!gameState) return;
+    
+    setGameState({
+      ...gameState,
+      currentServerTeam: gameState.currentServerTeam === 'A' ? 'B' : 'A',
+      currentServerPlayer: 1 // Reset to first player when switching teams
+    });
+  };
+
+  const changeCurrentServer = () => {
+    if (!gameState || !game) return;
+    
+    const maxPlayers = game.modality === 'dupla' ? 2 : 4;
+    const nextPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
+    
+    setGameState({
+      ...gameState,
+      currentServerPlayer: nextPlayer
+    });
   };
 
   const removePoint = (team: 'A' | 'B') => {
@@ -317,6 +368,27 @@ export default function RefereeDesk() {
               >
                 Tempo Médico (5min)
               </Button>
+              <div className="space-y-2">
+                <div className="text-sm font-medium mb-2">Controles de Override:</div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={switchServerTeam}
+                >
+                  <ArrowLeftRight className="mr-2" size={16} />
+                  Trocar Posse ({gameState.currentServerTeam === 'A' ? 'B' : 'A'})
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={changeCurrentServer}
+                >
+                  <UserCheck className="mr-2" size={16} />
+                  Próximo Sacador ({gameState.currentServerTeam} - {((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})
+                </Button>
+              </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1">
                   <RotateCcw className="mr-2" size={16} />
@@ -372,11 +444,11 @@ export default function RefereeDesk() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-2">
-                  {pointCategories.map((category) => (
+                  {mainCategories.map((category) => (
                     <Button
                       key={category.value}
                       variant="outline"
-                      onClick={() => addPoint(showPointCategories, category.value)}
+                      onClick={() => handleCategorySelection(showPointCategories, category.value)}
                       className="text-left justify-start"
                     >
                       {category.label}
@@ -387,6 +459,40 @@ export default function RefereeDesk() {
                   variant="outline" 
                   className="w-full mt-4"
                   onClick={() => setShowPointCategories(null)}
+                >
+                  Cancelar
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Attack Subcategory Modal */}
+        {showAttackSubcategories && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>
+                  Tipo de Ataque - {showAttackSubcategories === 'A' ? game.teamA.name : game.teamB.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-2">
+                  {attackSubcategories.map((subcategory) => (
+                    <Button
+                      key={subcategory.value}
+                      variant="outline"
+                      onClick={() => addPoint(showAttackSubcategories, subcategory.value)}
+                      className="text-left justify-start"
+                    >
+                      {subcategory.label}
+                    </Button>
+                  ))}
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full mt-4"
+                  onClick={() => setShowAttackSubcategories(null)}
                 >
                   Cancelar
                 </Button>
