@@ -43,6 +43,7 @@ export default function RefereeDesk() {
   const [showPointCategories, setShowPointCategories] = useState<'A' | 'B' | null>(null);
   const [showAttackSubcategories, setShowAttackSubcategories] = useState<'A' | 'B' | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
+  const [showSideSwitchAlert, setShowSideSwitchAlert] = useState(false);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -89,6 +90,12 @@ export default function RefereeDesk() {
     const totalPoints = newScores.teamA[currentSet] + newScores.teamB[currentSet];
     const sideSwitchSum = game.sideSwitchSum[currentSet];
     const shouldSwitch = totalPoints > 0 && totalPoints % sideSwitchSum === 0;
+
+    if (shouldSwitch) {
+      setShowSideSwitchAlert(true);
+      // Auto hide alert after 3 seconds
+      setTimeout(() => setShowSideSwitchAlert(false), 3000);
+    }
 
     setGameState({
       ...newGameState,
@@ -432,6 +439,20 @@ export default function RefereeDesk() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Side Switch Alert */}
+        {showSideSwitchAlert && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+            <Card className="bg-timeout text-white shadow-lg animate-pulse">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-lg font-bold">
+                  <Flag size={24} />
+                  TROCA DE QUADRA!
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Point Category Modal */}
         {showPointCategories && (
