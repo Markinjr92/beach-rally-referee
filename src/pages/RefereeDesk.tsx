@@ -117,30 +117,6 @@ export default function RefereeDesk() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const switchServerTeam = () => {
-    if (!gameState) return;
-
-    const newServerTeam = gameState.currentServerTeam === 'A' ? 'B' : 'A';
-    setGameState({
-      ...gameState,
-      currentServerTeam: newServerTeam,
-      currentServerPlayer: 1 // Reset to player 1 when switching teams
-    });
-  };
-
-  const changeServerPlayer = () => {
-    if (!gameState || !game) return;
-
-    const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-    const currentPlayer = gameState.currentServerPlayer;
-    const nextPlayer = currentPlayer >= maxPlayers ? 1 : currentPlayer + 1;
-    
-    setGameState({
-      ...gameState,
-      currentServerPlayer: nextPlayer
-    });
-  };
-
   if (!game || !gameState) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -341,29 +317,6 @@ export default function RefereeDesk() {
               >
                 Tempo Médico (5min)
               </Button>
-              <div className="border-t pt-4 space-y-2">
-                <h4 className="text-sm font-semibold text-muted-foreground">Controles de Override</h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={switchServerTeam}
-                    className="text-xs"
-                  >
-                    <Flag className="mr-1" size={14} />
-                    Trocar Posse
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={changeServerPlayer}
-                    className="text-xs"
-                  >
-                    <Users className="mr-1" size={14} />
-                    Trocar Sacador
-                  </Button>
-                </div>
-              </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1">
                   <RotateCcw className="mr-2" size={16} />
