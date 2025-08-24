@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, Users, Trophy } from "lucide-react";
+import { Calendar, MapPin, Users, Trophy, Plus, Settings, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { mockTournaments } from "@/data/mockData";
 
@@ -23,6 +23,22 @@ export default function TournamentList() {
           <p className="text-xl text-muted-foreground">
             Acompanhe os torneios e jogos em tempo real
           </p>
+        </div>
+
+        {/* Tournament Management Actions */}
+        <div className="mb-8 flex flex-wrap gap-4 justify-center">
+          <Button className="flex items-center gap-2">
+            <Plus size={20} />
+            Criar Novo Torneio
+          </Button>
+          <Button variant="outline" className="flex items-center gap-2">
+            <Settings size={20} />
+            Gerenciar Formatos
+          </Button>
+          <Button variant="outline" className="flex items-center gap-2">
+            <FileText size={20} />
+            Relatórios
+          </Button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -76,11 +92,17 @@ export default function TournamentList() {
                     ))}
                   </div>
 
-                  <Link to={`/tournament/${tournament.id}`}>
-                    <Button className="w-full" variant="default">
-                      Ver Torneio
+                  <div className="flex gap-2">
+                    <Link to={`/tournament/${tournament.id}`} className="flex-1">
+                      <Button className="w-full" variant="default">
+                        Ver Torneio
+                      </Button>
+                    </Link>
+                    <Button variant="outline" size="sm" className="flex items-center gap-1">
+                      <Settings size={16} />
+                      Gerenciar
                     </Button>
-                  </Link>
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -44,6 +44,7 @@ export default function RefereeDesk() {
   const [showAttackSubcategories, setShowAttackSubcategories] = useState<'A' | 'B' | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
   const [showSideSwitchAlert, setShowSideSwitchAlert] = useState(false);
+  const [gameHistory, setGameHistory] = useState<GameState[]>([]);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -74,6 +75,9 @@ export default function RefereeDesk() {
       newScores.teamB[currentSet]++;
     }
 
+    // Save current state to history before making changes
+    setGameHistory(prev => [...prev, { ...gameState }]);
+
     // Auto-rotate server after point (maintaining dynamic rotation)
     let newGameState = { ...gameState };
     if (gameState.currentServerTeam === team) {
@@ -81,9 +85,11 @@ export default function RefereeDesk() {
       const maxPlayers = game.modality === 'dupla' ? 2 : 4;
       newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
     } else {
-      // Different team scored, change server team and start with player 1
+      // Different team scored, change server team and rotate to next player
       newGameState.currentServerTeam = team;
-      newGameState.currentServerPlayer = 1;
+      // When switching teams, start with the next player in rotation for the new serving team
+      const maxPlayers = game.modality === 'dupla' ? 2 : 4;
+      newGameState.currentServerPlayer = 1; // Start rotation from player 1 for new serving team
     }
 
     // Check for side switch
@@ -122,6 +128,9 @@ export default function RefereeDesk() {
   const switchServerTeam = () => {
     if (!gameState) return;
     
+    // Save current state to history
+    setGameHistory(prev => [...prev, { ...gameState }]);
+    
     setGameState({
       ...gameState,
       currentServerTeam: gameState.currentServerTeam === 'A' ? 'B' : 'A',
@@ -132,6 +141,9 @@ export default function RefereeDesk() {
   const changeCurrentServer = () => {
     if (!gameState || !game) return;
     
+    // Save current state to history
+    setGameHistory(prev => [...prev, { ...gameState }]);
+    
     const maxPlayers = game.modality === 'dupla' ? 2 : 4;
     const nextPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
     
@@ -141,22 +153,12 @@ export default function RefereeDesk() {
     });
   };
 
-  const removePoint = (team: 'A' | 'B') => {
-    if (!gameState) return;
-
-    const newScores = { ...gameState.scores };
-    const currentSet = gameState.currentSet - 1;
+  const undoLastAction = () => {
+    if (gameHistory.length === 0) return;
     
-    if (team === 'A' && newScores.teamA[currentSet] > 0) {
-      newScores.teamA[currentSet]--;
-    } else if (team === 'B' && newScores.teamB[currentSet] > 0) {
-      newScores.teamB[currentSet]--;
-    }
-
-    setGameState({
-      ...gameState,
-      scores: newScores
-    });
+    const lastState = gameHistory[gameHistory.length - 1];
+    setGameState(lastState);
+    setGameHistory(prev => prev.slice(0, -1));
   };
 
   const startTimeout = (type: 'team' | 'technical' | 'medical', team?: 'A' | 'B') => {
@@ -299,14 +301,6 @@ export default function RefereeDesk() {
                   >
                     <Plus size={24} />
                   </ScoreButton>
-                  <ScoreButton
-                    variant="undo"
-                    size="lg"
-                    onClick={() => removePoint(leftTeam)}
-                    className="w-full"
-                  >
-                    <Minus size={20} />
-                  </ScoreButton>
                 </div>
                 <div className="space-y-2">
                   <h4 className="font-semibold">{rightTeam === 'A' ? game.teamA.name : game.teamB.name}</h4>
@@ -317,14 +311,6 @@ export default function RefereeDesk() {
                     className="w-full"
                   >
                     <Plus size={24} />
-                  </ScoreButton>
-                  <ScoreButton
-                    variant="undo"
-                    size="lg"
-                    onClick={() => removePoint(rightTeam)}
-                    className="w-full"
-                  >
-                    <Minus size={20} />
                   </ScoreButton>
                 </div>
               </div>
@@ -397,13 +383,15 @@ export default function RefereeDesk() {
                 </Button>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={undoLastAction}
+                  disabled={gameHistory.length === 0}
+                >
                   <RotateCcw className="mr-2" size={16} />
-                  Desfazer
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1">
-                  <RotateCw className="mr-2" size={16} />
-                  Refazer
+                  Desfazer ({gameHistory.length})
                 </Button>
               </div>
             </CardContent>
