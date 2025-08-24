@@ -78,18 +78,30 @@ export default function RefereeDesk() {
     // Save current state to history before making changes
     setGameHistory(prev => [...prev, { ...gameState }]);
 
-    // Auto-rotate server after point (maintaining dynamic rotation)
+    // Handle server rotation based on possession change
     let newGameState = { ...gameState };
-    if (gameState.currentServerTeam === team) {
-      // Same team scored, rotate server within team
-      const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-      newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
-    } else {
-      // Different team scored, change server team and rotate to next player
+    
+    // Only change server if possession changes (different team scored)
+    if (gameState.possession !== team) {
+      // Possession changes - new team gains serve
       newGameState.currentServerTeam = team;
-      // When switching teams, start with the next player in rotation for the new serving team
+      newGameState.possession = team;
+      
+      // Find the next player who should serve for this team
+      // The rule is: the partner who didn't serve last
       const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-      newGameState.currentServerPlayer = 1; // Start rotation from player 1 for new serving team
+      
+      // For the new serving team, start with player 1 or rotate to next
+      if (gameState.currentServerTeam !== team) {
+        // Complete team change - start with player 1
+        newGameState.currentServerPlayer = 1;
+      } else {
+        // Same team regains serve - rotate to next player
+        newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
+      }
+    } else {
+      // Same team continues - no server change, just update possession
+      newGameState.possession = team;
     }
 
     // Check for side switch
