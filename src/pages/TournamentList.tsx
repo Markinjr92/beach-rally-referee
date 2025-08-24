@@ -1,11 +1,25 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, MapPin, Users, Trophy, Plus, Settings, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { mockTournaments } from "@/data/mockData";
+import { useState } from "react";
 
 export default function TournamentList() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    location: '',
+    startDate: '',
+    endDate: '',
+    category: '',
+    modality: ''
+  });
   // Show only tournaments with active or scheduled games
   const activeTournaments = mockTournaments.filter(
     tournament => tournament.status === 'active' && 
@@ -27,10 +41,106 @@ export default function TournamentList() {
 
         {/* Tournament Management Actions */}
         <div className="mb-8 flex flex-wrap gap-4 justify-center">
-          <Button className="flex items-center gap-2">
-            <Plus size={20} />
-            Criar Novo Torneio
-          </Button>
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus size={20} />
+                Criar Novo Torneio
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Criar Novo Torneio</DialogTitle>
+                <DialogDescription>
+                  Preencha as informações básicas do torneio
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Nome do Torneio</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    placeholder="Ex: Campeonato Brasileiro 2024"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="location">Local</Label>
+                  <Input
+                    id="location"
+                    value={formData.location}
+                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                    placeholder="Ex: Copacabana, Rio de Janeiro"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="startDate">Data de Início</Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="endDate">Data de Fim</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Categoria</Label>
+                    <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Categoria" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background border border-border">
+                        <SelectItem value="M">Masculino</SelectItem>
+                        <SelectItem value="F">Feminino</SelectItem>
+                        <SelectItem value="Misto">Misto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Modalidade</Label>
+                    <Select value={formData.modality} onValueChange={(value) => setFormData({...formData, modality: value})}>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Modalidade" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background border border-border">
+                        <SelectItem value="dupla">Dupla</SelectItem>
+                        <SelectItem value="quarteto">Quarteto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={() => {
+                    // TODO: Implement tournament creation logic
+                    console.log('Creating tournament:', formData);
+                    setShowCreateDialog(false);
+                    setFormData({name: '', location: '', startDate: '', endDate: '', category: '', modality: ''});
+                  }}>
+                    Criar Torneio
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button variant="outline" className="flex items-center gap-2">
             <Settings size={20} />
             Gerenciar Formatos
