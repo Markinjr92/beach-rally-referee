@@ -87,20 +87,18 @@ export default function RefereeDesk() {
       newGameState.currentServerTeam = team;
       newGameState.possession = team;
       
-      // Find the next player who should serve for this team
-      // The rule is: the partner who didn't serve last
+      // When a team gains serve, always rotate to next player in that team
       const maxPlayers = game.modality === 'dupla' ? 2 : 4;
       
-      // For the new serving team, start with player 1 or rotate to next
-      if (gameState.currentServerTeam !== team) {
-        // Complete team change - start with player 1
-        newGameState.currentServerPlayer = 1;
-      } else {
+      if (gameState.currentServerTeam === team) {
         // Same team regains serve - rotate to next player
         newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
+      } else {
+        // Different team gains serve - start with player 1
+        newGameState.currentServerPlayer = 1;
       }
     } else {
-      // Same team continues - no server change, just update possession
+      // Same team continues scoring - no server change, just update possession
       newGameState.possession = team;
     }
 
