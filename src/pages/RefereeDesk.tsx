@@ -83,14 +83,17 @@ export default function RefereeDesk() {
     
     // Only change server if possession changes (different team scored)
     if (gameState.possession !== team) {
+      // Store previous serving team for comparison
+      const previousServerTeam = gameState.currentServerTeam;
+      
       // Possession changes - new team gains serve
       newGameState.currentServerTeam = team;
       newGameState.possession = team;
       
-      // When a team gains serve, always rotate to next player in that team
+      // When a team gains serve, rotate to next player in that team
       const maxPlayers = game.modality === 'dupla' ? 2 : 4;
       
-      if (gameState.currentServerTeam === team) {
+      if (previousServerTeam === team) {
         // Same team regains serve - rotate to next player
         newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
       } else {
