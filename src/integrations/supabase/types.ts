@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      password_resets: {
+        Row: {
+          id: string
+          reason: string | null
+          reset_at: string | null
+          reset_by: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          reason?: string | null
+          reset_at?: string | null
+          reset_by?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          reason?: string | null
+          reset_at?: string | null
+          reset_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       permissions: {
         Row: {
           created_at: string | null

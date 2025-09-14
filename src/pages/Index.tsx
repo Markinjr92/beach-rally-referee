@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { PasswordResetPanel } from "@/components/admin/PasswordResetPanel";
 
 const Index = () => {
   const { user, loading } = useAuth();
@@ -129,6 +130,11 @@ const Index = () => {
                   </Link>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Admin Panel */}
+            <div className="mb-16">
+              <PasswordResetPanel />
             </div>
 
             {/* Features List */}
