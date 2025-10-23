@@ -7,8 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, MapPin, Users, Trophy, Plus, Settings, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
-import { mockTournaments } from "@/data/mockData";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
+import { Tables } from "@/integrations/supabase/types";
+
+type TournamentRow = Tables<'tournaments'>
 
 export default function TournamentList() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -20,11 +24,24 @@ export default function TournamentList() {
     category: '',
     modality: ''
   });
-  // Show only tournaments with active or scheduled games
-  const activeTournaments = mockTournaments.filter(
-    tournament => tournament.status === 'active' && 
-    tournament.games.some(game => game.status === 'agendado' || game.status === 'em_andamento')
-  );
+  const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        toast({ title: 'Erro ao carregar torneios', description: error.message })
+      } else {
+        setTournaments(data || [])
+      }
+    }
+    load()
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -129,11 +146,27 @@ export default function TournamentList() {
                   <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={() => {
-                    // TODO: Implement tournament creation logic
-                    console.log('Creating tournament:', formData);
-                    setShowCreateDialog(false);
-                    setFormData({name: '', location: '', startDate: '', endDate: '', category: '', modality: ''});
+                  <Button onClick={async () => {
+                    const payload = {
+                      name: formData.name,
+                      location: formData.location || null,
+                      start_date: formData.startDate || null,
+                      end_date: formData.endDate || null,
+                      category: formData.category || null,
+                      modality: formData.modality || null,
+                      status: 'active',
+                    } as const
+
+                    const { error } = await supabase.from('tournaments').insert(payload)
+                    if (error) {
+                      toast({ title: 'Erro ao criar torneio', description: error.message })
+                    } else {
+                      toast({ title: 'Torneio criado' })
+                      setShowCreateDialog(false)
+                      setFormData({name: '', location: '', startDate: '', endDate: '', category: '', modality: ''})
+                      const { data } = await supabase.from('tournaments').select('*').order('created_at', { descending: true })
+                      setTournaments(data || [])
+                    }
                   }}>
                     Criar Torneio
                   </Button>
@@ -152,7 +185,7 @@ export default function TournamentList() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {activeTournaments.map((tournament) => (
+          {tournaments.map((tournament) => (
             <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -164,15 +197,15 @@ export default function TournamentList() {
                     </CardDescription>
                     <CardDescription className="flex items-center gap-2">
                       <Calendar size={16} />
-                      {new Date(tournament.startDate).toLocaleDateString('pt-BR')} - {' '}
-                      {new Date(tournament.endDate).toLocaleDateString('pt-BR')}
+                      {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('pt-BR') : '-'} - {' '}
+                      {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString('pt-BR') : '-'}
                     </CardDescription>
                   </div>
                   <Badge 
                     variant={tournament.status === 'active' ? 'default' : 'secondary'}
                     className="bg-serving text-white"
                   >
-                    {tournament.status === 'active' ? 'Ativo' : 'Em breve'}
+                    {tournament.status === 'active' ? 'Ativo' : (tournament.status === 'completed' ? 'Finalizado' : 'Em breve')}
                   </Badge>
                 </div>
               </CardHeader>
@@ -180,7 +213,7 @@ export default function TournamentList() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Users size={16} />
-                    <span>{tournament.games.length} jogos programados</span>
+                    <span>Torneio</span>
                   </div>
                   
                   <div className="space-y-2">

@@ -6,12 +6,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
-import TournamentList from "./pages/TournamentList";
-import TournamentDetail from "./pages/TournamentDetail";
+import TournamentsDB from "./pages/TournamentsDB";
+import TournamentDetailDB from "./pages/TournamentDetailDB";
 import RefereeDesk from "./pages/RefereeDesk";
 import PublicScoreboard from "./pages/PublicScoreboard";
 import SpectatorView from "./pages/SpectatorView";
 import NotFound from "./pages/NotFound";
+import LiveMatches from "./pages/LiveMatches";
 
 const queryClient = new QueryClient();
 
@@ -24,11 +25,12 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/tournaments" element={<TournamentList />} />
-            <Route path="/tournament/:tournamentId" element={<TournamentDetail />} />
+            <Route path="/tournaments" element={<TournamentsDB />} />
+            <Route path="/tournament/:tournamentId" element={<TournamentDetailDB />} />
             <Route path="/referee/:gameId" element={<RefereeDesk />} />
             <Route path="/scoreboard/:gameId" element={<PublicScoreboard />} />
             <Route path="/spectator/:gameId" element={<SpectatorView />} />
+            <Route path="/live" element={<LiveMatches />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

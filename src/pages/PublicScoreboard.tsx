@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Zap, Trophy } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
+import { supabase } from "@/integrations/supabase/client";
 import { Game, GameState } from "@/types/volleyball";
 
 export default function PublicScoreboard() {
@@ -15,7 +16,56 @@ export default function PublicScoreboard() {
     if (foundGame) {
       setGame(foundGame);
       setGameState(foundGame.gameState || null);
+      return;
     }
+
+    const loadFromDB = async () => {
+      if (!gameId) return;
+      const { data: match } = await supabase.from('matches').select('*').eq('id', gameId).single();
+      if (!match) return;
+      const { data: teams } = await supabase.from('teams').select('*').in('id', [match.team_a_id, match.team_b_id]);
+      const teamA = teams?.find(t => t.id === match.team_a_id);
+      const teamB = teams?.find(t => t.id === match.team_b_id);
+      const newGame: Game = {
+        id: match.id,
+        tournamentId: match.tournament_id,
+        title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
+        category: 'Misto',
+        modality: (match.modality as any) || 'dupla',
+        format: 'melhorDe3',
+        teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
+        teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
+        pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+        needTwoPointLead: true,
+        sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+        hasTechnicalTimeout: false,
+        technicalTimeoutSum: 0,
+        teamTimeoutsPerSet: 2,
+        teamTimeoutDurationSec: 30,
+        coinTossMode: 'initialThenAlternate',
+        status: match.status === 'in_progress' ? 'em_andamento' : match.status === 'completed' ? 'finalizado' : 'agendado',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setGame(newGame);
+      setGameState({
+        id: `${match.id}-state`,
+        gameId: match.id,
+        currentSet: 1,
+        setsWon: { teamA: 0, teamB: 0 },
+        scores: { teamA: [0, 0, 0], teamB: [0, 0, 0] },
+        currentServerTeam: 'A',
+        currentServerPlayer: 1,
+        possession: 'A',
+        leftIsTeamA: true,
+        timeoutsUsed: { teamA: [0, 0, 0], teamB: [0, 0, 0] },
+        technicalTimeoutUsed: [false, false, false],
+        sidesSwitched: [0, 0, 0],
+        events: [],
+        isGameEnded: false,
+      });
+    };
+    loadFromDB();
   }, [gameId]);
 
   if (!game || !gameState) {
