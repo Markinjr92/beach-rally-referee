@@ -16,12 +16,13 @@ import {
   ArrowLeftRight,
   Coins,
   UserCheck,
-  Stethoscope
+  Stethoscope,
+  Square
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
-import { Game, GameState, PointCategory } from "@/types/volleyball";
+import { Game, GameState, PointCategory, Timer } from "@/types/volleyball";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,15 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  buildTimer,
+  calculateRemainingSeconds,
+  createDefaultGameState,
+  mapGameStateToRow,
+  mapRowToGameState,
+} from "@/lib/matchState";
+import type { MatchStateRow } from "@/lib/matchState";
 
 type CoinSide = "heads" | "tails";
 
@@ -49,6 +59,7 @@ const coinLabels: Record<CoinSide, string> = {
 export default function RefereeDesk() {
   const { gameId } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showPointCategories, setShowPointCategories] = useState<'A' | 'B' | null>(null);
@@ -58,9 +69,12 @@ export default function RefereeDesk() {
   const [coinDialogOpen, setCoinDialogOpen] = useState(false);
   const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
   const [isFlippingCoin, setIsFlippingCoin] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const lastCompletedTimeoutId = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -117,19 +131,146 @@ export default function RefereeDesk() {
 
   const coinResultLabel = useMemo(() => (coinResult ? coinLabels[coinResult] : null), [coinResult]);
 
+  const snapshotState = useCallback((state: GameState): GameState => {
+    return JSON.parse(JSON.stringify(state)) as GameState;
+  }, []);
+
+  const persistState = useCallback(
+    async (newState: GameState, options?: { skipLocalUpdate?: boolean }) => {
+      const previousState = gameState ? snapshotState(gameState) : null;
+      if (!options?.skipLocalUpdate) {
+        setGameState(newState);
+      }
+
+      setIsSyncing(true);
+      try {
+        const payload = mapGameStateToRow(newState);
+        const { error } = await supabase
+          .from('match_states')
+          .upsert(payload, { onConflict: 'match_id', ignoreDuplicates: false, returning: 'minimal' });
+        if (error) {
+          throw error;
+        }
+      } catch (error) {
+        console.error('Failed to persist match state', error);
+        toast({
+          title: 'Erro ao salvar estado do jogo',
+          description: error instanceof Error ? error.message : 'Erro desconhecido ao salvar os dados.',
+          variant: 'destructive',
+        });
+        if (previousState && !options?.skipLocalUpdate) {
+          setGameState(previousState);
+        }
+        throw error;
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [gameState, snapshotState, toast]
+  );
+
+  const logMatchEvent = useCallback(
+    async (params: {
+      eventType: string;
+      team?: 'A' | 'B';
+      pointCategory?: PointCategory;
+      description?: string;
+      metadata?: Record<string, unknown>;
+      setNumber?: number;
+    }) => {
+      if (!gameId) return;
+      const { eventType, team, pointCategory, description, metadata, setNumber } = params;
+      const { error } = await supabase.from('match_events').insert({
+        match_id: gameId,
+        set_number: setNumber ?? gameState?.currentSet ?? null,
+        event_type: eventType,
+        team: team ?? null,
+        point_category: pointCategory ?? null,
+        description: description ?? null,
+        metadata: metadata ?? null,
+      });
+      if (error) {
+        console.error('Failed to log match event', error);
+      }
+    },
+    [gameId, gameState?.currentSet]
+  );
+
+  const finalizeTimeout = useCallback(
+    async (activeTimer: NonNullable<GameState['activeTimer']>) => {
+      if (!gameState) return;
+      if (lastCompletedTimeoutId.current === activeTimer.id) {
+        return;
+      }
+      lastCompletedTimeoutId.current = activeTimer.id;
+
+      if (gameState.activeTimer && gameState.activeTimer.id !== activeTimer.id) {
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('match_timeouts')
+          .update({ ended_at: new Date().toISOString() })
+          .eq('id', activeTimer.id);
+        if (error) {
+          throw error;
+        }
+      } catch (error) {
+        console.error('Failed to close timeout record', error);
+      }
+
+      const updatedState: GameState = {
+        ...snapshotState(gameState),
+        activeTimer: null,
+      };
+
+      try {
+        await persistState(updatedState);
+        await logMatchEvent({
+          eventType: 'TIMEOUT_ENDED',
+          team: activeTimer.team,
+          metadata: {
+            type: activeTimer.type,
+            durationSec: activeTimer.durationSec,
+          },
+        });
+      } catch (error) {
+        // Errors already surfaced in persistState
+      }
+    },
+    [gameState, logMatchEvent, persistState, snapshotState]
+  );
+
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
     if (foundGame) {
       setGame(foundGame);
-      setGameState(foundGame.gameState || null);
+      setGameHistory([]);
+      setGameState(foundGame.gameState || createDefaultGameState(foundGame));
+      setIsLoading(false);
       return;
     }
 
     const loadFromDB = async () => {
       if (!gameId) return;
-      const { data: match } = await supabase.from('matches').select('*').eq('id', gameId).single();
-      if (!match) return;
-      const { data: teams } = await supabase.from('teams').select('*').in('id', [match.team_a_id, match.team_b_id]);
+      setIsLoading(true);
+      setGameHistory([]);
+      const { data: match, error: matchError } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+      if (matchError || !match) {
+        console.error('Match not found', matchError);
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: teams } = await supabase
+        .from('teams')
+        .select('*')
+        .in('id', [match.team_a_id, match.team_b_id]);
       const teamA = teams?.find(t => t.id === match.team_a_id);
       const teamB = teams?.find(t => t.id === match.team_b_id);
       const newGame: Game = {
@@ -154,46 +295,94 @@ export default function RefereeDesk() {
         updatedAt: new Date().toISOString(),
       };
       setGame(newGame);
-      setGameState({
-        id: `${match.id}-state`,
-        gameId: match.id,
-        currentSet: 1,
-        setsWon: { teamA: 0, teamB: 0 },
-        scores: { teamA: [0, 0, 0], teamB: [0, 0, 0] },
-        currentServerTeam: 'A',
-        currentServerPlayer: 1,
-        possession: 'A',
-        leftIsTeamA: true,
-        timeoutsUsed: { teamA: [0, 0, 0], teamB: [0, 0, 0] },
-        technicalTimeoutUsed: [false, false, false],
-        sidesSwitched: [0, 0, 0],
-        events: [],
-        isGameEnded: false,
-      });
+
+      const { data: existingState } = await supabase
+        .from('match_states')
+        .select('*')
+        .eq('match_id', match.id)
+        .maybeSingle();
+
+      if (existingState) {
+        setGameState(mapRowToGameState(existingState as MatchStateRow, newGame));
+      } else {
+        const defaultState = createDefaultGameState(newGame);
+        setGameState(defaultState);
+        try {
+          await supabase
+            .from('match_states')
+            .upsert(mapGameStateToRow(defaultState), { onConflict: 'match_id', returning: 'minimal' });
+        } catch (error) {
+          console.error('Failed to create default match state', error);
+        }
+      }
 
       if (match.status === 'scheduled') {
         await supabase.from('matches').update({ status: 'in_progress' }).eq('id', match.id);
       }
+
+      setIsLoading(false);
     };
-    loadFromDB();
+
+    void loadFromDB();
   }, [gameId]);
 
   useEffect(() => {
-    if (timer && timer > 0) {
-      const interval = setInterval(() => {
-        setTimer(prev => prev ? prev - 1 : 0);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [timer]);
+    if (!gameId || !game) return;
+
+    const channel = supabase
+      .channel(`match-state-${gameId}`)
+      .on<MatchStateRow>('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'match_states',
+        filter: `match_id=eq.${gameId}`,
+      }, payload => {
+        if (payload.new) {
+          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
+        }
+      })
+      .on<MatchStateRow>('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'match_states',
+        filter: `match_id=eq.${gameId}`,
+      }, payload => {
+        if (payload.new) {
+          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [gameId, game]);
 
   useEffect(() => {
-    if (timer === 0) {
-      playAlert('timeout');
-      const timeoutId = setTimeout(() => setTimer(null), 600);
-      return () => clearTimeout(timeoutId);
+    if (!gameState?.activeTimer) {
+      setTimer(null);
+      lastCompletedTimeoutId.current = null;
+      return;
     }
-  }, [playAlert, timer]);
+
+    if (lastCompletedTimeoutId.current && lastCompletedTimeoutId.current !== gameState.activeTimer.id) {
+      lastCompletedTimeoutId.current = null;
+    }
+
+    const updateTimer = () => {
+      const remaining = calculateRemainingSeconds(gameState.activeTimer);
+      setTimer(remaining);
+      if (remaining === 0 && lastCompletedTimeoutId.current !== gameState.activeTimer?.id) {
+        lastCompletedTimeoutId.current = gameState.activeTimer?.id ?? null;
+        playAlert('timeout');
+        void finalizeTimeout(gameState.activeTimer);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [finalizeTimeout, gameState?.activeTimer, playAlert]);
 
   useEffect(() => {
     if (timer !== null) {
@@ -213,109 +402,227 @@ export default function RefereeDesk() {
     }
   }, [playAlert, showSideSwitchAlert]);
 
-  const addPoint = (team: 'A' | 'B', category: PointCategory) => {
-    if (!gameState || !game || timer !== null) return;
-
-    const newScores = { ...gameState.scores };
-    const currentSet = gameState.currentSet - 1;
-    
-    if (team === 'A') {
-      newScores.teamA[currentSet]++;
-    } else {
-      newScores.teamB[currentSet]++;
+  const addPoint = async (team: 'A' | 'B', category: PointCategory) => {
+    if (!gameState || !game || timer !== null || isSyncing) return;
+    if (gameState.isGameEnded) {
+      toast({
+        title: 'Partida já finalizada',
+        description: 'Não é possível adicionar pontos após o término do jogo.',
+        variant: 'destructive',
+      });
+      return;
     }
 
-    // Save current state to history before making changes
-    setGameHistory(prev => [...prev, { ...gameState }]);
+    const previousState = snapshotState(gameState);
+    setGameHistory(prev => [...prev, previousState]);
 
-    // Handle server rotation based on possession change
-    const newGameState = { ...gameState };
-    
-    // Only change server if possession changes (different team scored)
-    if (gameState.possession !== team) {
-      // Store previous serving team for comparison
-      const previousServerTeam = gameState.currentServerTeam;
-      
-      // Possession changes - new team gains serve
-      newGameState.currentServerTeam = team;
-      newGameState.possession = team;
-      
-      // When a team gains serve, rotate to next player in that team
+    const currentSet = previousState.currentSet - 1;
+    const updatedScores = {
+      teamA: [...previousState.scores.teamA],
+      teamB: [...previousState.scores.teamB],
+    };
+
+    if (team === 'A') {
+      updatedScores.teamA[currentSet]++;
+    } else {
+      updatedScores.teamB[currentSet]++;
+    }
+
+    const updatedState: GameState = {
+      ...previousState,
+      scores: updatedScores,
+    };
+
+    if (previousState.possession !== team) {
+      const previousServerTeam = previousState.currentServerTeam;
+      updatedState.currentServerTeam = team;
+      updatedState.possession = team;
+
       const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-      
       if (previousServerTeam === team) {
-        // Same team regains serve - rotate to next player
-        newGameState.currentServerPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
+        updatedState.currentServerPlayer = (previousState.currentServerPlayer % maxPlayers) + 1;
       } else {
-        // Different team gains serve - start with player 1
-        newGameState.currentServerPlayer = 1;
+        updatedState.currentServerPlayer = 1;
       }
     } else {
-      // Same team continues scoring - no server change, just update possession
-      newGameState.possession = team;
+      updatedState.possession = team;
     }
 
-    // Check for side switch
-    const totalPoints = newScores.teamA[currentSet] + newScores.teamB[currentSet];
-    const sideSwitchSum = game.sideSwitchSum[currentSet];
-    const shouldSwitch = totalPoints > 0 && totalPoints % sideSwitchSum === 0;
+    const totalPoints = updatedScores.teamA[currentSet] + updatedScores.teamB[currentSet];
+    const sideSwitchSum = game.sideSwitchSum[currentSet] ?? 0;
+    const shouldSwitch = sideSwitchSum > 0 && totalPoints > 0 && totalPoints % sideSwitchSum === 0;
 
     if (shouldSwitch) {
       setShowSideSwitchAlert(true);
-      // Auto hide alert after 3 seconds
       setTimeout(() => setShowSideSwitchAlert(false), 3000);
+      updatedState.leftIsTeamA = !previousState.leftIsTeamA;
+      updatedState.sidesSwitched = previousState.sidesSwitched.map((count, index) =>
+        index === currentSet ? count + 1 : count
+      );
     }
 
-    setGameState({
-      ...newGameState,
-      scores: newScores,
-      leftIsTeamA: shouldSwitch ? !gameState.leftIsTeamA : gameState.leftIsTeamA,
-      sidesSwitched: shouldSwitch ? 
-        gameState.sidesSwitched.map((count, i) => i === currentSet ? count + 1 : count) :
-        gameState.sidesSwitched
-    });
+    const targetPoints =
+      game.pointsPerSet?.[currentSet] ??
+      game.pointsPerSet?.[game.pointsPerSet.length - 1] ??
+      21;
+    const winnerKey: 'teamA' | 'teamB' = team === 'A' ? 'teamA' : 'teamB';
+    const opponentKey: 'teamA' | 'teamB' = team === 'A' ? 'teamB' : 'teamA';
+    const winnerScore = updatedScores[winnerKey][currentSet];
+    const opponentScore = updatedScores[opponentKey][currentSet];
+    const minimumLead = game.needTwoPointLead ? 2 : 1;
+    const setWon = winnerScore >= targetPoints && winnerScore - opponentScore >= minimumLead;
+
+    const eventsToLog: Array<Parameters<typeof logMatchEvent>[0]> = [
+      {
+        eventType: 'POINT_ADDED',
+        team,
+        pointCategory: category,
+        metadata: {
+          scoreA: updatedScores.teamA[currentSet],
+          scoreB: updatedScores.teamB[currentSet],
+          setNumber: previousState.currentSet,
+        },
+      },
+    ];
+
+    let shouldUpdateMatchRecord = false;
+    if (setWon) {
+      const updatedSetsWon = {
+        teamA: previousState.setsWon.teamA + (team === 'A' ? 1 : 0),
+        teamB: previousState.setsWon.teamB + (team === 'B' ? 1 : 0),
+      };
+      updatedState.setsWon = updatedSetsWon;
+      updatedState.activeTimer = null;
+
+      const setNumber = previousState.currentSet;
+      eventsToLog.push({
+        eventType: 'SET_COMPLETED',
+        team,
+        setNumber,
+        metadata: {
+          scoreA: updatedScores.teamA[currentSet],
+          scoreB: updatedScores.teamB[currentSet],
+        },
+      });
+
+      const totalSets = game.pointsPerSet?.length ?? updatedScores.teamA.length;
+      const setsToWin = Math.ceil(totalSets / 2);
+      const hasWonMatch = updatedSetsWon[winnerKey] >= setsToWin;
+
+      if (hasWonMatch) {
+        updatedState.isGameEnded = true;
+        eventsToLog.push({
+          eventType: 'MATCH_COMPLETED',
+          team,
+          setNumber,
+          metadata: {
+            finalSets: updatedSetsWon,
+            finalScores: updatedState.scores,
+          },
+        });
+        shouldUpdateMatchRecord = true;
+      } else {
+        updatedState.currentSet = previousState.currentSet + 1;
+        updatedState.currentServerPlayer = 1;
+        updatedState.currentServerTeam = team;
+        updatedState.possession = team;
+      }
+    }
+
+    try {
+      await persistState(updatedState);
+      for (const event of eventsToLog) {
+        await logMatchEvent(event);
+      }
+
+      if (shouldUpdateMatchRecord) {
+        await supabase
+          .from('matches')
+          .update({ status: 'completed' })
+          .eq('id', game.id);
+        setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
+      }
+    } catch (error) {
+      setGameHistory(prev => prev.slice(0, -1));
+    }
 
     setShowPointCategories(null);
   };
 
   const handleCategorySelection = (team: 'A' | 'B', category: string) => {
-    addPoint(team, category as PointCategory);
+    void addPoint(team, category as PointCategory);
   };
 
-  const switchServerTeam = () => {
-    if (!gameState) return;
-    
-    // Save current state to history
-    setGameHistory(prev => [...prev, { ...gameState }]);
-    
-    setGameState({
-      ...gameState,
-      currentServerTeam: gameState.currentServerTeam === 'A' ? 'B' : 'A',
-      currentServerPlayer: 1 // Reset to first player when switching teams
-    });
+  const switchServerTeam = async () => {
+    if (!gameState || isSyncing || gameState.isGameEnded) return;
+
+    const previousState = snapshotState(gameState);
+    setGameHistory(prev => [...prev, previousState]);
+
+    const updatedState: GameState = {
+      ...previousState,
+      currentServerTeam: previousState.currentServerTeam === 'A' ? 'B' : 'A',
+      currentServerPlayer: 1,
+    };
+
+    try {
+      await persistState(updatedState);
+      await logMatchEvent({
+        eventType: 'SERVER_SWITCH',
+        team: updatedState.currentServerTeam,
+      });
+    } catch (error) {
+      setGameHistory(prev => prev.slice(0, -1));
+    }
   };
 
-  const changeCurrentServer = () => {
-    if (!gameState || !game) return;
-    
-    // Save current state to history
-    setGameHistory(prev => [...prev, { ...gameState }]);
-    
+  const changeCurrentServer = async () => {
+    if (!gameState || !game || isSyncing || gameState.isGameEnded) return;
+
+    const previousState = snapshotState(gameState);
+    setGameHistory(prev => [...prev, previousState]);
+
     const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-    const nextPlayer = (gameState.currentServerPlayer % maxPlayers) + 1;
-    
-    setGameState({
-      ...gameState,
-      currentServerPlayer: nextPlayer
-    });
+    const nextPlayer = (previousState.currentServerPlayer % maxPlayers) + 1;
+
+    const updatedState: GameState = {
+      ...previousState,
+      currentServerPlayer: nextPlayer,
+    };
+
+    try {
+      await persistState(updatedState);
+      await logMatchEvent({
+        eventType: 'SERVER_PLAYER_ROTATION',
+        team: updatedState.currentServerTeam,
+        metadata: { player: nextPlayer },
+      });
+    } catch (error) {
+      setGameHistory(prev => prev.slice(0, -1));
+    }
   };
 
-  const undoLastAction = () => {
-    if (gameHistory.length === 0) return;
+  const undoLastAction = async () => {
+    if (gameHistory.length === 0 || !gameState) return;
 
     const lastState = gameHistory[gameHistory.length - 1];
-    setGameState(lastState);
     setGameHistory(prev => prev.slice(0, -1));
+
+    try {
+      await persistState(lastState);
+      await logMatchEvent({
+        eventType: 'POINT_UNDONE',
+        metadata: {
+          reason: 'undo',
+          restoredScores: lastState.scores,
+          restoredSets: lastState.setsWon,
+        },
+        setNumber: lastState.currentSet,
+      });
+    } catch (error) {
+      // Re-queue the state so the user can retry
+      setGameHistory(prev => [...prev, lastState]);
+    }
   };
 
   const clearCoinAnimations = () => {
@@ -357,13 +664,134 @@ export default function RefereeDesk() {
     flipTimeoutRef.current = timeout;
   };
 
-  const startTimeout = (type: 'team' | 'technical' | 'medical', team?: 'A' | 'B') => {
-    if (type === 'team') {
-      setTimer(30);
-    } else if (type === 'technical') {
-      setTimer(30);
-    } else if (type === 'medical') {
-      setTimer(300); // 5 minutes
+  const startTimeout = async (type: 'team' | 'technical' | 'medical', team?: 'A' | 'B') => {
+    if (!gameState || !game || isSyncing) return;
+    if (gameState.isGameEnded) {
+      toast({
+        title: 'Partida finalizada',
+        description: 'Não é possível iniciar tempos após o fim do jogo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (gameState.activeTimer) {
+      toast({
+        title: 'Já existe um tempo em andamento',
+        description: 'Finalize o tempo atual antes de iniciar outro.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const currentSetIndex = Math.max(gameState.currentSet - 1, 0);
+
+    if (type === 'team' && team) {
+      const key: 'teamA' | 'teamB' = team === 'A' ? 'teamA' : 'teamB';
+      const usedTimeouts = gameState.timeoutsUsed[key]?.[currentSetIndex] ?? 0;
+      if (usedTimeouts >= game.teamTimeoutsPerSet) {
+        toast({
+          title: 'Limite de timeouts atingido',
+          description: `A equipe ${team === 'A' ? game.teamA.name : game.teamB.name} já utilizou todos os timeouts deste set.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    if (type === 'technical' && gameState.technicalTimeoutUsed[currentSetIndex]) {
+      toast({
+        title: 'Tempo técnico já utilizado',
+        description: 'Este set já teve um tempo técnico registrado.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const duration =
+      type === 'medical'
+        ? 300
+        : type === 'team'
+          ? game.teamTimeoutDurationSec ?? 30
+          : 60;
+    const timerType: Timer['type'] =
+      type === 'team' ? 'TIMEOUT_TEAM' : type === 'technical' ? 'TIMEOUT_TECHNICAL' : 'MEDICAL';
+
+    let timeoutRecord: { id: string; started_at: string } | null = null;
+    try {
+      const { data, error } = await supabase
+        .from('match_timeouts')
+        .insert({
+          match_id: game.id,
+          set_number: gameState.currentSet,
+          team: team ?? null,
+          timeout_type: type,
+          duration_seconds: duration,
+        })
+        .select('id, started_at')
+        .single();
+      if (error || !data) {
+        throw error ?? new Error('Falha ao registrar timeout');
+      }
+      timeoutRecord = data;
+    } catch (error) {
+      console.error('Failed to start timeout', error);
+      toast({
+        title: 'Erro ao iniciar tempo',
+        description: error instanceof Error ? error.message : 'Erro desconhecido ao iniciar o tempo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    lastCompletedTimeoutId.current = null;
+
+    const previousState = snapshotState(gameState);
+    setGameHistory(prev => [...prev, previousState]);
+
+    const timerObject = buildTimer({
+      id: timeoutRecord.id,
+      type: timerType,
+      startedAt: timeoutRecord.started_at,
+      durationSec: duration,
+      team,
+    });
+
+    const updatedState: GameState = {
+      ...previousState,
+      activeTimer: timerObject,
+    };
+
+    if (type === 'team' && team) {
+      const key: 'teamA' | 'teamB' = team === 'A' ? 'teamA' : 'teamB';
+      updatedState.timeoutsUsed = {
+        teamA: [...previousState.timeoutsUsed.teamA],
+        teamB: [...previousState.timeoutsUsed.teamB],
+      };
+      updatedState.timeoutsUsed[key][previousState.currentSet - 1] += 1;
+    }
+
+    if (type === 'technical') {
+      updatedState.technicalTimeoutUsed = previousState.technicalTimeoutUsed.map((used, index) =>
+        index === previousState.currentSet - 1 ? true : used
+      );
+    }
+
+    try {
+      await persistState(updatedState);
+      await logMatchEvent({
+        eventType: 'TIMEOUT_STARTED',
+        team,
+        metadata: {
+          type: timerType,
+          durationSec: duration,
+        },
+      });
+    } catch (error) {
+      setGameHistory(prev => prev.slice(0, -1));
+      await supabase
+        .from('match_timeouts')
+        .update({ ended_at: new Date().toISOString() })
+        .eq('id', timeoutRecord.id);
     }
   };
 
@@ -380,6 +808,14 @@ export default function RefereeDesk() {
   }, [coinResultLabel, isFlippingCoin]);
 
   if (!game || !gameState) {
+    if (isLoading) {
+      return (
+        <div className="min-h-screen bg-gradient-ocean flex items-center justify-center text-white">
+          <p className="text-xl text-white/80">Carregando dados do jogo...</p>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gradient-ocean flex items-center justify-center text-white">
         <p className="text-xl text-white/80">Jogo não encontrado</p>
@@ -401,44 +837,59 @@ export default function RefereeDesk() {
   const rightTeamColorClass = rightTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
   const leftScoreButtonVariant = leftTeam === 'A' ? 'team' : 'teamB';
   const rightScoreButtonVariant = rightTeam === 'A' ? 'team' : 'teamB';
+  const leftHasPossession = gameState.possession === leftTeam;
+  const rightHasPossession = gameState.possession === rightTeam;
+  const possessionGlow = 'shadow-[0_0_35px_rgba(250,204,21,0.4)]';
+  const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
 
   const coinFaceToShow = (coinResult ?? 'heads') as CoinSide;
+  const gameIsEnded = gameState.isGameEnded;
   const mobileControlButtons = [
     {
       icon: RotateCcw,
       label: 'Desfazer',
-      onClick: undoLastAction,
-      disabled: gameHistory.length === 0
+      onClick: () => void undoLastAction(),
+      disabled: gameHistory.length === 0,
     },
     {
       icon: Pause,
       label: 'Timeout A',
-      onClick: () => startTimeout('team', 'A'),
-      disabled: !!timer
+      onClick: () => void startTimeout('team', 'A'),
+      disabled: !!gameState?.activeTimer || gameIsEnded,
     },
     {
       icon: Pause,
       label: 'Timeout B',
-      onClick: () => startTimeout('team', 'B'),
-      disabled: !!timer
+      onClick: () => void startTimeout('team', 'B'),
+      disabled: !!gameState?.activeTimer || gameIsEnded,
     },
     {
       icon: Stethoscope,
       label: 'Tempo Médico',
-      onClick: () => startTimeout('medical'),
-      disabled: !!timer
+      onClick: () => void startTimeout('medical'),
+      disabled: !!gameState?.activeTimer || gameIsEnded,
+    },
+    {
+      icon: Square,
+      label: 'Encerrar Tempo',
+      onClick: () => {
+        if (gameState?.activeTimer) {
+          void finalizeTimeout(gameState.activeTimer);
+        }
+      },
+      disabled: !gameState?.activeTimer,
     },
     {
       icon: ArrowLeftRight,
       label: 'Trocar Posse',
-      onClick: switchServerTeam,
-      disabled: false
+      onClick: () => void switchServerTeam(),
+      disabled: gameIsEnded,
     },
     {
       icon: UserCheck,
       label: 'Trocar Sacador',
-      onClick: changeCurrentServer,
-      disabled: false
+      onClick: () => void changeCurrentServer(),
+      disabled: gameIsEnded,
     },
     {
       icon: Coins,
@@ -447,7 +898,7 @@ export default function RefereeDesk() {
         resetCoinState();
         setCoinDialogOpen(true);
       },
-      disabled: false
+      disabled: false,
     }
   ];
 
@@ -480,6 +931,9 @@ export default function RefereeDesk() {
             <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
               Sacando: {serverTeamName} ({gameState.currentServerPlayer})
             </Badge>
+            <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
+              Posse: {possessionTeamName}
+            </Badge>
           </div>
         </div>
 
@@ -487,7 +941,13 @@ export default function RefereeDesk() {
         <div className="space-y-4 md:hidden">
           <div className="overflow-hidden rounded-3xl border border-white/20 text-white shadow-scoreboard">
             <div className="grid grid-cols-2">
-              <div className={cn('flex flex-col items-center justify-center gap-3 p-4 text-center', leftTeamColorClass)}>
+              <div
+                className={cn(
+                  'flex flex-col items-center justify-center gap-3 p-4 text-center',
+                  leftTeamColorClass,
+                  leftHasPossession && possessionGlow
+                )}
+              >
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-white/90">{leftTeamName}</h2>
                 <div className="text-5xl font-black">
                   {leftTeam === 'A' ? scoreA : scoreB}
@@ -510,7 +970,13 @@ export default function RefereeDesk() {
                   </Badge>
                 )}
               </div>
-              <div className={cn('flex flex-col items-center justify-center gap-3 p-4 text-center', rightTeamColorClass)}>
+              <div
+                className={cn(
+                  'flex flex-col items-center justify-center gap-3 p-4 text-center',
+                  rightTeamColorClass,
+                  rightHasPossession && possessionGlow
+                )}
+              >
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-white/90">{rightTeamName}</h2>
                 <div className="text-5xl font-black">
                   {rightTeam === 'A' ? scoreA : scoreB}
@@ -547,6 +1013,10 @@ export default function RefereeDesk() {
                   {formatTime(timer)}
                 </div>
               )}
+              <div className="flex items-center justify-center gap-2 text-amber-200">
+                <ArrowLeftRight className="h-4 w-4" />
+                Posse: {possessionTeamName}
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -554,10 +1024,10 @@ export default function RefereeDesk() {
               variant={leftScoreButtonVariant}
               size="score"
               onClick={() => {
-                if (timer !== null) return;
+                if (timer !== null || gameIsEnded) return;
                 setShowPointCategories(leftTeam);
               }}
-              disabled={timer !== null}
+              disabled={timer !== null || gameIsEnded}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
@@ -566,10 +1036,10 @@ export default function RefereeDesk() {
               variant={rightScoreButtonVariant}
               size="score"
               onClick={() => {
-                if (timer !== null) return;
+                if (timer !== null || gameIsEnded) return;
                 setShowPointCategories(rightTeam);
               }}
-              disabled={timer !== null}
+              disabled={timer !== null || gameIsEnded}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
@@ -595,7 +1065,13 @@ export default function RefereeDesk() {
         <Card className="hidden border-none bg-transparent shadow-none backdrop-blur-xl md:block">
           <CardContent className="p-0">
             <div className="grid overflow-hidden rounded-3xl border border-white/20 text-white shadow-scoreboard md:grid-cols-[1fr_minmax(0,260px)_1fr]">
-              <div className={cn('flex flex-col items-center justify-center gap-5 p-8 text-center', leftTeamColorClass)}>
+              <div
+                className={cn(
+                  'flex flex-col items-center justify-center gap-5 p-8 text-center',
+                  leftTeamColorClass,
+                  leftHasPossession && possessionGlow
+                )}
+              >
                 <h2 className="text-3xl font-semibold text-white/90">{leftTeamName}</h2>
                 <div className="text-7xl sm:text-8xl font-extrabold">
                   {leftTeam === 'A' ? scoreA : scoreB}
@@ -627,12 +1103,24 @@ export default function RefereeDesk() {
                     {formatTime(timer)}
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm text-amber-200">
-                  <Zap className="h-4 w-4" />
-                  Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+                <div className="space-y-1 text-sm text-amber-200">
+                  <div className="flex items-center justify-center gap-2">
+                    <Zap className="h-4 w-4" />
+                    Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <ArrowLeftRight className="h-4 w-4" />
+                    Posse: {possessionTeamName}
+                  </div>
                 </div>
               </div>
-              <div className={cn('flex flex-col items-center justify-center gap-5 p-8 text-center', rightTeamColorClass)}>
+              <div
+                className={cn(
+                  'flex flex-col items-center justify-center gap-5 p-8 text-center',
+                  rightTeamColorClass,
+                  rightHasPossession && possessionGlow
+                )}
+              >
                 <h2 className="text-3xl font-semibold text-white/90">{rightTeamName}</h2>
                 <div className="text-7xl sm:text-8xl font-extrabold">
                   {rightTeam === 'A' ? scoreA : scoreB}
@@ -677,10 +1165,10 @@ export default function RefereeDesk() {
                     variant={leftScoreButtonVariant}
                     size="score"
                     onClick={() => {
-                      if (timer !== null) return;
+                      if (timer !== null || gameIsEnded) return;
                       setShowPointCategories(leftTeam);
                     }}
-                    disabled={timer !== null}
+                    disabled={timer !== null || gameIsEnded}
                     className="h-28 w-full text-5xl"
                   >
                     <Plus size={28} />
@@ -692,10 +1180,10 @@ export default function RefereeDesk() {
                     variant={rightScoreButtonVariant}
                     size="score"
                     onClick={() => {
-                      if (timer !== null) return;
+                      if (timer !== null || gameIsEnded) return;
                       setShowPointCategories(rightTeam);
                     }}
-                    disabled={timer !== null}
+                    disabled={timer !== null || gameIsEnded}
                     className="h-28 w-full text-5xl"
                   >
                     <Plus size={28} />
@@ -709,7 +1197,7 @@ export default function RefereeDesk() {
                   variant="outline"
                   size="sm"
                   className="mt-3 border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
-                  onClick={undoLastAction}
+                  onClick={() => void undoLastAction()}
                   disabled={gameHistory.length === 0}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
@@ -732,8 +1220,8 @@ export default function RefereeDesk() {
                 <Button
                   variant="outline"
                   className="border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
-                  onClick={() => startTimeout('team', 'A')}
-                  disabled={!!timer}
+                  onClick={() => void startTimeout('team', 'A')}
+                  disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
                   <Pause className="mr-2 h-4 w-4" />
                   Timeout A
@@ -741,8 +1229,8 @@ export default function RefereeDesk() {
                 <Button
                   variant="outline"
                   className="border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
-                  onClick={() => startTimeout('team', 'B')}
-                  disabled={!!timer}
+                  onClick={() => void startTimeout('team', 'B')}
+                  disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
                   <Pause className="mr-2 h-4 w-4" />
                   Timeout B
@@ -751,8 +1239,8 @@ export default function RefereeDesk() {
               <Button
                 variant="outline"
                 className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
-                onClick={() => startTimeout('technical')}
-                disabled={!!timer}
+                onClick={() => void startTimeout('technical')}
+                disabled={!!gameState?.activeTimer || gameIsEnded}
               >
                 <Clock className="mr-2 h-4 w-4" />
                 Tempo Técnico
@@ -760,10 +1248,23 @@ export default function RefereeDesk() {
               <Button
                 variant="outline"
                 className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
-                onClick={() => startTimeout('medical')}
-                disabled={!!timer}
+                onClick={() => void startTimeout('medical')}
+                disabled={!!gameState?.activeTimer || gameIsEnded}
               >
                 Tempo Médico (5min)
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
+                onClick={() => {
+                  if (gameState?.activeTimer) {
+                    void finalizeTimeout(gameState.activeTimer);
+                  }
+                }}
+                disabled={!gameState?.activeTimer}
+              >
+                <Square className="mr-2 h-4 w-4" />
+                Encerrar Tempo
               </Button>
               <Button
                 variant="outline"
@@ -782,7 +1283,8 @@ export default function RefereeDesk() {
                   variant="outline"
                   size="sm"
                   className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
-                  onClick={switchServerTeam}
+                  onClick={() => void switchServerTeam()}
+                  disabled={gameIsEnded}
                 >
                   <ArrowLeftRight className="mr-2 h-4 w-4" />
                   Trocar Posse ({gameState.currentServerTeam === 'A' ? 'B' : 'A'})
@@ -791,7 +1293,8 @@ export default function RefereeDesk() {
                   variant="outline"
                   size="sm"
                   className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
-                  onClick={changeCurrentServer}
+                  onClick={() => void changeCurrentServer()}
+                  disabled={gameIsEnded}
                 >
                   <UserCheck className="mr-2 h-4 w-4" />
                   Próximo Sacador ({gameState.currentServerTeam} - {((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})

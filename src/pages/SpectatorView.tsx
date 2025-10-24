@@ -1,11 +1,18 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Trophy, TrendingUp, Target } from "lucide-react";
+import { Zap, Trophy, TrendingUp, Target, Clock, ArrowLeftRight } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
 import { Game, GameState, PointCategory } from "@/types/volleyball";
+import {
+  calculateRemainingSeconds,
+  createDefaultGameState,
+  mapRowToGameState,
+} from "@/lib/matchState";
+import type { MatchStateRow } from "@/lib/matchState";
+import { cn } from "@/lib/utils";
 
 const mockStatistics = {
   teamA: {
@@ -24,7 +31,7 @@ const mockStatistics = {
 
 const sponsorImages = [
   "https://via.placeholder.com/200x100/0066CC/FFFFFF?text=Sponsor+1",
-  "https://via.placeholder.com/200x100/FF6600/FFFFFF?text=Sponsor+2", 
+  "https://via.placeholder.com/200x100/FF6600/FFFFFF?text=Sponsor+2",
   "https://via.placeholder.com/200x100/00AA00/FFFFFF?text=Sponsor+3"
 ];
 
@@ -34,20 +41,36 @@ export default function SpectatorView() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [currentSponsor, setCurrentSponsor] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [timer, setTimer] = useState<number | null>(null);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
     if (foundGame) {
       setGame(foundGame);
-      setGameState(foundGame.gameState || null);
+      setGameState(foundGame.gameState || createDefaultGameState(foundGame));
+      setLoading(false);
       return;
     }
 
     const loadFromDB = async () => {
       if (!gameId) return;
-      const { data: match } = await supabase.from('matches').select('*').eq('id', gameId).single();
-      if (!match) return;
-      const { data: teams } = await supabase.from('teams').select('*').in('id', [match.team_a_id, match.team_b_id]);
+      setLoading(true);
+      const { data: match, error: matchError } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+      if (matchError || !match) {
+        console.error('Match not found', matchError);
+        setLoading(false);
+        return;
+      }
+
+      const { data: teams } = await supabase
+        .from('teams')
+        .select('*')
+        .in('id', [match.team_a_id, match.team_b_id]);
       const teamA = teams?.find(t => t.id === match.team_a_id);
       const teamB = teams?.find(t => t.id === match.team_b_id);
       const newGame: Game = {
@@ -72,25 +95,55 @@ export default function SpectatorView() {
         updatedAt: new Date().toISOString(),
       };
       setGame(newGame);
-      setGameState({
-        id: `${match.id}-state`,
-        gameId: match.id,
-        currentSet: 1,
-        setsWon: { teamA: 0, teamB: 0 },
-        scores: { teamA: [0, 0, 0], teamB: [0, 0, 0] },
-        currentServerTeam: 'A',
-        currentServerPlayer: 1,
-        possession: 'A',
-        leftIsTeamA: true,
-        timeoutsUsed: { teamA: [0, 0, 0], teamB: [0, 0, 0] },
-        technicalTimeoutUsed: [false, false, false],
-        sidesSwitched: [0, 0, 0],
-        events: [],
-        isGameEnded: false,
-      });
+
+      const { data: stateRow } = await supabase
+        .from('match_states')
+        .select('*')
+        .eq('match_id', match.id)
+        .maybeSingle();
+
+      if (stateRow) {
+        setGameState(mapRowToGameState(stateRow as MatchStateRow, newGame));
+      } else {
+        setGameState(createDefaultGameState(newGame));
+      }
+      setLoading(false);
     };
-    loadFromDB();
+
+    void loadFromDB();
   }, [gameId]);
+
+  useEffect(() => {
+    if (!gameId || !game) return;
+
+    const channel = supabase
+      .channel(`spectator-match-${gameId}`)
+      .on<MatchStateRow>('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'match_states',
+        filter: `match_id=eq.${gameId}`,
+      }, payload => {
+        if (payload.new) {
+          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
+        }
+      })
+      .on<MatchStateRow>('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'match_states',
+        filter: `match_id=eq.${gameId}`,
+      }, payload => {
+        if (payload.new) {
+          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [gameId, game]);
 
   // Rotate stats and sponsors every 10 seconds
   useEffect(() => {
@@ -100,6 +153,36 @@ export default function SpectatorView() {
     }, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!gameState?.activeTimer) {
+      setTimer(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const remaining = calculateRemainingSeconds(gameState.activeTimer);
+      setTimer(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [gameState?.activeTimer]);
+
+  const formatTime = useCallback((seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-ocean text-white flex items-center justify-center">
+        <p className="text-xl">Carregando jogo ao vivo...</p>
+      </div>
+    );
+  }
 
   if (!game || !gameState) {
     return (
@@ -114,6 +197,27 @@ export default function SpectatorView() {
   const scoreB = gameState.scores.teamB[currentSetIndex] || 0;
   const leftTeam = gameState.leftIsTeamA ? 'A' : 'B';
   const rightTeam = gameState.leftIsTeamA ? 'B' : 'A';
+  const leftHasPossession = gameState.possession === leftTeam;
+  const rightHasPossession = gameState.possession === rightTeam;
+  const possessionGlow = 'shadow-[0_0_40px_rgba(250,204,21,0.35)]';
+  const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
+
+  const timerDescriptor = useMemo(() => {
+    if (!gameState.activeTimer) return null;
+    const typeLabels: Record<string, string> = {
+      TIMEOUT_TEAM: 'Tempo de Equipe',
+      TIMEOUT_TECHNICAL: 'Tempo Técnico',
+      MEDICAL: 'Tempo Médico',
+      SET_INTERVAL: 'Intervalo de Set',
+    };
+    const baseLabel = typeLabels[gameState.activeTimer.type] ?? 'Tempo Oficial';
+    const teamLabel = gameState.activeTimer.team
+      ? gameState.activeTimer.team === 'A'
+        ? game.teamA.name
+        : game.teamB.name
+      : null;
+    return teamLabel ? `${baseLabel} • ${teamLabel}` : baseLabel;
+  }, [gameState.activeTimer, game]);
 
   const getCategoryLabel = (category: PointCategory) => {
     const labels: Record<PointCategory, string> = {
@@ -142,7 +246,12 @@ export default function SpectatorView() {
               <CardContent className="p-8">
                 <div className="grid grid-cols-5 gap-6 items-center">
                   {/* Left Team */}
-                  <div className="col-span-2 text-center">
+                  <div
+                    className={cn(
+                      'col-span-2 text-center',
+                      leftHasPossession && possessionGlow
+                    )}
+                  >
                     <h2 className="text-2xl font-bold mb-4">
                       {leftTeam === 'A' ? game.teamA.name : game.teamB.name}
                     </h2>
@@ -163,10 +272,27 @@ export default function SpectatorView() {
                     <div className="text-lg font-semibold">
                       Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
                     </div>
+                    <div className="mt-2 flex items-center justify-center gap-2 text-base text-amber-200">
+                      <ArrowLeftRight size={18} />
+                      Posse: {possessionTeamName}
+                    </div>
+                    {gameState.activeTimer && (
+                      <div className="mt-4 flex flex-col items-center gap-2">
+                        <Badge className="bg-timeout text-white text-base px-4 py-2">
+                          <Clock className="mr-2" size={18} />
+                          {(timerDescriptor ?? 'Tempo Oficial')} • {formatTime(timer ?? calculateRemainingSeconds(gameState.activeTimer))}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
 
                   {/* Right Team */}
-                  <div className="col-span-2 text-center">
+                  <div
+                    className={cn(
+                      'col-span-2 text-center',
+                      rightHasPossession && possessionGlow
+                    )}
+                  >
                     <h2 className="text-2xl font-bold mb-4">
                       {rightTeam === 'A' ? game.teamA.name : game.teamB.name}
                     </h2>
@@ -200,13 +326,11 @@ export default function SpectatorView() {
                       <h3 className="text-xl font-bold mb-4 text-center">
                         {game.teamA.name}
                       </h3>
-                      <div className="space-y-2">
-                        {Object.entries(mockStatistics.teamA).map(([category, count]) => (
-                          <div key={category} className="flex justify-between items-center">
-                            <span className="text-sm">{getCategoryLabel(category as PointCategory)}</span>
-                            <Badge variant="outline" className="text-white border-white">
-                              {count}
-                            </Badge>
+                      <div className="space-y-3">
+                        {Object.keys(mockStatistics.teamA).map(key => (
+                          <div key={key} className="flex justify-between">
+                            <span>{getCategoryLabel(key as PointCategory)}</span>
+                            <span className="font-bold">{mockStatistics.teamA[key as PointCategory]}</span>
                           </div>
                         ))}
                       </div>
@@ -217,13 +341,11 @@ export default function SpectatorView() {
                       <h3 className="text-xl font-bold mb-4 text-center">
                         {game.teamB.name}
                       </h3>
-                      <div className="space-y-2">
-                        {Object.entries(mockStatistics.teamB).map(([category, count]) => (
-                          <div key={category} className="flex justify-between items-center">
-                            <span className="text-sm">{getCategoryLabel(category as PointCategory)}</span>
-                            <Badge variant="outline" className="text-white border-white">
-                              {count}
-                            </Badge>
+                      <div className="space-y-3">
+                        {Object.keys(mockStatistics.teamB).map(key => (
+                          <div key={key} className="flex justify-between">
+                            <span>{getCategoryLabel(key as PointCategory)}</span>
+                            <span className="font-bold">{mockStatistics.teamB[key as PointCategory]}</span>
                           </div>
                         ))}
                       </div>
@@ -234,50 +356,55 @@ export default function SpectatorView() {
             )}
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar - Sponsors / Momentum */}
           <div className="space-y-6">
-            {/* Set History */}
             <Card className="bg-white/10 border-white/20 text-white">
               <CardHeader>
-                <CardTitle className="text-center">Histórico de Sets</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Target size={20} />
+                  Patrocinadores
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {Array.from({ length: Math.max(
-                    gameState.scores.teamA.length, 
-                    gameState.scores.teamB.length
-                  ) }).map((_, index) => (
-                    <div key={index} className="text-center p-3 bg-white/5 rounded-lg">
-                      <div className="text-sm mb-1">Set {index + 1}</div>
-                      <div className="text-lg font-bold">
-                        {gameState.scores.teamA[index] || 0} - {gameState.scores.teamB[index] || 0}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Sponsor Carousel */}
-            <Card className="bg-white/10 border-white/20 text-white">
-              <CardHeader>
-                <CardTitle className="text-center">Patrocinadores</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                <img 
-                  src={sponsorImages[currentSponsor]} 
+                <img
+                  src={sponsorImages[currentSponsor]}
                   alt={`Patrocinador ${currentSponsor + 1}`}
-                  className="w-full rounded-lg transition-all duration-1000"
+                  className="w-full rounded-lg"
                 />
               </CardContent>
             </Card>
 
-            {/* Live Indicator */}
-            <div className="text-center">
-              <Badge className="bg-red-500 text-white text-lg px-4 py-2 animate-pulse">
-                🔴 AO VIVO
-              </Badge>
-            </div>
+            <Card className="bg-white/10 border-white/20 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <TrendingUp size={20} />
+                  Momento do Jogo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-white/70">
+                      Últimos 5 pontos
+                    </h4>
+                    <div className="mt-2 flex gap-2">
+                      {[...Array(5)].map((_, index) => (
+                        <div
+                          key={index}
+                          className={`h-2 flex-1 rounded-full ${index < 3 ? 'bg-team-a' : 'bg-team-b/60'}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold uppercase tracking-wide text-white/70">
+                      Jogador Destaque
+                    </h4>
+                    <p className="mt-2 text-white/90">{game.teamA.players[0].name} • 7 pontos no set</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

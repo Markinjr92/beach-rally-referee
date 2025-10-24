@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, MapPin, Trophy } from 'lucide-react'
 
@@ -11,6 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDatePtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
+import { Game, GameState } from '@/types/volleyball'
+import { createDefaultGameState, mapRowToGameState } from '@/lib/matchState'
+import type { MatchStateRow } from '@/lib/matchState'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -28,9 +31,17 @@ const TournamentInfoDetail = () => {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
   const [scoresByMatch, setScoresByMatch] = useState<Record<string, MatchScore[]>>({})
+  const [matchStates, setMatchStates] = useState<Record<string, GameState>>({})
+  const [gameConfigs, setGameConfigs] = useState<Record<string, Game>>({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'status' | 'phase'>('date-asc')
+  const [timerTick, setTimerTick] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = setInterval(() => setTimerTick(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -109,6 +120,79 @@ const TournamentInfoDetail = () => {
 
       setMatches(enrichedMatches)
 
+      const configs: Record<string, Game> = {}
+      for (const match of enrichedMatches) {
+        const config: Game = {
+          id: match.id,
+          tournamentId: match.tournament_id,
+          title: `${match.teamA?.name ?? 'Equipe A'} vs ${match.teamB?.name ?? 'Equipe B'}`,
+          category: match.modality ? String(match.modality) : 'Misto',
+          modality: (match.modality as any) || 'dupla',
+          format: 'melhorDe3',
+          teamA: {
+            name: match.teamA?.name || 'Equipe A',
+            players: [
+              { name: match.teamA?.player_a || 'A1', number: 1 },
+              { name: match.teamA?.player_b || 'A2', number: 2 },
+            ],
+          },
+          teamB: {
+            name: match.teamB?.name || 'Equipe B',
+            players: [
+              { name: match.teamB?.player_a || 'B1', number: 1 },
+              { name: match.teamB?.player_b || 'B2', number: 2 },
+            ],
+          },
+          pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+          needTwoPointLead: true,
+          sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+          hasTechnicalTimeout: false,
+          technicalTimeoutSum: 0,
+          teamTimeoutsPerSet: 2,
+          teamTimeoutDurationSec: 30,
+          coinTossMode: 'initialThenAlternate',
+          status:
+            match.status === 'in_progress'
+              ? 'em_andamento'
+              : match.status === 'completed'
+                ? 'finalizado'
+                : 'agendado',
+          createdAt: match.created_at || new Date().toISOString(),
+          updatedAt: match.created_at || new Date().toISOString(),
+        }
+        configs[match.id] = config
+      }
+      setGameConfigs(configs)
+
+      if ((matchData?.length || 0) > 0) {
+        const { data: stateData } = await supabase
+          .from('match_states')
+          .select('*')
+          .in('match_id', matchData!.map((match) => match.id))
+
+        if (stateData) {
+          const mappedStates = stateData.reduce<Record<string, GameState>>((acc, state) => {
+            const config = configs[state.match_id]
+            if (config) {
+              acc[state.match_id] = mapRowToGameState(state as MatchStateRow, config)
+            }
+            return acc
+          }, {})
+
+          Object.keys(configs).forEach((matchId) => {
+            if (!mappedStates[matchId]) {
+              mappedStates[matchId] = createDefaultGameState(configs[matchId])
+            }
+          })
+
+          setMatchStates(mappedStates)
+        } else {
+          setMatchStates({})
+        }
+      } else {
+        setMatchStates({})
+      }
+
       if ((matchData?.length || 0) > 0) {
         const { data: scoreData, error: scoreError } = await supabase
           .from('match_scores')
@@ -140,6 +224,44 @@ const TournamentInfoDetail = () => {
 
     load()
   }, [tournamentId, toast])
+
+  useEffect(() => {
+    if (Object.keys(gameConfigs).length === 0) return
+
+    const channel = supabase
+      .channel(`tournament-info-match-states-${tournamentId ?? 'all'}`)
+      .on<MatchStateRow>('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'match_states',
+      }, payload => {
+        if (!payload.new) return
+        const config = gameConfigs[payload.new.match_id]
+        if (!config) return
+        setMatchStates((prev) => ({
+          ...prev,
+          [payload.new!.match_id]: mapRowToGameState(payload.new as MatchStateRow, config),
+        }))
+      })
+      .on<MatchStateRow>('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'match_states',
+      }, payload => {
+        if (!payload.new) return
+        const config = gameConfigs[payload.new.match_id]
+        if (!config) return
+        setMatchStates((prev) => ({
+          ...prev,
+          [payload.new!.match_id]: mapRowToGameState(payload.new as MatchStateRow, config),
+        }))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [gameConfigs, tournamentId])
 
   const filteredAndSortedMatches = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -187,6 +309,12 @@ const TournamentInfoDetail = () => {
 
     return sorted
   }, [matches, searchTerm, sortOption])
+
+  const formatTime = useCallback((seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }, [])
 
   if (loading) {
     return (
@@ -288,14 +416,67 @@ const TournamentInfoDetail = () => {
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredAndSortedMatches.map((match) => {
                   const scores = scoresByMatch[match.id] || []
-                  const setTotals = scores.reduce(
-                    (acc, score) => {
-                      if (score.team_a_points > score.team_b_points) acc.teamA += 1
-                      if (score.team_b_points > score.team_a_points) acc.teamB += 1
-                      return acc
-                    },
-                    { teamA: 0, teamB: 0 }
-                  )
+                  const liveState = matchStates[match.id]
+                  const displayScores = liveState
+                    ? liveState.scores.teamA.map((points, index) => ({
+                        match_id: match.id,
+                        set_number: index + 1,
+                        team_a_points: points,
+                        team_b_points: liveState.scores.teamB[index] ?? 0,
+                      }))
+                    : scores
+
+                  const setTotals = liveState
+                    ? liveState.setsWon
+                    : scores.reduce(
+                        (acc, score) => {
+                          if (score.team_a_points > score.team_b_points) acc.teamA += 1
+                          if (score.team_b_points > score.team_a_points) acc.teamB += 1
+                          return acc
+                        },
+                        { teamA: 0, teamB: 0 }
+                      )
+
+                  const activeTimerRemaining = liveState?.activeTimer
+                    ? Math.max(
+                        0,
+                        Math.ceil(
+                          (new Date(liveState.activeTimer.endsAt).getTime() - timerTick) / 1000,
+                        ),
+                      )
+                    : null
+
+                  const timerLabel = liveState?.activeTimer
+                    ? (() => {
+                        const typeLabels: Record<string, string> = {
+                          TIMEOUT_TEAM: 'Tempo de Equipe',
+                          TIMEOUT_TECHNICAL: 'Tempo Técnico',
+                          MEDICAL: 'Tempo Médico',
+                          SET_INTERVAL: 'Intervalo de Set',
+                        }
+                        const baseLabel = typeLabels[liveState.activeTimer.type] ?? 'Tempo Oficial'
+                        if (!liveState.activeTimer.team) {
+                          return baseLabel
+                        }
+                        const teamName =
+                          liveState.activeTimer.team === 'A'
+                            ? match.teamA?.name ?? 'Equipe A'
+                            : match.teamB?.name ?? 'Equipe B'
+                        return `${baseLabel} • ${teamName}`
+                      })()
+                    : null
+
+                  const possessionName = liveState
+                    ? liveState.possession === 'A'
+                      ? match.teamA?.name ?? 'Equipe A'
+                      : match.teamB?.name ?? 'Equipe B'
+                    : null
+
+                  const serverName = liveState
+                    ? liveState.currentServerTeam === 'A'
+                      ? match.teamA?.name ?? 'Equipe A'
+                      : match.teamB?.name ?? 'Equipe B'
+                    : null
 
                   return (
                     <div
@@ -320,14 +501,14 @@ const TournamentInfoDetail = () => {
                       <div className="space-y-1 text-white">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold truncate">{match.teamA?.name || 'Equipe A'}</span>
-                          {match.status === 'completed' && (
+                          {(match.status === 'completed' || liveState) && (
                             <span className="text-[11px] font-semibold text-white/80">{setTotals.teamA}</span>
                           )}
                         </div>
                         <div className="text-[9px] uppercase tracking-[0.35em] text-white/40 text-center">vs</div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold truncate">{match.teamB?.name || 'Equipe B'}</span>
-                          {match.status === 'completed' && (
+                          {(match.status === 'completed' || liveState) && (
                             <span className="text-[11px] font-semibold text-white/80">{setTotals.teamB}</span>
                           )}
                         </div>
@@ -340,9 +521,9 @@ const TournamentInfoDetail = () => {
                           <span className="rounded-full border border-white/15 px-2 py-0.5">Quadra {match.court}</span>
                         )}
                       </div>
-                      {scores.length > 0 && (
+                      {displayScores.length > 0 && (
                         <div className="flex flex-wrap gap-1 text-[10px] text-white/75">
-                          {scores.map((score) => (
+                          {displayScores.map((score) => (
                             <span
                               key={`${score.match_id}-${score.set_number}`}
                               className="rounded border border-white/15 px-1.5 py-0.5"
@@ -350,6 +531,27 @@ const TournamentInfoDetail = () => {
                               Set {score.set_number}: {score.team_a_points} x {score.team_b_points}
                             </span>
                           ))}
+                        </div>
+                      )}
+                      {liveState && (
+                        <div className="rounded border border-white/15 bg-white/5 px-2 py-1 text-[10px] text-white/80">
+                          <div className="flex items-center justify-between">
+                            <span>Set atual {liveState.currentSet}</span>
+                            <span>
+                              {liveState.scores.teamA[liveState.currentSet - 1] || 0} x{' '}
+                              {liveState.scores.teamB[liveState.currentSet - 1] || 0}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-white/70">
+                            <span>Servindo: {serverName} #{liveState.currentServerPlayer}</span>
+                            <span>Posse: {possessionName}</span>
+                          </div>
+                          {activeTimerRemaining !== null && liveState.activeTimer && (
+                            <div className="mt-1 flex items-center gap-1 text-yellow-200">
+                              <Clock size={12} />
+                              {(timerLabel ?? 'Tempo Oficial')} · {formatTime(activeTimerRemaining)}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
