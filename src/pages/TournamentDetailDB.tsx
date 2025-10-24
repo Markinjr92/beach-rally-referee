@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, MapPin } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -10,10 +10,90 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from '@/components/ui/command'
+import { cn } from '@/lib/utils'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
 type Match = Tables<'matches'>
+
+type TeamOption = { value: string; label: string }
+
+const formatDateTime = (value: string | null) => {
+  if (!value) return 'Sem horário agendado'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Sem horário agendado'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+type TeamSearchSelectProps = {
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+  options: TeamOption[]
+}
+
+const TeamSearchSelect = ({ value, onChange, placeholder, options }: TeamSearchSelectProps) => {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((option) => option.value === value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className={cn(
+            'w-full justify-between bg-white/10 border-white/20 text-white hover:bg-white/15 focus-visible:ring-white/50 focus-visible:ring-offset-0',
+            !selected && 'text-white/60'
+          )}
+        >
+          {selected ? selected.label : placeholder}
+          <ChevronsUpDown className="ml-2 h-4 w-4 opacity-70" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 bg-slate-950/95 border border-white/20 text-white"
+        align="start"
+        style={{ width: 'var(--radix-popover-trigger-width)' }}
+      >
+        <Command>
+          <CommandInput
+            placeholder={`Buscar ${placeholder.toLowerCase()}`}
+            className="text-white placeholder:text-white/60"
+          />
+          <CommandEmpty>Nenhuma dupla encontrada.</CommandEmpty>
+          <CommandGroup className="max-h-60 overflow-y-auto">
+            {options.map((option) => (
+              <CommandItem
+                key={option.value}
+                value={option.label}
+                onSelect={() => {
+                  onChange(option.value)
+                  setOpen(false)
+                }}
+                className="text-white"
+              >
+                <Check className={cn('mr-2 h-4 w-4', option.value === value ? 'opacity-100' : 'opacity-0')} />
+                {option.label}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export default function TournamentDetailDB() {
   const { tournamentId } = useParams()
@@ -195,11 +275,19 @@ export default function TournamentDetailDB() {
                 return (
                   <div key={m.id} className="flex flex-col gap-3 rounded-lg border border-white/15 bg-white/5 p-3 md:flex-row md:items-center md:justify-between">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                      <Badge variant="outline" className="border-white/40 text-white">
-                        {m.phase || 'Jogo'}
-                      </Badge>
-                      <div className="font-semibold">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
-                      <div className="text-xs uppercase tracking-wide text-white/70">{m.status}</div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
+                        <div className="flex items-center gap-2">
+                          <Clock size={16} className="text-white/60" />
+                          {formatDateTime(m.scheduled_at)}
+                        </div>
+                        <Badge variant="outline" className="border-white/40 text-white">
+                          {m.phase || 'Jogo'}
+                        </Badge>
+                      </div>
+                      <div>
+                        <div className="font-semibold">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
+                        <div className="text-xs uppercase tracking-wide text-white/70">{m.status}</div>
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Select value={m.status || 'scheduled'} onValueChange={async (v) => {
@@ -250,18 +338,18 @@ export default function TournamentDetailDB() {
               {matches.length === 0 && <p className="text-sm text-white/70">Nenhum jogo.</p>}
 
               <div className="grid md:grid-cols-4 gap-3 pt-2">
-                <Select value={matchForm.teamA} onValueChange={v => setMatchForm({ ...matchForm, teamA: v })}>
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white"><SelectValue placeholder="Equipe A" /></SelectTrigger>
-                  <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
-                    {teamOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={matchForm.teamB} onValueChange={v => setMatchForm({ ...matchForm, teamB: v })}>
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white"><SelectValue placeholder="Equipe B" /></SelectTrigger>
-                  <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
-                    {teamOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <TeamSearchSelect
+                  value={matchForm.teamA}
+                  onChange={(value) => setMatchForm({ ...matchForm, teamA: value })}
+                  placeholder="Equipe A"
+                  options={teamOptions}
+                />
+                <TeamSearchSelect
+                  value={matchForm.teamB}
+                  onChange={(value) => setMatchForm({ ...matchForm, teamB: value })}
+                  placeholder="Equipe B"
+                  options={teamOptions}
+                />
                 <Input
                   type="datetime-local"
                   value={matchForm.scheduled_at}
