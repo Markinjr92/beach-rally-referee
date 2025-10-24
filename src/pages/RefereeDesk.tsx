@@ -1055,7 +1055,7 @@ export default function RefereeDesk() {
       return {
         setNumber: currentSetNumber,
         isConfigured: true,
-        firstChoiceTeam,
+        firstChoiceTeam: firstTeam,
         firstChoiceOption,
         firstChoiceSide: firstChoiceOption === 'side' ? sideSelections[firstTeam] ?? undefined : undefined,
         secondChoiceOption,
