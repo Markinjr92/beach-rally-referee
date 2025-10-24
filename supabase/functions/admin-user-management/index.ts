@@ -7,14 +7,20 @@ type ListUsersResponse = {
   message?: string;
 };
 
+const allowedOrigins = [
+  "http://localhost:8080",
+  Deno.env.get("PRODUCTION_SITE_URL") ?? "",
+  Deno.env.get("PUBLIC_SITE_URL") ?? "",
+].filter(Boolean);
+
 const cors = (req: Request) => {
-  const origin = req.headers.get("Origin") ?? "*";
+  const origin = req.headers.get("Origin") ?? "";
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : "*";
+
   return {
-    "Access-Control-Allow-Origin": origin,
-    "Vary": "Origin",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey, x-client-info",
   } satisfies HeadersInit;
 };
 

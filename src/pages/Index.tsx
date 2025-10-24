@@ -27,7 +27,7 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "tournament-info",
     title: "Informações do Torneio",
     description: "Consulte jogos, placares e tabelas atualizadas",
-    to: "/tournaments",
+    to: "/tournament-info",
     icon: Trophy,
     roles: ["atleta", "organizador", "admin_sistema"],
     iconClass: "text-yellow-300",

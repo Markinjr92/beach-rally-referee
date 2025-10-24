@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
+import TournamentInfo from "./pages/TournamentInfo";
+import TournamentInfoDetail from "./pages/TournamentInfoDetail";
 import TournamentsDB from "./pages/TournamentsDB";
 import TournamentDetailDB from "./pages/TournamentDetailDB";
 import RefereeDesk from "./pages/RefereeDesk";
@@ -26,6 +28,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/tournament-info" element={<TournamentInfo />} />
+            <Route path="/tournament-info/:tournamentId" element={<TournamentInfoDetail />} />
             <Route path="/tournaments" element={<TournamentsDB />} />
             <Route path="/tournament/:tournamentId" element={<TournamentDetailDB />} />
             <Route path="/referee/:gameId" element={<RefereeDesk />} />

@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { Tables } from "@/integrations/supabase/types"
@@ -156,21 +157,32 @@ export default function TournamentsDB() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-white">Categoria</Label>
-                    <Input
-                      value={form.category}
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
-                      placeholder="M/F/Misto"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
-                    />
+                    <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
+                        <SelectItem value="M" className="focus:bg-white/10 focus:text-white">
+                          Masculino
+                        </SelectItem>
+                        <SelectItem value="F" className="focus:bg-white/10 focus:text-white">
+                          Feminino
+                        </SelectItem>
+                        <SelectItem value="Misto" className="focus:bg-white/10 focus:text-white">Misto</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label className="text-white">Modalidade</Label>
-                    <Input
-                      value={form.modality}
-                      onChange={(e) => setForm({ ...form, modality: e.target.value })}
-                      placeholder="dupla"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
-                    />
+                    <Select value={form.modality} onValueChange={(value) => setForm({ ...form, modality: value })}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
+                        <SelectValue placeholder="Selecione a modalidade" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
+                        <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">Dupla</SelectItem>
+                        <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">Quarteto</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex gap-2 justify-end pt-4">
