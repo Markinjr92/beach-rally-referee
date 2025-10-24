@@ -72,7 +72,7 @@ const AdminUserManagementPage = () => {
           <div>
             <h1 className="text-4xl font-bold">Administração de Usuários</h1>
             <p className="text-white/80 text-lg mt-2">
-              Gerencie perfis, redefina senhas e atualize dados dos usuários do sistema.
+              Visualize os usuários do sistema e confirme se as permissões estão configuradas corretamente.
             </p>
           </div>
           <div className="self-end">
