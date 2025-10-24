@@ -282,7 +282,7 @@ const TournamentInfoDetail = () => {
                         asChild
                         size="sm"
                         variant="outline"
-                        className="border-white/30 text-white hover:bg-white/15"
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40"
                       >
                         <Link to={`/scoreboard/${match.id}`}>Placar ao vivo</Link>
                       </Button>
@@ -290,7 +290,7 @@ const TournamentInfoDetail = () => {
                         asChild
                         size="sm"
                         variant="outline"
-                        className="border-white/30 text-white hover:bg-white/15"
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40"
                       >
                         <Link to={`/spectator/${match.id}`}>Visão da torcida</Link>
                       </Button>
@@ -360,7 +360,7 @@ const TournamentInfoDetail = () => {
                           asChild
                           size="sm"
                           variant="outline"
-                          className="border-white/30 text-white hover:bg-white/15"
+                          className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40"
                         >
                           <Link to={`/scoreboard/${match.id}`}>Rever placar</Link>
                         </Button>
@@ -368,7 +368,7 @@ const TournamentInfoDetail = () => {
                           asChild
                           size="sm"
                           variant="outline"
-                          className="border-white/30 text-white hover:bg-white/15"
+                          className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40"
                         >
                           <Link to={`/spectator/${match.id}`}>Destaques da torcida</Link>
                         </Button>
