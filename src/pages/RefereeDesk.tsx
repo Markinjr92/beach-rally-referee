@@ -22,7 +22,15 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
-import { Game, GameState, PointCategory, Timer } from "@/types/volleyball";
+import {
+  CoinChoice,
+  CourtSide,
+  Game,
+  GameState,
+  PointCategory,
+  SetConfiguration,
+  Timer,
+} from "@/types/volleyball";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +43,14 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 import { buildTimer, calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, saveMatchState, subscribeToMatchState } from "@/lib/matchStateService";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type CoinSide = "heads" | "tails";
 
@@ -71,6 +87,197 @@ export default function RefereeDesk() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastCompletedTimeoutId = useRef<string | null>(null);
   const fallbackWarningDisplayed = useRef(false);
+  const [setConfigDialogOpen, setSetConfigDialogOpen] = useState(false);
+  const [teamSetupForm, setTeamSetupForm] = useState<Record<'A' | 'B', { jerseyAssignment: Record<string, number | null>; serviceOrder: number[] }>>({
+    A: { jerseyAssignment: {}, serviceOrder: [] },
+    B: { jerseyAssignment: {}, serviceOrder: [] },
+  });
+  const [coinWinnerSelection, setCoinWinnerSelection] = useState<'A' | 'B' | null>(null);
+  const [firstChoiceTeamState, setFirstChoiceTeamState] = useState<'A' | 'B'>('A');
+  const [firstChoiceOption, setFirstChoiceOption] = useState<CoinChoice>('serve');
+  const [secondChoiceServeDecision, setSecondChoiceServeDecision] = useState<'serve' | 'receive' | null>(null);
+  const [sideSelections, setSideSelections] = useState<{ A: CourtSide | null; B: CourtSide | null }>({ A: null, B: null });
+
+  const getPlayersByTeam = useCallback(
+    (team: 'A' | 'B') => {
+      if (!game) return [];
+      return team === 'A' ? game.teamA.players ?? [] : game.teamB.players ?? [];
+    },
+    [game]
+  );
+
+  const getDefaultJerseyAssignment = useCallback(
+    (team: 'A' | 'B') => {
+      const players = getPlayersByTeam(team);
+      const assignment: Record<string, number> = {};
+      players.forEach((_, index) => {
+        assignment[String(index + 1)] = index;
+      });
+      return assignment;
+    },
+    [getPlayersByTeam]
+  );
+
+  const getDefaultServiceOrder = useCallback(
+    (team: 'A' | 'B') => {
+      const players = getPlayersByTeam(team);
+      if (!players.length) {
+        return [1, 2];
+      }
+      return players.map((_, index) => index + 1);
+    },
+    [getPlayersByTeam]
+  );
+
+  const getPlayerNameByJersey = useCallback(
+    (team: 'A' | 'B', jersey: number) => {
+      const players = getPlayersByTeam(team);
+      const assignment = teamSetupForm[team].jerseyAssignment[String(jersey)];
+      return players[assignment ?? 0]?.name ?? `Jogador ${jersey}`;
+    },
+    [getPlayersByTeam, teamSetupForm]
+  );
+
+  const currentSetIndex = Math.max(0, (gameState?.currentSet ?? 1) - 1);
+  const currentSetNumber = gameState?.currentSet ?? 1;
+  const currentSetConfig = gameState?.setConfigurations?.[currentSetIndex];
+  const previousSetConfig = currentSetIndex > 0 ? gameState?.setConfigurations?.[currentSetIndex - 1] : undefined;
+  const isCurrentSetConfigured = Boolean(currentSetConfig?.isConfigured);
+  const previousCoinWinner = previousSetConfig?.coinToss?.winner;
+  const previousCoinLoser = previousSetConfig?.coinToss?.loser ?? (previousCoinWinner ? (previousCoinWinner === 'A' ? 'B' : 'A') : undefined);
+  const requiresCoinToss = currentSetNumber === 1 || currentSetNumber >= 3;
+
+  const handleCoinWinnerChange = useCallback((team: 'A' | 'B') => {
+    setCoinWinnerSelection(team);
+    setFirstChoiceTeamState(team);
+  }, []);
+
+  const handleFirstChoiceOptionChange = useCallback((option: CoinChoice) => {
+    setFirstChoiceOption(option);
+    if (option !== 'side') {
+      setSecondChoiceServeDecision(null);
+    }
+  }, []);
+
+  const handleSecondChoiceDecisionChange = useCallback((decision: 'serve' | 'receive') => {
+    setSecondChoiceServeDecision(decision);
+  }, []);
+
+  const handleSideSelectionChange = useCallback((team: 'A' | 'B', side: CourtSide) => {
+    setSideSelections(prev => ({ ...prev, [team]: side }));
+  }, []);
+
+  const handleJerseyAssignmentChange = useCallback(
+    (team: 'A' | 'B', jerseyNumber: number, playerIndex: number) => {
+      setTeamSetupForm(prev => {
+        const current = prev[team];
+        const updatedAssignment: Record<string, number | null> = { ...current.jerseyAssignment };
+        const jerseyKey = String(jerseyNumber);
+        const otherEntry = Object.entries(updatedAssignment).find(([, value]) => value === playerIndex);
+        if (otherEntry && otherEntry[0] !== jerseyKey) {
+          updatedAssignment[otherEntry[0]] = updatedAssignment[jerseyKey] ?? null;
+        }
+        updatedAssignment[jerseyKey] = playerIndex;
+        return {
+          ...prev,
+          [team]: {
+            ...current,
+            jerseyAssignment: updatedAssignment,
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const handleServiceOrderChange = useCallback(
+    (team: 'A' | 'B', positionIndex: number, jerseyNumber: number) => {
+      setTeamSetupForm(prev => {
+        const current = prev[team];
+        const order = [...current.serviceOrder];
+        const existingIndex = order.findIndex(value => value === jerseyNumber);
+        if (existingIndex !== -1 && existingIndex !== positionIndex) {
+          const temp = order[positionIndex];
+          order[existingIndex] = temp;
+        }
+        order[positionIndex] = jerseyNumber;
+        return {
+          ...prev,
+          [team]: {
+            ...current,
+            serviceOrder: order,
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const isSetConfigurationValid = useMemo(() => {
+    const validateTeam = (team: 'A' | 'B') => {
+      const players = getPlayersByTeam(team);
+      const defaultOrder = getDefaultServiceOrder(team);
+      const playerCount = Math.max(players.length, defaultOrder.length);
+      const assignment = teamSetupForm[team];
+      const assignedPlayers = new Set<number>();
+
+      for (let index = 1; index <= playerCount; index += 1) {
+        const value = assignment.jerseyAssignment[String(index)];
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+          return false;
+        }
+        assignedPlayers.add(value);
+      }
+
+      if (assignedPlayers.size < playerCount) {
+        return false;
+      }
+
+      const orderSource = assignment.serviceOrder.length ? [...assignment.serviceOrder] : [...defaultOrder];
+      defaultOrder.forEach(num => {
+        if (!orderSource.includes(num)) {
+          orderSource.push(num);
+        }
+      });
+
+      const orderSet = new Set<number>();
+      for (let index = 0; index < playerCount; index += 1) {
+        const value = orderSource[index];
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+          return false;
+        }
+        orderSet.add(value);
+      }
+
+      return orderSet.size >= playerCount;
+    };
+
+    const firstTeam = firstChoiceTeamState;
+    const secondTeam = firstTeam === 'A' ? 'B' : 'A';
+    const sideTeam = firstChoiceOption === 'side' ? firstTeam : secondTeam;
+    const sideSelected = sideSelections[sideTeam] !== null;
+    const secondChoiceValid = firstChoiceOption === 'side' ? secondChoiceServeDecision !== null : true;
+    const coinValid = requiresCoinToss ? coinWinnerSelection !== null : true;
+
+    return (
+      coinValid &&
+      secondChoiceValid &&
+      sideSelected &&
+      validateTeam('A') &&
+      validateTeam('B')
+    );
+  }, [
+    teamSetupForm,
+    firstChoiceTeamState,
+    firstChoiceOption,
+    sideSelections,
+    secondChoiceServeDecision,
+    requiresCoinToss,
+    coinWinnerSelection,
+    getPlayersByTeam,
+    getDefaultServiceOrder,
+  ]);
+
 
   const notifyFallbackActivated = useCallback(() => {
     if (fallbackWarningDisplayed.current) return;
@@ -377,8 +584,114 @@ export default function RefereeDesk() {
     }
   }, [playAlert, showSideSwitchAlert]);
 
+  useEffect(() => {
+    if (!setConfigDialogOpen || !game || !gameState) {
+      return;
+    }
+
+    const buildTeamFormState = (
+      team: 'A' | 'B',
+      configTeam: SetConfiguration['teams']['teamA'] | SetConfiguration['teams']['teamB'] | undefined
+    ) => {
+      const defaultAssignment = getDefaultJerseyAssignment(team);
+      const players = getPlayersByTeam(team);
+      const playerCount = Math.max(players.length, getDefaultServiceOrder(team).length);
+      const jerseyAssignment: Record<string, number | null> = {};
+      const sourceAssignment = configTeam?.jerseyAssignment ?? defaultAssignment;
+      for (let index = 1; index <= playerCount; index += 1) {
+        const key = String(index);
+        const rawValue = sourceAssignment?.[key];
+        if (typeof rawValue === 'number') {
+          jerseyAssignment[key] = rawValue;
+        } else if (typeof rawValue === 'string') {
+          const parsed = Number(rawValue);
+          jerseyAssignment[key] = Number.isNaN(parsed) ? defaultAssignment[key] ?? index - 1 : parsed;
+        } else {
+          jerseyAssignment[key] = defaultAssignment[key] ?? index - 1;
+        }
+      }
+
+      const fallbackOrder = getDefaultServiceOrder(team);
+      const storedOrder = Array.isArray(configTeam?.serviceOrder) && configTeam.serviceOrder.length
+        ? configTeam.serviceOrder.map(Number)
+        : fallbackOrder;
+      const normalizedOrder = [...storedOrder];
+      fallbackOrder.forEach(number => {
+        if (!normalizedOrder.includes(number)) {
+          normalizedOrder.push(number);
+        }
+      });
+
+      return {
+        jerseyAssignment,
+        serviceOrder: normalizedOrder.slice(0, playerCount),
+      };
+    };
+
+    const nextFormState = {
+      A: buildTeamFormState('A', currentSetConfig?.teams.teamA),
+      B: buildTeamFormState('B', currentSetConfig?.teams.teamB),
+    };
+    setTeamSetupForm(nextFormState);
+
+    const defaultFirstChoiceTeam = currentSetConfig?.isConfigured && currentSetConfig.firstChoiceTeam
+      ? currentSetConfig.firstChoiceTeam
+      : requiresCoinToss
+        ? 'A'
+        : previousCoinLoser ?? (previousCoinWinner === 'A' ? 'B' : 'A');
+
+    if (requiresCoinToss) {
+      const winner = currentSetConfig?.isConfigured ? currentSetConfig.coinToss?.winner ?? null : null;
+      setCoinWinnerSelection(winner);
+      setFirstChoiceTeamState(winner ?? defaultFirstChoiceTeam);
+    } else {
+      setCoinWinnerSelection(previousCoinWinner ?? null);
+      setFirstChoiceTeamState(defaultFirstChoiceTeam);
+    }
+
+    const initialFirstChoiceOption = currentSetConfig?.isConfigured
+      ? currentSetConfig.firstChoiceOption
+      : 'serve';
+    setFirstChoiceOption(initialFirstChoiceOption);
+
+    if (initialFirstChoiceOption === 'side') {
+      const decision =
+        currentSetConfig?.isConfigured && (currentSetConfig.secondChoiceOption === 'serve' || currentSetConfig.secondChoiceOption === 'receive')
+          ? (currentSetConfig.secondChoiceOption as 'serve' | 'receive')
+          : null;
+      setSecondChoiceServeDecision(decision);
+    } else {
+      setSecondChoiceServeDecision(null);
+    }
+
+    const initialSideSelections: { A: CourtSide | null; B: CourtSide | null } = { A: null, B: null };
+    if (currentSetConfig?.isConfigured && currentSetConfig.sideChoiceTeam && currentSetConfig.sideSelection) {
+      initialSideSelections[currentSetConfig.sideChoiceTeam] = currentSetConfig.sideSelection;
+    }
+    setSideSelections(initialSideSelections);
+  }, [
+    setConfigDialogOpen,
+    game,
+    gameState,
+    currentSetConfig,
+    requiresCoinToss,
+    previousCoinLoser,
+    previousCoinWinner,
+    getDefaultJerseyAssignment,
+    getPlayersByTeam,
+    getDefaultServiceOrder,
+  ]);
+
   const addPoint = async (team: 'A' | 'B', category: PointCategory) => {
     if (!gameState || !game || timer !== null || isSyncing) return;
+    if (!isCurrentSetConfigured) {
+      toast({
+        title: 'Configuração pendente',
+        description: 'Defina o início do set antes de registrar pontos.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (gameState.isGameEnded) {
       toast({
         title: 'Partida já finalizada',
@@ -406,19 +719,28 @@ export default function RefereeDesk() {
     const updatedState: GameState = {
       ...previousState,
       scores: updatedScores,
+      serviceOrders: {
+        teamA: [...previousState.serviceOrders.teamA],
+        teamB: [...previousState.serviceOrders.teamB],
+      },
+      nextServerIndex: { ...previousState.nextServerIndex },
     };
 
     if (previousState.possession !== team) {
-      const previousServerTeam = previousState.currentServerTeam;
-      updatedState.currentServerTeam = team;
-      updatedState.possession = team;
-
-      const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-      if (previousServerTeam === team) {
-        updatedState.currentServerPlayer = (previousState.currentServerPlayer % maxPlayers) + 1;
-      } else {
-        updatedState.currentServerPlayer = 1;
+      const serviceKey: 'teamA' | 'teamB' = team === 'A' ? 'teamA' : 'teamB';
+      const order = updatedState.serviceOrders[serviceKey]?.length
+        ? updatedState.serviceOrders[serviceKey]
+        : getDefaultServiceOrder(team);
+      if (!updatedState.serviceOrders[serviceKey]?.length) {
+        updatedState.serviceOrders[serviceKey] = order;
       }
+
+      const rotationIndex = updatedState.nextServerIndex[serviceKey] ?? 0;
+      const normalizedIndex = order.length > 0 ? rotationIndex % order.length : 0;
+      updatedState.currentServerTeam = team;
+      updatedState.currentServerPlayer = order[normalizedIndex] ?? 1;
+      updatedState.possession = team;
+      updatedState.nextServerIndex[serviceKey] = order.length > 0 ? (normalizedIndex + 1) % order.length : 0;
     } else {
       updatedState.possession = team;
     }
@@ -499,8 +821,21 @@ export default function RefereeDesk() {
       } else {
         updatedState.currentSet = previousState.currentSet + 1;
         updatedState.currentServerPlayer = 1;
-        updatedState.currentServerTeam = team;
-        updatedState.possession = team;
+        updatedState.currentServerTeam = 'A';
+        updatedState.possession = 'A';
+        updatedState.serviceOrders = {
+          teamA: getDefaultServiceOrder('A'),
+          teamB: getDefaultServiceOrder('B'),
+        };
+        updatedState.nextServerIndex = { teamA: 0, teamB: 0 };
+
+        const nextSetIndex = previousState.currentSet;
+        const defaultConfigurations = createDefaultGameState(game).setConfigurations;
+        if (defaultConfigurations[nextSetIndex]) {
+          updatedState.setConfigurations = previousState.setConfigurations.map((config, index) =>
+            index === nextSetIndex ? defaultConfigurations[nextSetIndex] : config
+          );
+        }
       }
     }
 
@@ -530,15 +865,45 @@ export default function RefereeDesk() {
 
   const switchServerTeam = async () => {
     if (!gameState || isSyncing || gameState.isGameEnded) return;
+    if (!isCurrentSetConfigured) {
+      toast({
+        title: 'Configuração pendente',
+        description: 'Defina o início do set antes de ajustar a posse.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const previousState = snapshotState(gameState);
     setGameHistory(prev => [...prev, previousState]);
 
+    const newTeam: 'A' | 'B' = previousState.currentServerTeam === 'A' ? 'B' : 'A';
+    const serviceKey: 'teamA' | 'teamB' = newTeam === 'A' ? 'teamA' : 'teamB';
+    const order = previousState.serviceOrders[serviceKey]?.length
+      ? previousState.serviceOrders[serviceKey]
+      : getDefaultServiceOrder(newTeam);
+    const rotationIndex = previousState.nextServerIndex[serviceKey] ?? 0;
+    const normalizedIndex = order.length > 0 ? rotationIndex % order.length : 0;
+    const nextServerPlayer = order[normalizedIndex] ?? 1;
+
     const updatedState: GameState = {
       ...previousState,
-      currentServerTeam: previousState.currentServerTeam === 'A' ? 'B' : 'A',
-      currentServerPlayer: 1,
+      currentServerTeam: newTeam,
+      currentServerPlayer: nextServerPlayer,
+      serviceOrders: {
+        teamA: [...previousState.serviceOrders.teamA],
+        teamB: [...previousState.serviceOrders.teamB],
+      },
+      nextServerIndex: {
+        ...previousState.nextServerIndex,
+        [serviceKey]: order.length > 0 ? (normalizedIndex + 1) % order.length : 0,
+      },
+      possession: newTeam,
     };
+
+    if (!updatedState.serviceOrders[serviceKey]?.length) {
+      updatedState.serviceOrders[serviceKey] = order;
+    }
 
     try {
       await persistState(updatedState);
@@ -553,17 +918,43 @@ export default function RefereeDesk() {
 
   const changeCurrentServer = async () => {
     if (!gameState || !game || isSyncing || gameState.isGameEnded) return;
+    if (!isCurrentSetConfigured) {
+      toast({
+        title: 'Configuração pendente',
+        description: 'Defina o início do set antes de alternar o sacador.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const previousState = snapshotState(gameState);
     setGameHistory(prev => [...prev, previousState]);
 
-    const maxPlayers = game.modality === 'dupla' ? 2 : 4;
-    const nextPlayer = (previousState.currentServerPlayer % maxPlayers) + 1;
+    const team = previousState.currentServerTeam;
+    const serviceKey: 'teamA' | 'teamB' = team === 'A' ? 'teamA' : 'teamB';
+    const order = previousState.serviceOrders[serviceKey]?.length
+      ? previousState.serviceOrders[serviceKey]
+      : getDefaultServiceOrder(team);
+    const currentIndex = order.findIndex(value => value === previousState.currentServerPlayer);
+    const nextIndex = order.length > 0 ? (currentIndex === -1 ? 0 : (currentIndex + 1) % order.length) : 0;
+    const nextPlayer = order[nextIndex] ?? previousState.currentServerPlayer;
 
     const updatedState: GameState = {
       ...previousState,
       currentServerPlayer: nextPlayer,
+      serviceOrders: {
+        teamA: [...previousState.serviceOrders.teamA],
+        teamB: [...previousState.serviceOrders.teamB],
+      },
+      nextServerIndex: {
+        ...previousState.nextServerIndex,
+        [serviceKey]: order.length > 0 ? (nextIndex + 1) % order.length : 0,
+      },
     };
+
+    if (!updatedState.serviceOrders[serviceKey]?.length) {
+      updatedState.serviceOrders[serviceKey] = order;
+    }
 
     try {
       await persistState(updatedState);
@@ -574,6 +965,163 @@ export default function RefereeDesk() {
       });
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
+    }
+  };
+
+  const applySetConfiguration = async () => {
+    if (!gameState || !game || !isSetConfigurationValid) {
+      return;
+    }
+
+    const previousState = snapshotState(gameState);
+    setGameHistory(prev => [...prev, previousState]);
+
+    const firstTeam = firstChoiceTeamState;
+    const secondTeam = firstTeam === 'A' ? 'B' : 'A';
+    const sideTeam = firstChoiceOption === 'side' ? firstTeam : secondTeam;
+    const sideSelection = sideSelections[sideTeam];
+    const secondChoiceOption: CoinChoice =
+      firstChoiceOption === 'side'
+        ? (secondChoiceServeDecision ?? 'serve')
+        : 'side';
+
+    const normalizeJerseyAssignment = (team: 'A' | 'B') => {
+      const defaultAssignment = getDefaultJerseyAssignment(team);
+      const players = getPlayersByTeam(team);
+      const playerCount = Math.max(players.length, getDefaultServiceOrder(team).length);
+      const assignment: Record<string, number> = {};
+      for (let index = 1; index <= playerCount; index += 1) {
+        const key = String(index);
+        const value = teamSetupForm[team].jerseyAssignment[key];
+        const fallback = defaultAssignment[key] ?? index - 1;
+        assignment[key] = typeof value === 'number' && !Number.isNaN(value) ? value : fallback;
+      }
+      return assignment;
+    };
+
+    const normalizeServiceOrder = (team: 'A' | 'B') => {
+      const defaultOrder = getDefaultServiceOrder(team);
+      const source = teamSetupForm[team].serviceOrder.length
+        ? [...teamSetupForm[team].serviceOrder]
+        : [...defaultOrder];
+      defaultOrder.forEach(num => {
+        if (!source.includes(num)) {
+          source.push(num);
+        }
+      });
+      return source.slice(0, defaultOrder.length);
+    };
+
+    const serviceOrderA = normalizeServiceOrder('A');
+    const serviceOrderB = normalizeServiceOrder('B');
+
+    const startingServerTeam: 'A' | 'B' =
+      firstChoiceOption === 'serve'
+        ? firstTeam
+        : firstChoiceOption === 'receive'
+          ? secondTeam
+          : secondChoiceOption === 'serve'
+            ? secondTeam
+            : firstTeam;
+
+    const startingServerPlayer = (startingServerTeam === 'A' ? serviceOrderA : serviceOrderB)[0] ?? 1;
+    const receivingTeam = startingServerTeam === 'A' ? 'B' : 'A';
+
+    const coinWinner = requiresCoinToss
+      ? coinWinnerSelection ?? firstTeam
+      : previousCoinWinner ?? (firstTeam === 'A' ? 'B' : 'A');
+    const coinLoser = requiresCoinToss
+      ? (coinWinner === 'A' ? 'B' : 'A')
+      : previousCoinLoser ?? (coinWinner === 'A' ? 'B' : 'A');
+
+    const nextServerIndex = {
+      teamA: startingServerTeam === 'A' && serviceOrderA.length > 1 ? 1 % serviceOrderA.length : 0,
+      teamB: startingServerTeam === 'B' && serviceOrderB.length > 1 ? 1 % serviceOrderB.length : 0,
+    };
+
+    let leftIsTeamA = previousState.leftIsTeamA;
+    if (sideSelection) {
+      if (sideTeam === 'A') {
+        leftIsTeamA = sideSelection === 'left';
+      } else {
+        leftIsTeamA = sideSelection !== 'left';
+      }
+    }
+
+    const updatedConfigurations = previousState.setConfigurations.map((config, index) => {
+      if (index !== currentSetIndex) {
+        return config;
+      }
+      return {
+        setNumber: currentSetNumber,
+        isConfigured: true,
+        firstChoiceTeam,
+        firstChoiceOption,
+        firstChoiceSide: firstChoiceOption === 'side' ? sideSelections[firstTeam] ?? undefined : undefined,
+        secondChoiceOption,
+        secondChoiceSide: secondChoiceOption === 'side' ? sideSelections[secondTeam] ?? undefined : undefined,
+        sideChoiceTeam: sideTeam,
+        sideSelection: sideSelection ?? 'left',
+        startingServerTeam,
+        startingReceiverTeam: receivingTeam,
+        startingServerPlayer,
+        coinToss: {
+          performed: requiresCoinToss,
+          winner: coinWinner,
+          loser: coinLoser,
+        },
+        teams: {
+          teamA: {
+            jerseyAssignment: normalizeJerseyAssignment('A'),
+            serviceOrder: serviceOrderA,
+          },
+          teamB: {
+            jerseyAssignment: normalizeJerseyAssignment('B'),
+            serviceOrder: serviceOrderB,
+          },
+        },
+      };
+    });
+
+    const updatedState: GameState = {
+      ...previousState,
+      currentServerTeam: startingServerTeam,
+      currentServerPlayer: startingServerPlayer,
+      possession: startingServerTeam,
+      leftIsTeamA,
+      serviceOrders: {
+        teamA: serviceOrderA,
+        teamB: serviceOrderB,
+      },
+      nextServerIndex,
+      setConfigurations: updatedConfigurations,
+    };
+
+    try {
+      await persistState(updatedState);
+      await logMatchEvent({
+        eventType: 'SET_CONFIGURATION_APPLIED',
+        setNumber: currentSetNumber,
+        metadata: {
+          startingServerTeam,
+          startingServerPlayer,
+          sideChoiceTeam: sideTeam,
+          sideSelection: sideSelection ?? 'left',
+          coinToss: {
+            performed: requiresCoinToss,
+            winner: coinWinner,
+            loser: coinLoser,
+          },
+        },
+      });
+      setSetConfigDialogOpen(false);
+    } catch (error) {
+      setGameHistory(prev => prev.slice(0, -1));
+      toast({
+        title: 'Erro ao aplicar configuração',
+        description: error instanceof Error ? error.message : 'Não foi possível salvar a configuração do set.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -641,6 +1189,14 @@ export default function RefereeDesk() {
 
   const startTimeout = async (type: 'team' | 'technical' | 'medical', team?: 'A' | 'B') => {
     if (!gameState || !game || isSyncing) return;
+    if (!isCurrentSetConfigured) {
+      toast({
+        title: 'Configuração pendente',
+        description: 'Defina o início do set antes de controlar tempos.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (gameState.isGameEnded) {
       toast({
         title: 'Partida finalizada',
@@ -798,27 +1354,52 @@ export default function RefereeDesk() {
     );
   }
 
-  const currentSetIndex = gameState.currentSet - 1;
-  const scoreA = gameState.scores.teamA[currentSetIndex] || 0;
-  const scoreB = gameState.scores.teamB[currentSetIndex] || 0;
+  const activeSetIndex = Math.max(0, Math.min(currentSetIndex, gameState.scores.teamA.length - 1));
+  const scoreA = gameState.scores.teamA[activeSetIndex] ?? 0;
+  const scoreB = gameState.scores.teamB[activeSetIndex] ?? 0;
   const leftTeam = gameState.leftIsTeamA ? 'A' : 'B';
   const rightTeam = gameState.leftIsTeamA ? 'B' : 'A';
   const leftTeamName = leftTeam === 'A' ? game.teamA.name : game.teamB.name;
   const rightTeamName = rightTeam === 'A' ? game.teamA.name : game.teamB.name;
   const leftTeamScores = leftTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
   const rightTeamScores = rightTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
-  const serverTeamName = gameState.currentServerTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const serverTeamName = isCurrentSetConfigured
+    ? gameState.currentServerTeam === 'A'
+      ? game.teamA.name
+      : game.teamB.name
+    : 'Configuração pendente';
+  const serverPlayerDisplay = isCurrentSetConfigured ? gameState.currentServerPlayer : '-';
   const leftTeamColorClass = leftTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
   const rightTeamColorClass = rightTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
   const leftScoreButtonVariant = leftTeam === 'A' ? 'team' : 'teamB';
   const rightScoreButtonVariant = rightTeam === 'A' ? 'team' : 'teamB';
-  const leftHasPossession = gameState.possession === leftTeam;
-  const rightHasPossession = gameState.possession === rightTeam;
+  const leftHasPossession = isCurrentSetConfigured && gameState.possession === leftTeam;
+  const rightHasPossession = isCurrentSetConfigured && gameState.possession === rightTeam;
   const possessionGlow = 'shadow-[0_0_35px_rgba(250,204,21,0.4)]';
-  const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
+  const possessionTeamName = isCurrentSetConfigured
+    ? gameState.possession === 'A'
+      ? game.teamA.name
+      : game.teamB.name
+    : 'Configuração pendente';
+  const playersTeamA = getPlayersByTeam('A');
+  const playersTeamB = getPlayersByTeam('B');
+  const jerseyNumbersA = getDefaultServiceOrder('A');
+  const jerseyNumbersB = getDefaultServiceOrder('B');
+  const servicePositionsA = jerseyNumbersA;
+  const servicePositionsB = jerseyNumbersB;
+  const secondTeamForChoices = firstChoiceTeamState === 'A' ? 'B' : 'A';
+  const firstChoiceTeamName = firstChoiceTeamState === 'A' ? game.teamA.name : game.teamB.name;
+  const secondChoiceTeamName = secondTeamForChoices === 'A' ? game.teamA.name : game.teamB.name;
+  const sideChoiceTeamForDisplay = firstChoiceOption === 'side' ? firstChoiceTeamState : secondTeamForChoices;
+  const sideChoiceTeamName = sideChoiceTeamForDisplay === 'A' ? game.teamA.name : game.teamB.name;
 
   const coinFaceToShow = (coinResult ?? 'heads') as CoinSide;
   const gameIsEnded = gameState.isGameEnded;
+  const setConfigButtonLabel = isCurrentSetConfigured
+    ? 'Editar início'
+    : currentSetNumber === 1
+      ? 'Início da partida'
+      : 'Configurar início do set';
   const mobileControlButtons = [
     {
       icon: RotateCcw,
@@ -830,19 +1411,19 @@ export default function RefereeDesk() {
       icon: Pause,
       label: 'Timeout A',
       onClick: () => void startTimeout('team', 'A'),
-      disabled: !!gameState?.activeTimer || gameIsEnded,
+      disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: Pause,
       label: 'Timeout B',
       onClick: () => void startTimeout('team', 'B'),
-      disabled: !!gameState?.activeTimer || gameIsEnded,
+      disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: Stethoscope,
       label: 'Tempo Médico',
       onClick: () => void startTimeout('medical'),
-      disabled: !!gameState?.activeTimer || gameIsEnded,
+      disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: Square,
@@ -883,14 +1464,26 @@ export default function RefereeDesk() {
         {/* Header */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <Button
-              variant="outline"
-              className="w-fit bg-amber-400 text-slate-900 font-semibold border-transparent hover:bg-amber-300 md:border-white/30 md:bg-transparent md:text-white md:hover:bg-white/20"
-              onClick={() => navigate(-1)}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Voltar
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="w-fit bg-amber-400 text-slate-900 font-semibold border-transparent hover:bg-amber-300 md:border-white/30 md:bg-transparent md:text-white md:hover:bg-white/20"
+                onClick={() => navigate(-1)}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
+              </Button>
+              <Button
+                variant="outline"
+                className={cn(
+                  'w-fit border-transparent bg-white/15 text-white font-semibold hover:bg-white/25 md:bg-amber-400 md:text-slate-900 md:hover:bg-amber-300',
+                  !isCurrentSetConfigured && 'animate-pulse'
+                )}
+                onClick={() => setSetConfigDialogOpen(true)}
+              >
+                {setConfigButtonLabel}
+              </Button>
+            </div>
             <div className="hidden md:block md:text-right">
               <h1 className="text-3xl font-bold">{game.title}</h1>
               <p className="text-white/70">{game.category} • {game.modality} • {game.format}</p>
@@ -904,11 +1497,16 @@ export default function RefereeDesk() {
               Parcial de sets {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
             </Badge>
             <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
-              Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+              Sacando: {serverTeamName} ({serverPlayerDisplay})
             </Badge>
             <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
               Posse: {possessionTeamName}
             </Badge>
+            {!isCurrentSetConfigured && (
+              <Badge variant="destructive" className="bg-amber-500 text-slate-900 border-transparent">
+                Início do set pendente
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -938,10 +1536,10 @@ export default function RefereeDesk() {
                     </Badge>
                   ))}
                 </div>
-                {gameState.currentServerTeam === leftTeam && (
+                {isCurrentSetConfigured && gameState.currentServerTeam === leftTeam && (
                   <Badge className="border border-white/30 bg-white/25 text-white">
                     <Zap className="mr-1 h-4 w-4" />
-                    Sacando ({gameState.currentServerPlayer})
+                    Sacando ({serverPlayerDisplay})
                   </Badge>
                 )}
               </div>
@@ -967,10 +1565,10 @@ export default function RefereeDesk() {
                     </Badge>
                   ))}
                 </div>
-                {gameState.currentServerTeam === rightTeam && (
+                {isCurrentSetConfigured && gameState.currentServerTeam === rightTeam && (
                   <Badge className="border border-white/30 bg-white/25 text-white">
                     <Zap className="mr-1 h-4 w-4" />
-                    Sacando ({gameState.currentServerPlayer})
+                    Sacando ({serverPlayerDisplay})
                   </Badge>
                 )}
               </div>
@@ -980,7 +1578,7 @@ export default function RefereeDesk() {
               <div>Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</div>
               <div className="flex items-center justify-center gap-2 text-amber-200">
                 <Zap className="h-4 w-4" />
-                Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+                Sacando: {serverTeamName} ({serverPlayerDisplay})
               </div>
               {timer !== null && (
                 <div className="mx-auto flex w-full max-w-[200px] items-center justify-center gap-2 rounded-full border border-amber-200/60 bg-amber-200/10 px-3 py-1 text-base font-semibold text-amber-100 shadow-inner">
@@ -999,10 +1597,10 @@ export default function RefereeDesk() {
               variant={leftScoreButtonVariant}
               size="score"
               onClick={() => {
-                if (timer !== null || gameIsEnded) return;
+                if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
                 setShowPointCategories(leftTeam);
               }}
-              disabled={timer !== null || gameIsEnded}
+              disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
@@ -1011,10 +1609,10 @@ export default function RefereeDesk() {
               variant={rightScoreButtonVariant}
               size="score"
               onClick={() => {
-                if (timer !== null || gameIsEnded) return;
+                if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
                 setShowPointCategories(rightTeam);
               }}
-              disabled={timer !== null || gameIsEnded}
+              disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
@@ -1062,10 +1660,10 @@ export default function RefereeDesk() {
                     </Badge>
                   ))}
                 </div>
-                {gameState.currentServerTeam === leftTeam && (
+                {isCurrentSetConfigured && gameState.currentServerTeam === leftTeam && (
                   <Badge className="border border-white/40 bg-white/25 text-white">
                     <Zap className="mr-1 h-4 w-4" />
-                    Sacando ({gameState.currentServerPlayer})
+                    Sacando ({serverPlayerDisplay})
                   </Badge>
                 )}
               </div>
@@ -1111,10 +1709,10 @@ export default function RefereeDesk() {
                     </Badge>
                   ))}
                 </div>
-                {gameState.currentServerTeam === rightTeam && (
+                {isCurrentSetConfigured && gameState.currentServerTeam === rightTeam && (
                   <Badge className="border border-white/40 bg-white/25 text-white">
                     <Zap className="mr-1 h-4 w-4" />
-                    Sacando ({gameState.currentServerPlayer})
+                    Sacando ({serverPlayerDisplay})
                   </Badge>
                 )}
               </div>
@@ -1139,11 +1737,11 @@ export default function RefereeDesk() {
                   <ScoreButton
                     variant={leftScoreButtonVariant}
                     size="score"
-                    onClick={() => {
-                      if (timer !== null || gameIsEnded) return;
+                  onClick={() => {
+                      if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
                       setShowPointCategories(leftTeam);
                     }}
-                    disabled={timer !== null || gameIsEnded}
+                    disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
                     className="h-28 w-full text-5xl"
                   >
                     <Plus size={28} />
@@ -1155,10 +1753,10 @@ export default function RefereeDesk() {
                     variant={rightScoreButtonVariant}
                     size="score"
                     onClick={() => {
-                      if (timer !== null || gameIsEnded) return;
+                      if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
                       setShowPointCategories(rightTeam);
                     }}
-                    disabled={timer !== null || gameIsEnded}
+                    disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
                     className="h-28 w-full text-5xl"
                   >
                     <Plus size={28} />
@@ -1272,7 +1870,9 @@ export default function RefereeDesk() {
                   disabled={gameIsEnded}
                 >
                   <UserCheck className="mr-2 h-4 w-4" />
-                  Próximo Sacador ({gameState.currentServerTeam} - {((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})
+                  {isCurrentSetConfigured
+                    ? `Próximo Sacador (${gameState.currentServerTeam} - ${((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})`
+                    : 'Próximo Sacador (definir início)'}
                 </Button>
               </div>
             </CardContent>
@@ -1311,6 +1911,201 @@ export default function RefereeDesk() {
           </Card>
 
         </div>
+
+        <Dialog open={setConfigDialogOpen} onOpenChange={setSetConfigDialogOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Configurar início do set {currentSetNumber}</DialogTitle>
+              <DialogDescription>
+                Defina as numerações e escolhas iniciais para liberar os controles deste set.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6">
+              <section className="space-y-3">
+                <h3 className="text-base font-semibold text-white">Numeração das duplas</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {(['A', 'B'] as const).map(teamKey => {
+                    const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
+                    const jerseyNumbers = teamKey === 'A' ? jerseyNumbersA : jerseyNumbersB;
+                    const players = teamKey === 'A' ? playersTeamA : playersTeamB;
+                    return (
+                      <div key={teamKey} className="space-y-3">
+                        <h4 className="text-sm font-semibold text-white/90">{teamName}</h4>
+                        <div className="space-y-3">
+                          {jerseyNumbers.map(number => {
+                            const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
+                            return (
+                              <div key={number} className="space-y-1">
+                                <Label className="text-xs text-white/80">Jogador número {number}</Label>
+                                <Select
+                                  value={typeof value === 'number' ? String(value) : undefined}
+                                  onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
+                                >
+                                  <SelectTrigger className="bg-white/10 text-white border-white/20">
+                                    <SelectValue placeholder="Selecione um atleta" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {players.map((player, index) => (
+                                      <SelectItem key={player.name} value={String(index)}>
+                                        {player.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="text-base font-semibold text-white">Escolhas iniciais</h3>
+                {requiresCoinToss ? (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-white/80">Quem venceu o cara ou coroa?</Label>
+                    <Select
+                      value={coinWinnerSelection ?? undefined}
+                      onValueChange={val => handleCoinWinnerChange(val as 'A' | 'B')}
+                    >
+                      <SelectTrigger className="bg-white/10 text-white border-white/20">
+                        <SelectValue placeholder="Selecione a dupla vencedora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">{game.teamA.name}</SelectItem>
+                        <SelectItem value="B">{game.teamB.name}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <p className="rounded-md bg-white/5 px-3 py-2 text-xs text-white/70">
+                    A dupla {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
+                  </p>
+                )}
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-white/80">Escolha da dupla {firstChoiceTeamName}</Label>
+                  <Select
+                    value={firstChoiceOption}
+                    onValueChange={val => handleFirstChoiceOptionChange(val as CoinChoice)}
+                  >
+                    <SelectTrigger className="bg-white/10 text-white border-white/20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="serve">Sacar primeiro</SelectItem>
+                      <SelectItem value="receive">Receber primeiro</SelectItem>
+                      <SelectItem value="side">Escolher lado da quadra</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {firstChoiceOption === 'side' ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-white/80">Lado escolhido por {firstChoiceTeamName}</Label>
+                      <Select
+                        value={sideSelections[firstChoiceTeamState] ?? undefined}
+                        onValueChange={val => handleSideSelectionChange(firstChoiceTeamState, val as CourtSide)}
+                      >
+                        <SelectTrigger className="bg-white/10 text-white border-white/20">
+                          <SelectValue placeholder="Selecione o lado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="left">Lado esquerdo</SelectItem>
+                          <SelectItem value="right">Lado direito</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-white/80">Escolha da dupla {secondChoiceTeamName}</Label>
+                      <Select
+                        value={secondChoiceServeDecision ?? undefined}
+                        onValueChange={val => handleSecondChoiceDecisionChange(val as 'serve' | 'receive')}
+                      >
+                        <SelectTrigger className="bg-white/10 text-white border-white/20">
+                          <SelectValue placeholder="Selecione a opção" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="serve">Sacar primeiro</SelectItem>
+                          <SelectItem value="receive">Receber primeiro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-white/80">Lado escolhido por {secondChoiceTeamName}</Label>
+                    <Select
+                      value={sideSelections[secondTeamForChoices] ?? undefined}
+                      onValueChange={val => handleSideSelectionChange(secondTeamForChoices, val as CourtSide)}
+                    >
+                      <SelectTrigger className="bg-white/10 text-white border-white/20">
+                        <SelectValue placeholder="Selecione o lado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="left">Lado esquerdo</SelectItem>
+                        <SelectItem value="right">Lado direito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="text-base font-semibold text-white">Ordem de saque</h3>
+                <p className="text-xs text-white/60">
+                  Defina a sequência de sacadores para cada dupla. A ordem será utilizada sempre que a dupla recuperar o saque.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {(['A', 'B'] as const).map(teamKey => {
+                    const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
+                    const positions = teamKey === 'A' ? servicePositionsA : servicePositionsB;
+                    return (
+                      <div key={teamKey} className="space-y-3">
+                        <h4 className="text-sm font-semibold text-white/90">{teamName}</h4>
+                        {positions.map((_, index) => {
+                          const currentValue = teamSetupForm[teamKey].serviceOrder[index] ?? positions[index];
+                          return (
+                            <div key={`${teamKey}-service-${index}`} className="space-y-1">
+                              <Label className="text-xs text-white/80">{index + 1}º sacador</Label>
+                              <Select
+                                value={currentValue ? String(currentValue) : undefined}
+                                onValueChange={val => handleServiceOrderChange(teamKey, index, Number(val))}
+                              >
+                                <SelectTrigger className="bg-white/10 text-white border-white/20">
+                                  <SelectValue placeholder="Selecione o atleta" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {positions.map(number => (
+                                    <SelectItem key={`${teamKey}-order-${number}`} value={String(number)}>
+                                      Jogador nº {number} ({getPlayerNameByJersey(teamKey, number)})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSetConfigDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => void applySetConfiguration()} disabled={!isSetConfigurationValid || isSyncing}>
+                {isSyncing ? 'Salvando...' : 'Aplicar configuração'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Side Switch Alert */}
         {showSideSwitchAlert && (

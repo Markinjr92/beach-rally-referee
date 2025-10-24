@@ -1,4 +1,10 @@
-import { Game, GameState, Timer } from "@/types/volleyball";
+import {
+  Game,
+  GameState,
+  SetConfiguration,
+  TeamSetConfiguration,
+  Timer,
+} from "@/types/volleyball";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 export type MatchStateRow = Tables<"match_states">;
@@ -13,8 +19,57 @@ const ensureArray = <T>(value: T[] | null | undefined, fallbackLength: number, f
   return Array.from({ length: fallbackLength }, () => fallbackValue);
 };
 
+const buildDefaultServiceOrder = (game: Game, team: "A" | "B"): number[] => {
+  const players = team === "A" ? game.teamA.players : game.teamB.players;
+  if (!players || players.length === 0) {
+    return [1, 2];
+  }
+  return players.map((_, index) => index + 1);
+};
+
+const buildDefaultTeamConfiguration = (game: Game, team: "A" | "B"): TeamSetConfiguration => {
+  const players = team === "A" ? game.teamA.players : game.teamB.players;
+  const assignment: Record<string, number> = {};
+  players.forEach((_, index) => {
+    assignment[String(index + 1)] = index;
+  });
+
+  return {
+    jerseyAssignment: assignment,
+    serviceOrder: buildDefaultServiceOrder(game, team),
+  };
+};
+
+const buildDefaultSetConfigurations = (game: Game, sets: number): SetConfiguration[] => {
+  return Array.from({ length: sets }, (_, index) => {
+    const setNumber = index + 1;
+    return {
+      setNumber,
+      isConfigured: false,
+      firstChoiceTeam: "A",
+      firstChoiceOption: "serve",
+      secondChoiceOption: "side",
+      sideChoiceTeam: "B",
+      sideSelection: "left",
+      startingServerTeam: "A",
+      startingReceiverTeam: "B",
+      startingServerPlayer: 1,
+      coinToss: {
+        performed: false,
+        winner: undefined,
+        loser: undefined,
+      },
+      teams: {
+        teamA: buildDefaultTeamConfiguration(game, "A"),
+        teamB: buildDefaultTeamConfiguration(game, "B"),
+      },
+    } satisfies SetConfiguration;
+  });
+};
+
 export const createDefaultGameState = (game: Game): GameState => {
   const sets = game.pointsPerSet?.length ?? 3;
+  const defaultSetConfigurations = buildDefaultSetConfigurations(game, sets);
   return {
     id: `${game.id}-state`,
     gameId: game.id,
@@ -34,6 +89,12 @@ export const createDefaultGameState = (game: Game): GameState => {
     },
     technicalTimeoutUsed: Array.from({ length: sets }, () => false),
     sidesSwitched: Array.from({ length: sets }, () => 0),
+    serviceOrders: {
+      teamA: buildDefaultServiceOrder(game, "A"),
+      teamB: buildDefaultServiceOrder(game, "B"),
+    },
+    nextServerIndex: { teamA: 0, teamB: 0 },
+    setConfigurations: defaultSetConfigurations,
     events: [],
     activeTimer: null,
     isGameEnded: false,
@@ -43,6 +104,15 @@ export const createDefaultGameState = (game: Game): GameState => {
 export const mapRowToGameState = (row: MatchStateRow, game: Game): GameState => {
   const sets = game.pointsPerSet?.length ?? 3;
   const activeTimer = row.active_timer as (Record<string, any> | null) | undefined;
+  const storedServiceOrders = (row.service_orders as
+    | { teamA?: number[]; teamB?: number[] }
+    | null
+    | undefined) ?? null;
+  const storedNextServerIndex = (row.next_server_index as
+    | { teamA?: number; teamB?: number }
+    | null
+    | undefined) ?? null;
+  const storedConfigurations = (row.set_configurations as any as SetConfiguration[] | undefined) ?? undefined;
 
   let timer: Timer | null = null;
   if (activeTimer && typeof activeTimer === "object" && activeTimer.id) {
@@ -55,6 +125,65 @@ export const mapRowToGameState = (row: MatchStateRow, game: Game): GameState => 
       team: activeTimer.team === "A" || activeTimer.team === "B" ? activeTimer.team : undefined,
     };
   }
+
+  const defaultState = createDefaultGameState(game);
+
+  const mergeTeamConfiguration = (config: TeamSetConfiguration | undefined, team: "A" | "B"): TeamSetConfiguration => {
+    if (!config) {
+      return buildDefaultTeamConfiguration(game, team);
+    }
+
+    const jerseyAssignment: Record<string, number> = {};
+    Object.entries(config.jerseyAssignment ?? {}).forEach(([key, value]) => {
+      jerseyAssignment[key] = Number(value);
+    });
+
+    const serviceOrder = Array.isArray(config.serviceOrder) && config.serviceOrder.length
+      ? config.serviceOrder.map(Number)
+      : buildDefaultServiceOrder(game, team);
+
+    return {
+      jerseyAssignment,
+      serviceOrder,
+    };
+  };
+
+  const setConfigurations: SetConfiguration[] = defaultState.setConfigurations.map((defaultConfig, index) => {
+    const storedConfig = storedConfigurations?.[index];
+    if (!storedConfig) {
+      return defaultConfig;
+    }
+
+    const coinToss = storedConfig.coinToss ?? defaultConfig.coinToss;
+    const firstChoiceTeam = storedConfig.firstChoiceTeam ?? defaultConfig.firstChoiceTeam;
+    const startingServerTeam = storedConfig.startingServerTeam ?? defaultConfig.startingServerTeam;
+    const startingReceiverTeam = storedConfig.startingReceiverTeam ?? (startingServerTeam === "A" ? "B" : "A");
+    const sideChoiceTeam = storedConfig.sideChoiceTeam ?? defaultConfig.sideChoiceTeam;
+
+    return {
+      setNumber: storedConfig.setNumber ?? defaultConfig.setNumber,
+      isConfigured: storedConfig.isConfigured ?? defaultConfig.isConfigured,
+      firstChoiceTeam,
+      firstChoiceOption: storedConfig.firstChoiceOption ?? defaultConfig.firstChoiceOption,
+      firstChoiceSide: storedConfig.firstChoiceSide ?? defaultConfig.firstChoiceSide,
+      secondChoiceOption: storedConfig.secondChoiceOption ?? defaultConfig.secondChoiceOption,
+      secondChoiceSide: storedConfig.secondChoiceSide ?? defaultConfig.secondChoiceSide,
+      sideChoiceTeam,
+      sideSelection: storedConfig.sideSelection ?? defaultConfig.sideSelection,
+      startingServerTeam,
+      startingReceiverTeam,
+      startingServerPlayer: storedConfig.startingServerPlayer ?? defaultConfig.startingServerPlayer,
+      coinToss: {
+        performed: coinToss?.performed ?? defaultConfig.coinToss.performed,
+        winner: coinToss?.winner ?? defaultConfig.coinToss.winner,
+        loser: coinToss?.loser ?? defaultConfig.coinToss.loser,
+      },
+      teams: {
+        teamA: mergeTeamConfiguration(storedConfig.teams?.teamA, "A"),
+        teamB: mergeTeamConfiguration(storedConfig.teams?.teamB, "B"),
+      },
+    };
+  });
 
   return {
     id: `${row.match_id}-state`,
@@ -78,6 +207,19 @@ export const mapRowToGameState = (row: MatchStateRow, game: Game): GameState => 
     },
     technicalTimeoutUsed: ensureArray<boolean>(row.technical_timeout_used as any, sets, false).map(Boolean),
     sidesSwitched: ensureArray<number>(row.sides_switched as any, sets, 0).map(Number),
+    serviceOrders: {
+      teamA: Array.isArray(storedServiceOrders?.teamA) && storedServiceOrders?.teamA.length
+        ? storedServiceOrders.teamA.map(Number)
+        : defaultState.serviceOrders.teamA,
+      teamB: Array.isArray(storedServiceOrders?.teamB) && storedServiceOrders?.teamB.length
+        ? storedServiceOrders.teamB.map(Number)
+        : defaultState.serviceOrders.teamB,
+    },
+    nextServerIndex: {
+      teamA: Number(storedNextServerIndex?.teamA ?? defaultState.nextServerIndex.teamA),
+      teamB: Number(storedNextServerIndex?.teamB ?? defaultState.nextServerIndex.teamB),
+    },
+    setConfigurations,
     events: [],
     activeTimer: timer,
     isGameEnded: row.is_game_ended ?? false,
@@ -103,6 +245,15 @@ export const mapGameStateToRow = (state: GameState): TablesInsert<"match_states"
     },
     technical_timeout_used: state.technicalTimeoutUsed,
     sides_switched: state.sidesSwitched,
+    service_orders: {
+      teamA: state.serviceOrders.teamA,
+      teamB: state.serviceOrders.teamB,
+    },
+    next_server_index: {
+      teamA: state.nextServerIndex.teamA,
+      teamB: state.nextServerIndex.teamB,
+    },
+    set_configurations: state.setConfigurations,
     active_timer: state.activeTimer
       ? {
           id: state.activeTimer.id,
