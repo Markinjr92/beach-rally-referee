@@ -23,6 +23,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
+import { Tables } from "@/integrations/supabase/types";
 import {
   CoinChoice,
   CourtSide,
@@ -52,6 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/hooks/useAuth";
 
 type CoinSide = "heads" | "tails";
 
@@ -71,6 +73,7 @@ export default function RefereeDesk() {
   const { gameId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showPointCategories, setShowPointCategories] = useState<'A' | 'B' | null>(null);
@@ -487,6 +490,12 @@ export default function RefereeDesk() {
         .in('id', [match.team_a_id, match.team_b_id]);
       const teamA = teams?.find(t => t.id === match.team_a_id);
       const teamB = teams?.find(t => t.id === match.team_b_id);
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('has_statistics')
+        .eq('id', match.tournament_id)
+        .maybeSingle();
+      const hasStatistics = tournament?.has_statistics ?? true;
       const newGame: Game = {
         id: match.id,
         tournamentId: match.tournament_id,
@@ -507,6 +516,7 @@ export default function RefereeDesk() {
         status: match.status === 'in_progress' ? 'em_andamento' : match.status === 'completed' ? 'finalizado' : 'agendado',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        hasStatistics,
       };
       setGame(newGame);
 
@@ -519,15 +529,22 @@ export default function RefereeDesk() {
         fallbackWarningDisplayed.current = false;
       }
 
+      const updatePayload: Partial<Tables<'matches'>> = {};
       if (match.status === 'scheduled') {
-        await supabase.from('matches').update({ status: 'in_progress' }).eq('id', match.id);
+        updatePayload.status = 'in_progress';
+      }
+      if (!match.referee_id && user?.id) {
+        updatePayload.referee_id = user.id;
+      }
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from('matches').update(updatePayload).eq('id', match.id);
       }
 
       setIsLoading(false);
     };
 
     void loadFromDB();
-  }, [gameId, notifyFallbackActivated]);
+  }, [gameId, notifyFallbackActivated, user?.id]);
 
   useEffect(() => {
     if (!gameId || !game) return;
@@ -683,7 +700,7 @@ export default function RefereeDesk() {
     getDefaultServiceOrder,
   ]);
 
-  const addPoint = async (team: 'A' | 'B', category: PointCategory) => {
+  const addPoint = async (team: 'A' | 'B', category?: PointCategory) => {
     if (!gameState || !game || timer !== null || isSyncing) return;
     if (!isCurrentSetConfigured) {
       toast({
@@ -791,7 +808,7 @@ export default function RefereeDesk() {
       );
     }
 
-    const targetPoints =
+    const targetPointsForCurrentSet =
       game.pointsPerSet?.[currentSet] ??
       game.pointsPerSet?.[game.pointsPerSet.length - 1] ??
       21;
@@ -799,8 +816,8 @@ export default function RefereeDesk() {
     const opponentKey: 'teamA' | 'teamB' = team === 'A' ? 'teamB' : 'teamA';
     const winnerScore = updatedScores[winnerKey][currentSet];
     const opponentScore = updatedScores[opponentKey][currentSet];
-    const minimumLead = game.needTwoPointLead ? 2 : 1;
-    const setWon = winnerScore >= targetPoints && winnerScore - opponentScore >= minimumLead;
+    const setWon =
+      winnerScore >= targetPointsForCurrentSet && winnerScore - opponentScore >= minimumLead;
 
     const eventsToLog: Array<Parameters<typeof logMatchEvent>[0]> = [
       {
@@ -1641,6 +1658,10 @@ export default function RefereeDesk() {
               size="score"
               onClick={() => {
                 if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                if (game?.hasStatistics === false) {
+                  void addPoint(leftTeam);
+                  return;
+                }
                 setShowPointCategories(leftTeam);
               }}
               disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
@@ -1653,6 +1674,10 @@ export default function RefereeDesk() {
               size="score"
               onClick={() => {
                 if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                if (game?.hasStatistics === false) {
+                  void addPoint(rightTeam);
+                  return;
+                }
                 setShowPointCategories(rightTeam);
               }}
               disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
@@ -1780,8 +1805,12 @@ export default function RefereeDesk() {
                   <ScoreButton
                     variant={leftScoreButtonVariant}
                     size="score"
-                  onClick={() => {
+                    onClick={() => {
                       if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                      if (game?.hasStatistics === false) {
+                        void addPoint(leftTeam);
+                        return;
+                      }
                       setShowPointCategories(leftTeam);
                     }}
                     disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
@@ -1797,6 +1826,10 @@ export default function RefereeDesk() {
                     size="score"
                     onClick={() => {
                       if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                      if (game?.hasStatistics === false) {
+                        void addPoint(rightTeam);
+                        return;
+                      }
                       setShowPointCategories(rightTeam);
                     }}
                     disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}

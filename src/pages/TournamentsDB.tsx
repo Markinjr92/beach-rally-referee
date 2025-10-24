@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { Tables } from "@/integrations/supabase/types"
@@ -27,7 +28,15 @@ export default function TournamentsDB() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [statusFilter, setStatusFilter] = useState<'active' | 'completed' | 'all'>('active')
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ name: "", location: "", start: "", end: "", category: "", modality: "" })
+  const [form, setForm] = useState({
+    name: "",
+    location: "",
+    start: "",
+    end: "",
+    category: "",
+    modality: "",
+    hasStatistics: true,
+  })
   const { toast } = useToast()
 
   useEffect(() => {
@@ -52,6 +61,7 @@ export default function TournamentsDB() {
       category: form.category || null,
       modality: form.modality || null,
       status: "active",
+      has_statistics: form.hasStatistics,
     })
     if (error) {
       toast({ title: "Erro ao criar", description: error.message })
@@ -63,7 +73,7 @@ export default function TournamentsDB() {
       .order("created_at", { ascending: false })
     setTournaments(data || [])
     setOpen(false)
-    setForm({ name: "", location: "", start: "", end: "", category: "", modality: "" })
+    setForm({ name: "", location: "", start: "", end: "", category: "", modality: "", hasStatistics: true })
     toast({ title: "Torneio criado" })
   }
 
@@ -193,6 +203,19 @@ export default function TournamentsDB() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3">
+                  <div className="space-y-1">
+                    <Label className="text-white">Registrar estatísticas</Label>
+                    <p className="text-xs text-white/60">
+                      Controle detalhado de pontos por categoria durante as partidas.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.hasStatistics}
+                    onCheckedChange={(checked) => setForm({ ...form, hasStatistics: checked })}
+                    className="data-[state=checked]:bg-yellow-400"
+                  />
                 </div>
                 <div className="flex gap-2 justify-end pt-4">
                   <Button
