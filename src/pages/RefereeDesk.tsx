@@ -15,7 +15,8 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Coins,
-  UserCheck
+  UserCheck,
+  Stethoscope
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
@@ -333,8 +334,50 @@ export default function RefereeDesk() {
   const leftTeamScores = leftTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
   const rightTeamScores = rightTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
   const serverTeamName = gameState.currentServerTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const leftTeamColorClass = leftTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
+  const rightTeamColorClass = rightTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
+  const leftScoreButtonVariant = leftTeam === 'A' ? 'team' : 'teamB';
+  const rightScoreButtonVariant = rightTeam === 'A' ? 'team' : 'teamB';
 
   const coinFaceToShow = (coinResult ?? selectedCoinSide ?? 'heads') as CoinSide;
+  const mobileControlButtons = [
+    {
+      icon: RotateCcw,
+      label: 'Desfazer',
+      onClick: undoLastAction,
+      disabled: gameHistory.length === 0
+    },
+    {
+      icon: Pause,
+      label: 'Timeout A',
+      onClick: () => startTimeout('team', 'A'),
+      disabled: !!timer
+    },
+    {
+      icon: Pause,
+      label: 'Timeout B',
+      onClick: () => startTimeout('team', 'B'),
+      disabled: !!timer
+    },
+    {
+      icon: Stethoscope,
+      label: 'Tempo Médico',
+      onClick: () => startTimeout('medical'),
+      disabled: !!timer
+    },
+    {
+      icon: ArrowLeftRight,
+      label: 'Trocar Posse',
+      onClick: switchServerTeam,
+      disabled: false
+    },
+    {
+      icon: UserCheck,
+      label: 'Trocar Sacador',
+      onClick: changeCurrentServer,
+      disabled: false
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -370,50 +413,110 @@ export default function RefereeDesk() {
 
         {/* Mobile Scoreboard */}
         <div className="space-y-4 md:hidden">
-          <div className="rounded-2xl border border-white/20 bg-slate-900/80 p-4 text-white shadow-scoreboard">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-base font-semibold">
-              <span className="flex-1 text-left">{game.teamA.name}</span>
-              <div className="flex items-center gap-2 text-2xl font-extrabold">
-                <span>{scoreA}</span>
-                <span className="text-lg font-semibold text-white/70">x</span>
-                <span>{scoreB}</span>
+          <div className="overflow-hidden rounded-3xl border border-white/20 text-white shadow-scoreboard">
+            <div className="grid grid-cols-2">
+              <div className={cn('flex flex-col items-center justify-center gap-3 p-4 text-center', leftTeamColorClass)}>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-white/90">{leftTeamName}</h2>
+                <div className="text-5xl font-black">
+                  {leftTeam === 'A' ? scoreA : scoreB}
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {leftTeamScores.map((setScore, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="border-white/40 bg-white/20 text-white"
+                    >
+                      {setScore}
+                    </Badge>
+                  ))}
+                </div>
+                {gameState.currentServerTeam === leftTeam && (
+                  <Badge className="border border-white/30 bg-white/25 text-white">
+                    <Zap className="mr-1 h-4 w-4" />
+                    Sacando ({gameState.currentServerPlayer})
+                  </Badge>
+                )}
               </div>
-              <span className="flex-1 text-right">{game.teamB.name}</span>
+              <div className={cn('flex flex-col items-center justify-center gap-3 p-4 text-center', rightTeamColorClass)}>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-white/90">{rightTeamName}</h2>
+                <div className="text-5xl font-black">
+                  {rightTeam === 'A' ? scoreA : scoreB}
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {rightTeamScores.map((setScore, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="border-white/40 bg-white/20 text-white"
+                    >
+                      {setScore}
+                    </Badge>
+                  ))}
+                </div>
+                {gameState.currentServerTeam === rightTeam && (
+                  <Badge className="border border-white/30 bg-white/25 text-white">
+                    <Zap className="mr-1 h-4 w-4" />
+                    Sacando ({gameState.currentServerPlayer})
+                  </Badge>
+                )}
+              </div>
             </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-white/70">
-              <span>Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</span>
-              <span className="flex items-center gap-1 text-amber-200">
+            <div className="space-y-2 bg-slate-900/80 px-4 py-3 text-center text-sm text-white/80">
+              <div className="text-base font-semibold text-white">Set {gameState.currentSet}</div>
+              <div>Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</div>
+              <div className="flex items-center justify-center gap-2 text-amber-200">
                 <Zap className="h-4 w-4" />
                 Sacando: {serverTeamName} ({gameState.currentServerPlayer})
-              </span>
+              </div>
+              {timer !== null && (
+                <div className="mx-auto flex w-full max-w-[200px] items-center justify-center gap-2 rounded-full border border-amber-200/60 bg-amber-200/10 px-3 py-1 text-base font-semibold text-amber-100 shadow-inner">
+                  <Clock className="h-4 w-4" />
+                  {formatTime(timer)}
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <ScoreButton
-              variant="team"
+              variant={leftScoreButtonVariant}
               size="score"
-              onClick={() => setShowPointCategories('A')}
+              onClick={() => setShowPointCategories(leftTeam)}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
             </ScoreButton>
             <ScoreButton
-              variant="teamB"
+              variant={rightScoreButtonVariant}
               size="score"
-              onClick={() => setShowPointCategories('B')}
+              onClick={() => setShowPointCategories(rightTeam)}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
             </ScoreButton>
           </div>
+          <div className="grid grid-cols-3 gap-3">
+            {mobileControlButtons.map(({ icon: Icon, label, onClick, disabled }) => (
+              <Button
+                key={label}
+                variant="outline"
+                className="h-24 flex flex-col items-center justify-center gap-2 rounded-xl border-white/30 bg-white/10 text-center text-xs font-semibold text-white hover:bg-white/20"
+                onClick={onClick}
+                disabled={disabled}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="leading-tight">{label}</span>
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Main Scoreboard */}
-        <Card className="hidden bg-slate-900/80 border border-white/20 text-score-text shadow-scoreboard backdrop-blur-xl md:block">
-          <CardContent className="p-6 lg:p-10">
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-center">
-              <div className="space-y-4 text-center">
-                <h2 className="text-2xl font-semibold text-white/90">{leftTeamName}</h2>
+        <Card className="hidden border-none bg-transparent shadow-none backdrop-blur-xl md:block">
+          <CardContent className="p-0">
+            <div className="grid overflow-hidden rounded-3xl border border-white/20 text-white shadow-scoreboard md:grid-cols-[1fr_minmax(0,260px)_1fr]">
+              <div className={cn('flex flex-col items-center justify-center gap-5 p-8 text-center', leftTeamColorClass)}>
+                <h2 className="text-3xl font-semibold text-white/90">{leftTeamName}</h2>
                 <div className="text-7xl sm:text-8xl font-extrabold">
                   {leftTeam === 'A' ? scoreA : scoreB}
                 </div>
@@ -422,35 +525,35 @@ export default function RefereeDesk() {
                     <Badge
                       key={index}
                       variant="outline"
-                      className="border-score-text/40 bg-white/10 text-score-text"
+                      className="border-white/40 bg-white/20 text-white"
                     >
                       {setScore}
                     </Badge>
                   ))}
                 </div>
                 {gameState.currentServerTeam === leftTeam && (
-                  <Badge className="bg-serving text-white">
+                  <Badge className="border border-white/40 bg-white/25 text-white">
                     <Zap className="mr-1 h-4 w-4" />
                     Sacando ({gameState.currentServerPlayer})
                   </Badge>
                 )}
               </div>
-
-              <div className="space-y-4 text-center">
-                <div className="text-lg font-medium text-white/80">Set {gameState.currentSet}</div>
-                <div className="text-sm text-white/70">
-                  Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
-                </div>
+              <div className="flex flex-col items-center justify-center gap-4 bg-slate-900/80 px-8 py-6 text-center text-white/80">
+                <div className="text-lg font-semibold text-white">Set {gameState.currentSet}</div>
+                <div className="text-sm">Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</div>
                 {timer !== null && (
-                  <div className="mx-auto w-fit rounded-full border border-amber-200/60 bg-amber-200/10 px-5 py-2 text-lg font-semibold text-amber-100 shadow-inner">
-                    <Clock className="mr-2 inline h-5 w-5" />
+                  <div className="flex items-center gap-2 rounded-full border border-amber-200/60 bg-amber-200/10 px-5 py-2 text-lg font-semibold text-amber-100 shadow-inner">
+                    <Clock className="h-5 w-5" />
                     {formatTime(timer)}
                   </div>
                 )}
+                <div className="flex items-center gap-2 text-sm text-amber-200">
+                  <Zap className="h-4 w-4" />
+                  Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+                </div>
               </div>
-
-              <div className="space-y-4 text-center">
-                <h2 className="text-2xl font-semibold text-white/90">{rightTeamName}</h2>
+              <div className={cn('flex flex-col items-center justify-center gap-5 p-8 text-center', rightTeamColorClass)}>
+                <h2 className="text-3xl font-semibold text-white/90">{rightTeamName}</h2>
                 <div className="text-7xl sm:text-8xl font-extrabold">
                   {rightTeam === 'A' ? scoreA : scoreB}
                 </div>
@@ -459,14 +562,14 @@ export default function RefereeDesk() {
                     <Badge
                       key={index}
                       variant="outline"
-                      className="border-score-text/40 bg-white/10 text-score-text"
+                      className="border-white/40 bg-white/20 text-white"
                     >
                       {setScore}
                     </Badge>
                   ))}
                 </div>
                 {gameState.currentServerTeam === rightTeam && (
-                  <Badge className="bg-serving text-white">
+                  <Badge className="border border-white/40 bg-white/25 text-white">
                     <Zap className="mr-1 h-4 w-4" />
                     Sacando ({gameState.currentServerPlayer})
                   </Badge>
@@ -479,7 +582,7 @@ export default function RefereeDesk() {
         {/* Control Panel */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           {/* Scoring Controls */}
-          <Card className="xl:col-span-7 bg-white/10 border border-white/20 text-white backdrop-blur-lg">
+          <Card className="hidden bg-white/10 border border-white/20 text-white backdrop-blur-lg md:block xl:col-span-7">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Trophy size={20} />
@@ -491,7 +594,7 @@ export default function RefereeDesk() {
                 <div className="space-y-3">
                   <h4 className="text-lg font-semibold text-white/90">{leftTeamName}</h4>
                   <ScoreButton
-                    variant="team"
+                    variant={leftScoreButtonVariant}
                     size="score"
                     onClick={() => setShowPointCategories(leftTeam)}
                     className="h-28 w-full text-5xl"
@@ -502,7 +605,7 @@ export default function RefereeDesk() {
                 <div className="space-y-3">
                   <h4 className="text-lg font-semibold text-white/90">{rightTeamName}</h4>
                   <ScoreButton
-                    variant="teamB"
+                    variant={rightScoreButtonVariant}
                     size="score"
                     onClick={() => setShowPointCategories(rightTeam)}
                     className="h-28 w-full text-5xl"
@@ -529,7 +632,7 @@ export default function RefereeDesk() {
           </Card>
 
           {/* Timeouts & Controles */}
-          <Card className="xl:col-span-3 bg-white/10 border border-white/20 text-white backdrop-blur-lg">
+          <Card className="hidden bg-white/10 border border-white/20 text-white backdrop-blur-lg md:block xl:col-span-3">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Clock size={20} />
@@ -610,7 +713,7 @@ export default function RefereeDesk() {
           </Card>
 
           {/* Game Info */}
-          <Card className="xl:col-span-2 bg-white/10 border border-white/20 text-white backdrop-blur-lg">
+          <Card className="hidden bg-white/10 border border-white/20 text-white backdrop-blur-lg md:block xl:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Users size={20} />
