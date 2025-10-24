@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreButton } from "@/components/ui/score-button";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +61,64 @@ export default function RefereeDesk() {
   const [isFlippingCoin, setIsFlippingCoin] = useState(false);
   const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContextClass();
+    }
+    return () => {
+      if (audioContextRef.current?.state !== 'closed') {
+        audioContextRef.current?.close().catch(() => undefined);
+      }
+    };
+  }, []);
+
+  const playTone = useCallback((frequency: number, startOffset = 0, duration = 0.6) => {
+    const context = audioContextRef.current;
+    if (!context) return;
+    if (context.state === 'suspended') {
+      void context.resume();
+    }
+
+    const startTime = context.currentTime + startOffset;
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, startTime);
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+
+    const attack = 0.01;
+    const release = Math.max(duration - attack, 0.2);
+    gainNode.gain.setValueAtTime(0.0001, startTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.18, startTime + attack);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + attack + release);
+
+    oscillator.start(startTime);
+    oscillator.stop(startTime + attack + release);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gainNode.disconnect();
+    };
+  }, []);
+
+  const playAlert = useCallback(
+    (type: 'timeout' | 'sideSwitch') => {
+      if (type === 'timeout') {
+        playTone(880, 0, 0.7);
+        playTone(660, 0.28, 0.6);
+      } else {
+        playTone(540, 0, 0.5);
+        playTone(540, 0.22, 0.4);
+      }
+    },
+    [playTone]
+  );
 
   const coinResultLabel = useMemo(() => (coinResult ? coinLabels[coinResult] : null), [coinResult]);
 
@@ -135,10 +193,24 @@ export default function RefereeDesk() {
   }, [timer]);
 
   useEffect(() => {
+    if (timer === 0) {
+      playAlert('timeout');
+      const timeoutId = setTimeout(() => setTimer(null), 600);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [playAlert, timer]);
+
+  useEffect(() => {
     return () => {
       clearCoinAnimations();
     };
   }, []);
+
+  useEffect(() => {
+    if (showSideSwitchAlert) {
+      playAlert('sideSwitch');
+    }
+  }, [playAlert, showSideSwitchAlert]);
 
   const addPoint = (team: 'A' | 'B', category: PointCategory) => {
     if (!gameState || !game) return;

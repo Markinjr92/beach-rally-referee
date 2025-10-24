@@ -121,6 +121,9 @@ export default function TournamentDetailDB() {
     </div>
   )
 
+  const formattedStartDate = tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('pt-BR') : '-'
+  const formattedEndDate = tournament.end_date ? new Date(tournament.end_date).toLocaleDateString('pt-BR') : '-'
+
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
       <div className="container mx-auto px-4 py-10 space-y-8">
@@ -145,7 +148,7 @@ export default function TournamentDetailDB() {
                   </span>
                   <span className="flex items-center gap-2">
                     <Calendar size={16} />
-                    {tournament.start_date || '-'} — {tournament.end_date || '-'}
+                    {formattedStartDate} — {formattedEndDate}
                   </span>
                   {tournament.category && (
                     <span className="flex items-center gap-2">
@@ -163,22 +166,8 @@ export default function TournamentDetailDB() {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card className="bg-white/10 border border-white/20 text-white backdrop-blur-lg">
-            <CardHeader>
-              <CardTitle className="text-xl">Informações</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm space-y-2 text-white/80">
-                <div><span className="font-semibold text-white">Local:</span> {tournament.location || '-'}</div>
-                <div><span className="font-semibold text-white">Datas:</span> {tournament.start_date || '-'} — {tournament.end_date || '-'}</div>
-                <div><span className="font-semibold text-white">Categoria:</span> {tournament.category || '-'}</div>
-                <div><span className="font-semibold text-white">Modalidade:</span> {tournament.modality || '-'}</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="md:col-span-2 bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+        <div className="grid gap-6">
+          <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
             <CardHeader>
               <CardTitle className="text-xl">Equipes</CardTitle>
             </CardHeader>
