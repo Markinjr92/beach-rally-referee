@@ -9,6 +9,11 @@ const sanitizeDateInput = (value: string) => {
   return `${datePart}T${timePart}`.replace(/T$/, '')
 }
 
+export const toDatetimeLocalInputValue = (value: string | null) => {
+  if (!value) return ''
+  return sanitizeDateInput(value)
+}
+
 export const parseLocalDateTime = (value: string | null): Date | null => {
   if (!value) return null
   const sanitized = sanitizeDateInput(value)
