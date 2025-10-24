@@ -5,12 +5,8 @@ import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
 import { Game, GameState } from "@/types/volleyball";
-import {
-  calculateRemainingSeconds,
-  createDefaultGameState,
-  mapRowToGameState,
-} from "@/lib/matchState";
-import type { MatchStateRow } from "@/lib/matchState";
+import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
+import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
 import { cn } from "@/lib/utils";
 
 export default function PublicScoreboard() {
@@ -19,12 +15,14 @@ export default function PublicScoreboard() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [timer, setTimer] = useState<number | null>(null);
+  const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
     if (foundGame) {
       setGame(foundGame);
       setGameState(foundGame.gameState || createDefaultGameState(foundGame));
+      setUsingMatchStateFallback(false);
       setLoading(false);
       return;
     }
@@ -72,17 +70,9 @@ export default function PublicScoreboard() {
       };
       setGame(newGame);
 
-      const { data: stateRow } = await supabase
-        .from('match_states')
-        .select('*')
-        .eq('match_id', match.id)
-        .maybeSingle();
-
-      if (stateRow) {
-        setGameState(mapRowToGameState(stateRow as MatchStateRow, newGame));
-      } else {
-        setGameState(createDefaultGameState(newGame));
-      }
+      const { state, usedFallback } = await loadMatchState(match.id, newGame);
+      setGameState(state);
+      setUsingMatchStateFallback(usedFallback);
       setLoading(false);
     };
 
@@ -92,34 +82,12 @@ export default function PublicScoreboard() {
   useEffect(() => {
     if (!gameId || !game) return;
 
-    const channel = supabase
-      .channel(`public-scoreboard-${gameId}`)
-      .on<MatchStateRow>('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'match_states',
-        filter: `match_id=eq.${gameId}`,
-      }, payload => {
-        if (payload.new) {
-          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
-        }
-      })
-      .on<MatchStateRow>('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'match_states',
-        filter: `match_id=eq.${gameId}`,
-      }, payload => {
-        if (payload.new) {
-          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
-        }
-      })
-      .subscribe();
+    const unsubscribe = subscribeToMatchState(gameId, game, setGameState);
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe?.();
     };
-  }, [gameId, game]);
+  }, [gameId, game, usingMatchStateFallback]);
 
   useEffect(() => {
     if (!gameState?.activeTimer) {

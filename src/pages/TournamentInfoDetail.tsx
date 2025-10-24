@@ -12,8 +12,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDatePtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
 import { Game, GameState } from '@/types/volleyball'
-import { createDefaultGameState, mapRowToGameState } from '@/lib/matchState'
-import type { MatchStateRow } from '@/lib/matchState'
+import { createDefaultGameState } from '@/lib/matchState'
+import { loadMatchStates, subscribeToMatchState } from '@/lib/matchStateService'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -37,6 +37,7 @@ const TournamentInfoDetail = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'status' | 'phase'>('date-asc')
   const [timerTick, setTimerTick] = useState(() => Date.now())
+  const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(() => setTimerTick(Date.now()), 1000)
@@ -165,28 +166,15 @@ const TournamentInfoDetail = () => {
       setGameConfigs(configs)
 
       if ((matchData?.length || 0) > 0) {
-        const { data: stateData } = await supabase
-          .from('match_states')
-          .select('*')
-          .in('match_id', matchData!.map((match) => match.id))
-
-        if (stateData) {
-          const mappedStates = stateData.reduce<Record<string, GameState>>((acc, state) => {
-            const config = configs[state.match_id]
-            if (config) {
-              acc[state.match_id] = mapRowToGameState(state as MatchStateRow, config)
-            }
-            return acc
-          }, {})
-
-          Object.keys(configs).forEach((matchId) => {
-            if (!mappedStates[matchId]) {
-              mappedStates[matchId] = createDefaultGameState(configs[matchId])
-            }
-          })
-
-          setMatchStates(mappedStates)
-        } else {
+        try {
+          const { states, usedFallback } = await loadMatchStates(
+            matchData!.map((match) => match.id),
+            configs,
+          )
+          setMatchStates(states)
+          setUsingMatchStateFallback(usedFallback)
+        } catch (error) {
+          console.error('Não foi possível carregar os estados das partidas', error)
           setMatchStates({})
         }
       } else {
@@ -228,40 +216,19 @@ const TournamentInfoDetail = () => {
   useEffect(() => {
     if (Object.keys(gameConfigs).length === 0) return
 
-    const channel = supabase
-      .channel(`tournament-info-match-states-${tournamentId ?? 'all'}`)
-      .on<MatchStateRow>('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'match_states',
-      }, payload => {
-        if (!payload.new) return
-        const config = gameConfigs[payload.new.match_id]
-        if (!config) return
+    const unsubscribeList = Object.entries(gameConfigs).map(([matchId, config]) =>
+      subscribeToMatchState(matchId, config, (state) => {
         setMatchStates((prev) => ({
           ...prev,
-          [payload.new!.match_id]: mapRowToGameState(payload.new as MatchStateRow, config),
+          [matchId]: state,
         }))
-      })
-      .on<MatchStateRow>('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'match_states',
-      }, payload => {
-        if (!payload.new) return
-        const config = gameConfigs[payload.new.match_id]
-        if (!config) return
-        setMatchStates((prev) => ({
-          ...prev,
-          [payload.new!.match_id]: mapRowToGameState(payload.new as MatchStateRow, config),
-        }))
-      })
-      .subscribe()
+      }),
+    )
 
     return () => {
-      supabase.removeChannel(channel)
+      unsubscribeList.forEach((unsubscribe) => unsubscribe?.())
     }
-  }, [gameConfigs, tournamentId])
+  }, [gameConfigs, usingMatchStateFallback])
 
   const filteredAndSortedMatches = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -410,6 +377,12 @@ const TournamentInfoDetail = () => {
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
+            {usingMatchStateFallback && (
+              <div className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                Alguns recursos em tempo real estão limitados. Apenas os placares básicos estão sendo sincronizados com o
+                servidor no momento.
+              </div>
+            )}
             {filteredAndSortedMatches.length === 0 ? (
               <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
             ) : (
