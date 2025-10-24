@@ -33,14 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  buildTimer,
-  calculateRemainingSeconds,
-  createDefaultGameState,
-  mapGameStateToRow,
-  mapRowToGameState,
-} from "@/lib/matchState";
-import type { MatchStateRow } from "@/lib/matchState";
+import { buildTimer, calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
+import { loadMatchState, saveMatchState, subscribeToMatchState } from "@/lib/matchStateService";
 
 type CoinSide = "heads" | "tails";
 
@@ -71,10 +65,22 @@ export default function RefereeDesk() {
   const [isFlippingCoin, setIsFlippingCoin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false);
   const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastCompletedTimeoutId = useRef<string | null>(null);
+  const fallbackWarningDisplayed = useRef(false);
+
+  const notifyFallbackActivated = useCallback(() => {
+    if (fallbackWarningDisplayed.current) return;
+    fallbackWarningDisplayed.current = true;
+    toast({
+      title: 'Modo de compatibilidade ativado',
+      description:
+        'Não foi possível acessar a tabela de estados avançados. Apenas os placares básicos serão salvos remotamente.',
+    });
+  }, [toast]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -144,13 +150,13 @@ export default function RefereeDesk() {
 
       setIsSyncing(true);
       try {
-        const payload = mapGameStateToRow(newState);
-        const { error } = await supabase
-          .from('match_states')
-          .upsert(payload, { onConflict: 'match_id', ignoreDuplicates: false, returning: 'minimal' });
-        if (error) {
-          throw error;
+        const { usedFallback } = await saveMatchState(newState);
+        if (usedFallback) {
+          notifyFallbackActivated();
+        } else {
+          fallbackWarningDisplayed.current = false;
         }
+        setUsingMatchStateFallback(usedFallback);
       } catch (error) {
         console.error('Failed to persist match state', error);
         toast({
@@ -166,7 +172,7 @@ export default function RefereeDesk() {
         setIsSyncing(false);
       }
     },
-    [gameState, snapshotState, toast]
+    [gameState, notifyFallbackActivated, snapshotState, toast]
   );
 
   const logMatchEvent = useCallback(
@@ -296,24 +302,13 @@ export default function RefereeDesk() {
       };
       setGame(newGame);
 
-      const { data: existingState } = await supabase
-        .from('match_states')
-        .select('*')
-        .eq('match_id', match.id)
-        .maybeSingle();
-
-      if (existingState) {
-        setGameState(mapRowToGameState(existingState as MatchStateRow, newGame));
+      const { state, usedFallback } = await loadMatchState(match.id, newGame);
+      setGameState(state);
+      setUsingMatchStateFallback(usedFallback);
+      if (usedFallback) {
+        notifyFallbackActivated();
       } else {
-        const defaultState = createDefaultGameState(newGame);
-        setGameState(defaultState);
-        try {
-          await supabase
-            .from('match_states')
-            .upsert(mapGameStateToRow(defaultState), { onConflict: 'match_id', returning: 'minimal' });
-        } catch (error) {
-          console.error('Failed to create default match state', error);
-        }
+        fallbackWarningDisplayed.current = false;
       }
 
       if (match.status === 'scheduled') {
@@ -324,39 +319,19 @@ export default function RefereeDesk() {
     };
 
     void loadFromDB();
-  }, [gameId]);
+  }, [gameId, notifyFallbackActivated]);
 
   useEffect(() => {
     if (!gameId || !game) return;
 
-    const channel = supabase
-      .channel(`match-state-${gameId}`)
-      .on<MatchStateRow>('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'match_states',
-        filter: `match_id=eq.${gameId}`,
-      }, payload => {
-        if (payload.new) {
-          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
-        }
-      })
-      .on<MatchStateRow>('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'match_states',
-        filter: `match_id=eq.${gameId}`,
-      }, payload => {
-        if (payload.new) {
-          setGameState(mapRowToGameState(payload.new as MatchStateRow, game));
-        }
-      })
-      .subscribe();
+    const unsubscribe = subscribeToMatchState(gameId, game, newState => {
+      setGameState(snapshotState(newState));
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe?.();
     };
-  }, [gameId, game]);
+  }, [gameId, game, snapshotState, usingMatchStateFallback]);
 
   useEffect(() => {
     if (!gameState?.activeTimer) {

@@ -3,6 +3,8 @@ import { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 export type MatchStateRow = Tables<"match_states">;
 export type MatchTimeoutRow = Tables<"match_timeouts">;
+export type MatchScoreRow = Tables<"match_scores">;
+export type MatchScoreInsert = TablesInsert<"match_scores">;
 
 const ensureArray = <T>(value: T[] | null | undefined, fallbackLength: number, fallbackValue: T) => {
   if (Array.isArray(value) && value.length >= fallbackLength) {
@@ -113,6 +115,85 @@ export const mapGameStateToRow = (state: GameState): TablesInsert<"match_states"
       : null,
     is_game_ended: state.isGameEnded,
   };
+};
+
+const getSetTargetPoints = (game: Game, setIndex: number) => {
+  const pointsPerSet = game.pointsPerSet ?? [];
+  if (pointsPerSet.length === 0) {
+    return 21;
+  }
+  const clampedIndex = Math.min(setIndex, pointsPerSet.length - 1);
+  return pointsPerSet[clampedIndex] ?? pointsPerSet[pointsPerSet.length - 1] ?? 21;
+};
+
+const getSetsToWin = (game: Game) => {
+  const sets = game.pointsPerSet?.length ?? 3;
+  return Math.floor(sets / 2) + 1;
+};
+
+export const mapScoreRowsToGameState = (rows: MatchScoreRow[] | null | undefined, game: Game): GameState => {
+  const state = createDefaultGameState(game);
+  if (!rows || rows.length === 0) {
+    return state;
+  }
+
+  const sortedRows = [...rows].sort((a, b) => a.set_number - b.set_number);
+  const totalSets = game.pointsPerSet?.length ?? state.scores.teamA.length;
+  let highestSetNumber = 1;
+
+  sortedRows.forEach(row => {
+    const setIndex = Math.min(Math.max(row.set_number - 1, 0), totalSets - 1);
+    highestSetNumber = Math.max(highestSetNumber, row.set_number);
+
+    state.scores.teamA[setIndex] = row.team_a_points;
+    state.scores.teamB[setIndex] = row.team_b_points;
+
+    const targetPoints = getSetTargetPoints(game, setIndex);
+    const difference = Math.abs(row.team_a_points - row.team_b_points);
+    const hasWinner = difference >= 2 && (row.team_a_points >= targetPoints || row.team_b_points >= targetPoints);
+
+    if (hasWinner) {
+      if (row.team_a_points > row.team_b_points) {
+        state.setsWon.teamA += 1;
+      } else {
+        state.setsWon.teamB += 1;
+      }
+    }
+  });
+
+  const setsToWin = getSetsToWin(game);
+  if (state.setsWon.teamA >= setsToWin || state.setsWon.teamB >= setsToWin) {
+    state.isGameEnded = true;
+    state.currentSet = Math.min(highestSetNumber, totalSets);
+  } else {
+    state.currentSet = Math.min(Math.max(highestSetNumber, 1), totalSets);
+  }
+
+  return state;
+};
+
+export const mapGameStateToScoreRows = (state: GameState): MatchScoreInsert[] => {
+  const rows: MatchScoreInsert[] = [];
+  const totalSets = Math.max(state.scores.teamA.length, state.scores.teamB.length);
+  for (let index = 0; index < totalSets; index += 1) {
+    const teamAPoints = state.scores.teamA[index] ?? 0;
+    const teamBPoints = state.scores.teamB[index] ?? 0;
+    const isCompletedSet = index < state.currentSet - 1;
+    const isCurrentSet = index === state.currentSet - 1;
+    const hasScore = teamAPoints > 0 || teamBPoints > 0;
+    if (!isCompletedSet && !hasScore && !isCurrentSet) {
+      continue;
+    }
+
+    rows.push({
+      match_id: state.gameId,
+      set_number: index + 1,
+      team_a_points: teamAPoints,
+      team_b_points: teamBPoints,
+    });
+  }
+
+  return rows;
 };
 
 export const buildTimer = (params: {
