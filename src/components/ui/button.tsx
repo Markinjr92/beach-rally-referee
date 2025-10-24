@@ -5,18 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default:
+          "bg-primary text-primary-foreground shadow-[0_12px_30px_rgba(14,116,144,0.35)] hover:bg-primary/90 hover:shadow-[0_16px_36px_rgba(14,116,144,0.45)] focus-visible:ring-white/60 focus-visible:ring-offset-0",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-[0_10px_24px_rgba(239,68,68,0.35)] hover:bg-destructive/90",
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "border border-border/70 bg-background/90 text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.12)] hover:bg-accent/15 hover:text-foreground focus-visible:ring-primary/40",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+          "bg-secondary text-secondary-foreground shadow-[0_8px_22px_rgba(15,23,42,0.18)] hover:bg-secondary/80",
+        ghost:
+          "hover:bg-accent/15 hover:text-foreground focus-visible:ring-primary/40",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

@@ -82,7 +82,7 @@ const TeamSearchSelect = ({ value, onChange, placeholder, options }: TeamSearchS
                   onChange(option.value)
                   setOpen(false)
                 }}
-                className="text-white"
+                className="text-white data-[selected=true]:bg-white/15 data-[selected=true]:text-white data-[highlighted=true]:bg-white/10 data-[highlighted=true]:text-white"
               >
                 <Check className={cn('mr-2 h-4 w-4', option.value === value ? 'opacity-100' : 'opacity-0')} />
                 {option.label}
@@ -102,7 +102,7 @@ export default function TournamentDetailDB() {
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
   const [teamForm, setTeamForm] = useState({ name: '', player_a: '', player_b: '' })
-  const [matchForm, setMatchForm] = useState({ teamA: '', teamB: '', scheduled_at: '' })
+  const [matchForm, setMatchForm] = useState({ teamA: '', teamB: '', scheduled_at: '', court: '' })
 
   useEffect(() => {
     const load = async () => {
@@ -276,14 +276,19 @@ export default function TournamentDetailDB() {
                   <div key={m.id} className="flex flex-col gap-3 rounded-lg border border-white/15 bg-white/5 p-3 md:flex-row md:items-center md:justify-between">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
                       <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
-                        <div className="flex items-center gap-2">
-                          <Clock size={16} className="text-white/60" />
-                          {formatDateTime(m.scheduled_at)}
-                        </div>
-                        <Badge variant="outline" className="border-white/40 text-white">
-                          {m.phase || 'Jogo'}
-                        </Badge>
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-white/60" />
+                        {formatDateTime(m.scheduled_at)}
                       </div>
+                      <Badge variant="outline" className="border-white/40 text-white">
+                        {m.phase || 'Jogo'}
+                      </Badge>
+                      {m.court && (
+                        <Badge variant="outline" className="border-white/40 text-white">
+                          Quadra {m.court}
+                        </Badge>
+                      )}
+                    </div>
                       <div>
                         <div className="font-semibold">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
                         <div className="text-xs uppercase tracking-wide text-white/70">{m.status}</div>
@@ -337,7 +342,7 @@ export default function TournamentDetailDB() {
               })}
               {matches.length === 0 && <p className="text-sm text-white/70">Nenhum jogo.</p>}
 
-              <div className="grid md:grid-cols-4 gap-3 pt-2">
+              <div className="grid md:grid-cols-5 gap-3 pt-2">
                 <TeamSearchSelect
                   value={matchForm.teamA}
                   onChange={(value) => setMatchForm({ ...matchForm, teamA: value })}
@@ -349,6 +354,13 @@ export default function TournamentDetailDB() {
                   onChange={(value) => setMatchForm({ ...matchForm, teamB: value })}
                   placeholder="Equipe B"
                   options={teamOptions}
+                />
+                <Input
+                  type="text"
+                  value={matchForm.court}
+                  onChange={(e) => setMatchForm({ ...matchForm, court: e.target.value })}
+                  placeholder="Quadra"
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                 />
                 <Input
                   type="datetime-local"
@@ -365,12 +377,13 @@ export default function TournamentDetailDB() {
                       team_a_id: matchForm.teamA,
                       team_b_id: matchForm.teamB,
                       scheduled_at: matchForm.scheduled_at || null,
+                      court: matchForm.court || null,
                       status: 'scheduled'
                     })
                     if (error) { toast({ title: 'Erro ao criar jogo', description: error.message }); return }
                     const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournament.id).order('scheduled_at', { ascending: true })
                     setMatches(m || [])
-                    setMatchForm({ teamA: '', teamB: '', scheduled_at: '' })
+                    setMatchForm({ teamA: '', teamB: '', scheduled_at: '', court: '' })
                     toast({ title: 'Jogo criado' })
                   }}
                 >

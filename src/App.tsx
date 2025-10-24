@@ -11,6 +11,8 @@ import TournamentInfoDetail from "./pages/TournamentInfoDetail";
 import TournamentsDB from "./pages/TournamentsDB";
 import TournamentDetailDB from "./pages/TournamentDetailDB";
 import RefereeDesk from "./pages/RefereeDesk";
+import RefereeTournaments from "./pages/RefereeTournaments";
+import RefereeTournamentMatches from "./pages/RefereeTournamentMatches";
 import PublicScoreboard from "./pages/PublicScoreboard";
 import SpectatorView from "./pages/SpectatorView";
 import NotFound from "./pages/NotFound";
@@ -32,6 +34,8 @@ const App = () => (
             <Route path="/tournament-info/:tournamentId" element={<TournamentInfoDetail />} />
             <Route path="/tournaments" element={<TournamentsDB />} />
             <Route path="/tournament/:tournamentId" element={<TournamentDetailDB />} />
+            <Route path="/referee" element={<RefereeTournaments />} />
+            <Route path="/referee/tournament/:tournamentId" element={<RefereeTournamentMatches />} />
             <Route path="/referee/:gameId" element={<RefereeDesk />} />
             <Route path="/scoreboard/:gameId" element={<PublicScoreboard />} />
             <Route path="/spectator/:gameId" element={<SpectatorView />} />
