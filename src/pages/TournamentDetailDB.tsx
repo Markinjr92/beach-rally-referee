@@ -19,7 +19,7 @@ import {
   CommandItem,
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
-import { formatDateShortPtBr, formatDateTimePtBr } from '@/utils/date'
+import { formatDateShortPtBr, formatDateTimePtBr, toDatetimeLocalInputValue } from '@/utils/date'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -156,6 +156,18 @@ export default function TournamentDetailDB() {
     }
     load()
   }, [tournamentId, toast])
+
+  useEffect(() => {
+    if (matchForm.scheduled_at) return
+
+    for (let index = matches.length - 1; index >= 0; index -= 1) {
+      const scheduled = matches[index]?.scheduled_at
+      if (scheduled) {
+        setMatchForm(prev => ({ ...prev, scheduled_at: toDatetimeLocalInputValue(scheduled) }))
+        break
+      }
+    }
+  }, [matches, matchForm.scheduled_at])
 
   const teamOptions = useMemo(() => teams.map(t => ({ value: t.id, label: t.name })), [teams])
 
