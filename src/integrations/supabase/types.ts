@@ -108,6 +108,9 @@ export type Database = {
           timeouts_used: Json
           technical_timeout_used: Json
           sides_switched: Json
+          service_orders: Json | null
+          next_server_index: Json | null
+          set_configurations: Json | null
           active_timer: Json | null
           is_game_ended: boolean
           created_at: string
@@ -125,6 +128,9 @@ export type Database = {
           timeouts_used?: Json
           technical_timeout_used?: Json
           sides_switched?: Json
+          service_orders?: Json | null
+          next_server_index?: Json | null
+          set_configurations?: Json | null
           active_timer?: Json | null
           is_game_ended?: boolean
           created_at?: string
@@ -142,6 +148,9 @@ export type Database = {
           timeouts_used?: Json
           technical_timeout_used?: Json
           sides_switched?: Json
+          service_orders?: Json | null
+          next_server_index?: Json | null
+          set_configurations?: Json | null
           active_timer?: Json | null
           is_game_ended?: boolean
           created_at?: string

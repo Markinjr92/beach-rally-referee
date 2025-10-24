@@ -41,6 +41,40 @@ export interface GameConfiguration {
   updatedAt: string;
 }
 
+export type CoinChoice = 'side' | 'serve' | 'receive';
+export type CourtSide = 'left' | 'right';
+
+export interface TeamSetConfiguration {
+  jerseyAssignment: Record<string, number>;
+  serviceOrder: number[];
+}
+
+export interface CoinTossConfiguration {
+  performed: boolean;
+  winner?: 'A' | 'B';
+  loser?: 'A' | 'B';
+}
+
+export interface SetConfiguration {
+  setNumber: number;
+  isConfigured: boolean;
+  firstChoiceTeam: 'A' | 'B';
+  firstChoiceOption: CoinChoice;
+  firstChoiceSide?: CourtSide;
+  secondChoiceOption: CoinChoice;
+  secondChoiceSide?: CourtSide;
+  sideChoiceTeam: 'A' | 'B';
+  sideSelection: CourtSide;
+  startingServerTeam: 'A' | 'B';
+  startingReceiverTeam: 'A' | 'B';
+  startingServerPlayer: number;
+  coinToss: CoinTossConfiguration;
+  teams: {
+    teamA: TeamSetConfiguration;
+    teamB: TeamSetConfiguration;
+  };
+}
+
 export interface GameState {
   id: string;
   gameId: string;
@@ -54,6 +88,9 @@ export interface GameState {
   timeoutsUsed: { teamA: number[]; teamB: number[] }; // per set
   technicalTimeoutUsed: boolean[];
   sidesSwitched: number[]; // track switches per set
+  serviceOrders: { teamA: number[]; teamB: number[] };
+  nextServerIndex: { teamA: number; teamB: number };
+  setConfigurations: SetConfiguration[];
   events?: GameEvent[];
   activeTimer?: Timer | null;
   isGameEnded: boolean;

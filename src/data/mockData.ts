@@ -76,6 +76,33 @@ export const mockGames: Game[] = [
       timeoutsUsed: { teamA: [0], teamB: [0] },
       technicalTimeoutUsed: [false],
       sidesSwitched: [0],
+      serviceOrders: { teamA: [1, 2], teamB: [1, 2] },
+      nextServerIndex: { teamA: 1, teamB: 0 },
+      setConfigurations: [
+        {
+          setNumber: 1,
+          isConfigured: true,
+          firstChoiceTeam: 'A',
+          firstChoiceOption: 'serve',
+          secondChoiceOption: 'side',
+          sideChoiceTeam: 'B',
+          sideSelection: 'left',
+          startingServerTeam: 'A',
+          startingReceiverTeam: 'B',
+          startingServerPlayer: 1,
+          coinToss: { performed: true, winner: 'A', loser: 'B' },
+          teams: {
+            teamA: {
+              jerseyAssignment: { '1': 0, '2': 1 },
+              serviceOrder: [1, 2]
+            },
+            teamB: {
+              jerseyAssignment: { '1': 0, '2': 1 },
+              serviceOrder: [1, 2]
+            }
+          }
+        }
+      ],
       events: [],
       isGameEnded: false
     }
