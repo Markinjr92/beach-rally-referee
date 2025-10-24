@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { Tables } from "@/integrations/supabase/types"
-import { cn } from "@/lib/utils"
+import { cn, formatDateToISO, normalizeString } from "@/lib/utils"
 import { useAuth } from "@/hooks/useAuth"
 import { useUserRoles } from "@/hooks/useUserRoles"
 
@@ -61,7 +61,8 @@ export default function TournamentsDB() {
       toast({ title: "Faça login para criar um torneio" })
       return
     }
-    if (!form.name) {
+    const trimmedName = normalizeString(form.name)
+    if (!trimmedName) {
       toast({ title: "Informe o nome do torneio" })
       return
     }
@@ -72,18 +73,33 @@ export default function TournamentsDB() {
       })
       return
     }
-    const { error } = await supabase.from("tournaments").insert({
-      name: form.name,
-      location: form.location || null,
-      start_date: form.start || null,
-      end_date: form.end || null,
-      category: form.category || null,
-      modality: form.modality || null,
+    const location = normalizeString(form.location)
+    const category = normalizeString(form.category)
+    const modality = normalizeString(form.modality)
+    const startDateISO = formatDateToISO(form.start)
+    const endDateISO = formatDateToISO(form.end)
+
+    const payload: Tables<'tournaments'>['Insert'] = {
+      name: trimmedName,
       status: "active",
       has_statistics: form.hasStatistics,
       created_by: user.id,
-    })
+    }
+
+    if (location) payload.location = location
+    if (category) payload.category = category
+    if (modality) payload.modality = modality
+    if (startDateISO) payload.start_date = startDateISO
+    if (endDateISO) payload.end_date = endDateISO
+
+    const { error } = await supabase.from("tournaments").insert(payload)
     if (error) {
+      console.error("Erro ao criar torneio", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
       toast({ title: "Erro ao criar", description: error.message })
       return
     }

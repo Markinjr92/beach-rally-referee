@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Tables } from "@/integrations/supabase/types";
-import { cn } from "@/lib/utils";
+import { cn, formatDateToISO, normalizeString } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 
@@ -237,20 +237,39 @@ export default function TournamentList() {
                         return
                       }
 
-                      const payload = {
-                        name: formData.name,
-                        location: formData.location || null,
-                        start_date: formData.startDate || null,
-                        end_date: formData.endDate || null,
-                        category: formData.category || null,
-                        modality: formData.modality || null,
-                        has_statistics: formData.hasStatistics,
+                      const trimmedName = normalizeString(formData.name)
+                      if (!trimmedName) {
+                        toast({ title: 'Informe o nome do torneio' })
+                        return
+                      }
+
+                      const location = normalizeString(formData.location)
+                      const category = normalizeString(formData.category)
+                      const modality = normalizeString(formData.modality)
+                      const startDateISO = formatDateToISO(formData.startDate)
+                      const endDateISO = formatDateToISO(formData.endDate)
+
+                      const payload: Tables<'tournaments'>['Insert'] = {
+                        name: trimmedName,
                         status: 'active',
+                        has_statistics: formData.hasStatistics,
                         created_by: user.id,
-                      } as const
+                      }
+
+                      if (location) payload.location = location
+                      if (category) payload.category = category
+                      if (modality) payload.modality = modality
+                      if (startDateISO) payload.start_date = startDateISO
+                      if (endDateISO) payload.end_date = endDateISO
 
                       const { error } = await supabase.from('tournaments').insert(payload)
                       if (error) {
+                        console.error('Erro ao criar torneio', {
+                          message: error.message,
+                          details: error.details,
+                          hint: error.hint,
+                          code: error.code,
+                        })
                         toast({ title: 'Erro ao criar torneio', description: error.message })
                       } else {
                         toast({ title: 'Torneio criado' })
