@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Trophy, Users, Monitor, Eye, Settings, Shield } from "lucide-react";
+import { Activity, Trophy, Users, Settings, Shield } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,7 +29,7 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     description: "Consulte jogos, placares e tabelas atualizadas",
     to: "/tournament-info",
     icon: Trophy,
-    roles: ["atleta", "organizador", "admin_sistema"],
+    roles: ["atleta", "arbitro", "organizador", "admin_sistema"],
     iconClass: "text-yellow-300",
   },
   {
@@ -58,24 +58,6 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: Users,
     roles: ["arbitro", "admin_sistema"],
     iconClass: "text-blue-200",
-  },
-  {
-    key: "scoreboard",
-    title: "Placar Oficial",
-    description: "Visualização limpa para transmissões oficiais",
-    to: "/scoreboard/game-1",
-    icon: Monitor,
-    roles: ["publico", "admin_sistema"],
-    iconClass: "text-green-300",
-  },
-  {
-    key: "spectator",
-    title: "Visão da Torcida",
-    description: "Experiência imersiva com estatísticas e patrocinadores",
-    to: "/spectator/game-1",
-    icon: Eye,
-    roles: ["publico", "admin_sistema"],
-    iconClass: "text-purple-300",
   },
   {
     key: "admin-users",
