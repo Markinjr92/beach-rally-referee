@@ -27,6 +27,35 @@ type Match = Tables<'matches'>
 
 type TeamOption = { value: string; label: string }
 
+const MATCH_MODES = [
+  {
+    value: 'best3_21_15',
+    label: 'Melhor de 3 sets de 21 e desempate de 15',
+    bestOf: 3,
+    pointsPerSet: [21, 21, 15],
+  },
+  {
+    value: 'single_21',
+    label: '1 set de 21',
+    bestOf: 1,
+    pointsPerSet: [21],
+  },
+  {
+    value: 'best3_15_10',
+    label: 'Melhor de 3 sets de 15 e desempate de 10',
+    bestOf: 3,
+    pointsPerSet: [15, 15, 10],
+  },
+  {
+    value: 'best3_15_15',
+    label: 'Melhor de 3 sets de 15 e desempate de 15',
+    bestOf: 3,
+    pointsPerSet: [15, 15, 15],
+  },
+] as const
+
+type MatchModeValue = typeof MATCH_MODES[number]['value']
+
 type TeamSearchSelectProps = {
   value: string
   onChange: (value: string) => void
@@ -86,6 +115,14 @@ const TeamSearchSelect = ({ value, onChange, placeholder, options }: TeamSearchS
   )
 }
 
+type MatchFormState = {
+  teamA: string
+  teamB: string
+  scheduled_at: string
+  court: string
+  mode: MatchModeValue
+}
+
 export default function TournamentDetailDB() {
   const { tournamentId } = useParams()
   const { toast } = useToast()
@@ -93,7 +130,13 @@ export default function TournamentDetailDB() {
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
   const [teamForm, setTeamForm] = useState({ name: '', player_a: '', player_b: '' })
-  const [matchForm, setMatchForm] = useState({ teamA: '', teamB: '', scheduled_at: '', court: '' })
+  const [matchForm, setMatchForm] = useState<MatchFormState>({
+    teamA: '',
+    teamB: '',
+    scheduled_at: '',
+    court: '',
+    mode: MATCH_MODES[0].value,
+  })
 
   useEffect(() => {
     const load = async () => {
@@ -322,7 +365,7 @@ export default function TournamentDetailDB() {
               })}
               {matches.length === 0 && <p className="text-sm text-white/70">Nenhum jogo.</p>}
 
-              <div className="grid md:grid-cols-5 gap-3 pt-2">
+              <div className="grid md:grid-cols-6 gap-3 pt-2">
                 <TeamSearchSelect
                   value={matchForm.teamA}
                   onChange={(value) => setMatchForm({ ...matchForm, teamA: value })}
@@ -348,22 +391,40 @@ export default function TournamentDetailDB() {
                   onChange={(e) => setMatchForm({ ...matchForm, scheduled_at: e.target.value })}
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                 />
+                <Select
+                  value={matchForm.mode}
+                  onValueChange={(value) => setMatchForm({ ...matchForm, mode: value as MatchModeValue })}
+                >
+                  <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                    <SelectValue placeholder="Modo de disputa" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
+                    {MATCH_MODES.map((mode) => (
+                      <SelectItem key={mode.value} value={mode.value}>
+                        {mode.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
                   onClick={async () => {
                     if (!matchForm.teamA || !matchForm.teamB || matchForm.teamA === matchForm.teamB) { toast({ title: 'Selecione equipes diferentes' }); return }
+                    const selectedMode = MATCH_MODES.find((mode) => mode.value === matchForm.mode) ?? MATCH_MODES[0]
                     const { error } = await supabase.from('matches').insert({
                       tournament_id: tournament.id,
                       team_a_id: matchForm.teamA,
                       team_b_id: matchForm.teamB,
                       scheduled_at: matchForm.scheduled_at || null,
                       court: matchForm.court || null,
-                      status: 'scheduled'
+                      status: 'scheduled',
+                      best_of: selectedMode.bestOf,
+                      points_per_set: selectedMode.pointsPerSet,
                     })
                     if (error) { toast({ title: 'Erro ao criar jogo', description: error.message }); return }
                     const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournament.id).order('scheduled_at', { ascending: true })
                     setMatches(m || [])
-                    setMatchForm({ teamA: '', teamB: '', scheduled_at: '', court: '' })
+                    setMatchForm({ teamA: '', teamB: '', scheduled_at: '', court: '', mode: MATCH_MODES[0].value })
                     toast({ title: 'Jogo criado' })
                   }}
                 >
