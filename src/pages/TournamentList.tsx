@@ -1,3 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Calendar, MapPin, Users, Trophy, Plus, Settings, FileText, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -5,14 +8,24 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, Users, Trophy, Plus, Settings, FileText } from "lucide-react";
-import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Tables } from "@/integrations/supabase/types";
+import { cn } from "@/lib/utils";
 
 type TournamentRow = Tables<'tournaments'>
+
+type TournamentGame = {
+  id: string;
+  title: string;
+  status?: string | null;
+  teamA?: { name?: string | null } | null;
+  teamB?: { name?: string | null } | null;
+};
+
+type TournamentWithGames = TournamentRow & {
+  games?: TournamentGame[] | null;
+};
 
 export default function TournamentList() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -24,8 +37,13 @@ export default function TournamentList() {
     category: '',
     modality: ''
   });
-  const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+  const [tournaments, setTournaments] = useState<TournamentWithGames[]>([]);
   const { toast } = useToast();
+
+  const activeTournaments = useMemo(
+    () => tournaments.filter((tournament) => tournament.status === "active"),
+    [tournaments]
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -37,229 +55,302 @@ export default function TournamentList() {
       if (error) {
         toast({ title: 'Erro ao carregar torneios', description: error.message })
       } else {
-        setTournaments(data || [])
+        setTournaments((data as TournamentWithGames[]) || [])
       }
-    }
-    load()
-  }, [])
+    };
+    load();
+  }, [toast]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-foreground mb-4 flex items-center justify-center gap-3">
-            <Trophy className="text-primary" size={40} />
-            Torneios de Vôlei de Praia
-          </h1>
-          <p className="text-xl text-muted-foreground">
-            Acompanhe os torneios e jogos em tempo real
-          </p>
+    <div className="min-h-screen bg-gradient-ocean text-white">
+      <div className="container mx-auto px-4 py-12">
+        <div className="mb-12 flex flex-col gap-6">
+          <div className="flex items-center justify-between gap-4">
+            <Link to="/">
+              <Button
+                variant="ghost"
+                className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
+              >
+                <ArrowLeft size={18} />
+                Voltar
+              </Button>
+            </Link>
+            <div className="hidden md:flex items-center gap-2 text-white/70">
+              <Trophy className="text-yellow-300" size={20} />
+              <span>Gestão completa dos seus torneios oficiais</span>
+            </div>
+          </div>
+
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 border border-white/20 backdrop-blur-lg">
+              <Trophy className="text-yellow-300" size={28} />
+              <div className="text-left">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/60">Circuito profissional</p>
+                <h1 className="text-3xl sm:text-4xl font-semibold">Torneios de Vôlei de Praia</h1>
+              </div>
+            </div>
+            <p className="text-lg text-white/80 max-w-2xl mx-auto">
+              Acompanhe jogos, programe novas etapas e mantenha sua comunidade informada com um visual inspirado na arena principal.
+            </p>
+          </div>
         </div>
 
         {/* Tournament Management Actions */}
-        <div className="mb-8 flex flex-wrap gap-4 justify-center">
+        <div className="mb-12 flex flex-wrap gap-4 justify-center">
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
+              <Button className="flex items-center gap-2 bg-white/15 border border-white/20 text-white hover:bg-white/25">
                 <Plus size={20} />
                 Criar Novo Torneio
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md bg-slate-900/80 text-white border-white/20 backdrop-blur-xl">
               <DialogHeader>
-                <DialogTitle>Criar Novo Torneio</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-2xl font-semibold">Criar Novo Torneio</DialogTitle>
+                <DialogDescription className="text-white/70">
                   Preencha as informações básicas do torneio
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Nome do Torneio</Label>
+                  <Label htmlFor="name" className="text-white">Nome do Torneio</Label>
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Ex: Campeonato Brasileiro 2024"
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
                   />
                 </div>
-                
+
                 <div>
-                  <Label htmlFor="location">Local</Label>
+                  <Label htmlFor="location" className="text-white">Local</Label>
                   <Input
                     id="location"
                     value={formData.location}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="Ex: Copacabana, Rio de Janeiro"
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
                   />
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="startDate">Data de Início</Label>
+                    <Label htmlFor="startDate" className="text-white">Data de Início</Label>
                     <Input
                       id="startDate"
                       type="date"
                       value={formData.startDate}
-                      onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="endDate">Data de Fim</Label>
+                    <Label htmlFor="endDate" className="text-white">Data de Fim</Label>
                     <Input
                       id="endDate"
                       type="date"
                       value={formData.endDate}
-                      onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
                     />
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label>Categoria</Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
-                      <SelectTrigger className="bg-background">
+                    <Label className="text-white">Categoria</Label>
+                    <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
                         <SelectValue placeholder="Categoria" />
                       </SelectTrigger>
-                      <SelectContent className="bg-background border border-border">
-                        <SelectItem value="M">Masculino</SelectItem>
-                        <SelectItem value="F">Feminino</SelectItem>
-                        <SelectItem value="Misto">Misto</SelectItem>
+                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
+                        <SelectItem value="M" className="focus:bg-white/10 focus:text-white">Masculino</SelectItem>
+                        <SelectItem value="F" className="focus:bg-white/10 focus:text-white">Feminino</SelectItem>
+                        <SelectItem value="Misto" className="focus:bg-white/10 focus:text-white">Misto</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Modalidade</Label>
-                    <Select value={formData.modality} onValueChange={(value) => setFormData({...formData, modality: value})}>
-                      <SelectTrigger className="bg-background">
+                    <Label className="text-white">Modalidade</Label>
+                    <Select value={formData.modality} onValueChange={(value) => setFormData({ ...formData, modality: value })}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
                         <SelectValue placeholder="Modalidade" />
                       </SelectTrigger>
-                      <SelectContent className="bg-background border border-border">
-                        <SelectItem value="dupla">Dupla</SelectItem>
-                        <SelectItem value="quarteto">Quarteto</SelectItem>
+                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
+                        <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">Dupla</SelectItem>
+                        <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">Quarteto</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShowCreateDialog(false)}
+                    className="bg-white/5 border border-white/20 text-white hover:bg-white/15"
+                  >
                     Cancelar
                   </Button>
-                  <Button onClick={async () => {
-                    const payload = {
-                      name: formData.name,
-                      location: formData.location || null,
-                      start_date: formData.startDate || null,
-                      end_date: formData.endDate || null,
-                      category: formData.category || null,
-                      modality: formData.modality || null,
-                      status: 'active',
-                    } as const
+                  <Button
+                    className="bg-yellow-400/90 text-slate-900 hover:bg-yellow-300"
+                    onClick={async () => {
+                      const payload = {
+                        name: formData.name,
+                        location: formData.location || null,
+                        start_date: formData.startDate || null,
+                        end_date: formData.endDate || null,
+                        category: formData.category || null,
+                        modality: formData.modality || null,
+                        status: 'active',
+                      } as const
 
-                    const { error } = await supabase.from('tournaments').insert(payload)
-                    if (error) {
-                      toast({ title: 'Erro ao criar torneio', description: error.message })
-                    } else {
-                      toast({ title: 'Torneio criado' })
-                      setShowCreateDialog(false)
-                      setFormData({name: '', location: '', startDate: '', endDate: '', category: '', modality: ''})
-                      const { data } = await supabase.from('tournaments').select('*').order('created_at', { descending: true })
-                      setTournaments(data || [])
-                    }
-                  }}>
+                      const { error } = await supabase.from('tournaments').insert(payload)
+                      if (error) {
+                        toast({ title: 'Erro ao criar torneio', description: error.message })
+                      } else {
+                        toast({ title: 'Torneio criado' })
+                        setShowCreateDialog(false)
+                        setFormData({name: '', location: '', startDate: '', endDate: '', category: '', modality: ''})
+                        const { data } = await supabase.from('tournaments').select('*').order('created_at', { descending: true })
+                        setTournaments((data as TournamentWithGames[]) || [])
+                      }
+                    }}
+                  >
                     Criar Torneio
                   </Button>
                 </div>
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 bg-white/10 border border-white/20 text-white hover:bg-white/20"
+          >
             <Settings size={20} />
             Gerenciar Formatos
           </Button>
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 bg-white/10 border border-white/20 text-white hover:bg-white/20"
+          >
             <FileText size={20} />
             Relatórios
           </Button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {tournaments.map((tournament) => (
-            <Card key={tournament.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-xl mb-2">{tournament.name}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 mb-2">
-                      <MapPin size={16} />
-                      {tournament.location}
-                    </CardDescription>
-                    <CardDescription className="flex items-center gap-2">
-                      <Calendar size={16} />
-                      {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('pt-BR') : '-'} - {' '}
-                      {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString('pt-BR') : '-'}
-                    </CardDescription>
-                  </div>
-                  <Badge 
-                    variant={tournament.status === 'active' ? 'default' : 'secondary'}
-                    className="bg-serving text-white"
-                  >
-                    {tournament.status === 'active' ? 'Ativo' : (tournament.status === 'completed' ? 'Finalizado' : 'Em breve')}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Users size={16} />
-                    <span>Torneio</span>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {tournament.games.slice(0, 3).map((game) => (
-                      <div key={game.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                        <div>
-                          <p className="font-medium text-sm">{game.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {game.teamA.name} vs {game.teamB.name}
-                          </p>
-                        </div>
-                        <Badge 
-                          variant={game.status === 'em_andamento' ? 'destructive' : 'outline'}
-                          className={game.status === 'em_andamento' ? 'bg-team-a text-white' : ''}
-                        >
-                          {game.status === 'em_andamento' ? 'Ao vivo' : 'Agendado'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
+          {tournaments.map((tournament) => {
+            const games = Array.isArray(tournament.games)
+              ? tournament.games.slice(0, 3)
+              : [];
+            const statusStyles =
+              tournament.status === 'active'
+                ? 'bg-emerald-400/15 text-emerald-50 border-emerald-200/40'
+                : tournament.status === 'completed'
+                ? 'bg-white/10 text-white border-white/20'
+                : 'bg-amber-400/15 text-amber-50 border-amber-200/40';
 
-                  <div className="flex gap-2">
-                    <Link to={`/tournament/${tournament.id}`} className="flex-1">
-                      <Button className="w-full" variant="default">
-                        Ver Torneio
-                      </Button>
-                    </Link>
-                    <Button variant="outline" size="sm" className="flex items-center gap-1">
-                      <Settings size={16} />
-                      Gerenciar
-                    </Button>
+            return (
+              <Card
+                key={tournament.id}
+                className="bg-white/10 border-white/20 text-white backdrop-blur-xl transition-all hover:bg-white/15 hover:-translate-y-1"
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <CardTitle className="text-2xl font-semibold leading-tight">{tournament.name}</CardTitle>
+                      <CardDescription className="flex items-center gap-2 text-white/70">
+                        <MapPin size={16} className="text-white/60" />
+                        {tournament.location || 'Local a definir'}
+                      </CardDescription>
+                      <CardDescription className="flex items-center gap-2 text-white/70">
+                        <Calendar size={16} className="text-white/60" />
+                        {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('pt-BR') : '-'}
+                        <span className="text-white/40">até</span>
+                        {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString('pt-BR') : '-'}
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className={cn("uppercase tracking-wide", statusStyles)}>
+                      {tournament.status === 'active'
+                        ? 'Ativo'
+                        : tournament.status === 'completed'
+                        ? 'Finalizado'
+                        : 'Em breve'}
+                    </Badge>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm text-white/70">
+                      <Users size={16} className="text-white/60" />
+                      <span>Torneio oficial</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {games.length === 0 ? (
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+                          Nenhuma partida vinculada ainda.
+                        </div>
+                      ) : (
+                        games.map((game) => (
+                          <div
+                            key={game.id}
+                            className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3"
+                          >
+                            <div>
+                              <p className="font-medium text-sm text-white">{game.title}</p>
+                              <p className="text-xs text-white/70">
+                                {game.teamA?.name} vs {game.teamB?.name}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "border-white/20 text-xs",
+                                game.status === 'em_andamento'
+                                  ? 'bg-rose-500/20 text-rose-100'
+                                  : 'bg-white/10 text-white'
+                              )}
+                            >
+                              {game.status === 'em_andamento' ? 'Ao vivo' : 'Agendado'}
+                            </Badge>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Link to={`/tournament/${tournament.id}`} className="flex-1 min-w-[140px]">
+                        <Button className="w-full bg-yellow-400/90 text-slate-900 hover:bg-yellow-300">
+                          Ver Torneio
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex items-center gap-1 bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                      >
+                        <Settings size={16} />
+                        Gerenciar
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {activeTournaments.length === 0 && (
-          <div className="text-center py-12">
-            <Trophy className="mx-auto text-muted-foreground mb-4" size={64} />
-            <h3 className="text-xl font-semibold text-muted-foreground mb-2">
-              Nenhum torneio ativo
-            </h3>
-            <p className="text-muted-foreground">
-              Não há torneios com jogos em andamento no momento.
+          <div className="text-center py-16">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-white/40 bg-white/10">
+              <Trophy className="text-yellow-300" size={40} />
+            </div>
+            <h3 className="text-2xl font-semibold text-white mb-2">Nenhum torneio ativo</h3>
+            <p className="text-white/70 max-w-xl mx-auto">
+              Organize uma nova etapa ou ative um torneio existente para começar a registrar partidas e resultados.
             </p>
           </div>
         )}
