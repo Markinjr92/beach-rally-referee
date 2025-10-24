@@ -24,17 +24,9 @@ import { Game, GameState, PointCategory } from "@/types/volleyball";
 
 const mainCategories = [
   { value: 'ATTACK', label: 'Ataque' },
-  { value: 'BLOCK_DIRECT', label: 'Bloqueio Direto' },
-  { value: 'ACE', label: 'Ace' },
-  { value: 'DEFENSE_DIRECT', label: 'Defesa Direta' },
-  { value: 'ERROR_ATTACK', label: 'Erro Ataque Adversário' },
-  { value: 'ERROR_SERVE', label: 'Erro Saque Adversário' }
-];
-
-const attackSubcategories: { value: PointCategory; label: string }[] = [
-  { value: 'ATTACK_WINNER', label: 'Super Ataque' },
-  { value: 'ATTACK_DROP', label: 'Largada/Cut' },
-  { value: 'ATTACK_SECOND_BALL', label: 'Bola de 2ª' }
+  { value: 'BLOCK', label: 'Bloqueio' },
+  { value: 'SERVE_POINT', label: 'Ponto de Saque' },
+  { value: 'OPPONENT_ERROR', label: 'Erro adversário' }
 ];
 
 export default function RefereeDesk() {
@@ -42,7 +34,6 @@ export default function RefereeDesk() {
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showPointCategories, setShowPointCategories] = useState<'A' | 'B' | null>(null);
-  const [showAttackSubcategories, setShowAttackSubcategories] = useState<'A' | 'B' | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
   const [showSideSwitchAlert, setShowSideSwitchAlert] = useState(false);
   const [gameHistory, setGameHistory] = useState<GameState[]>([]);
@@ -133,7 +124,7 @@ export default function RefereeDesk() {
     setGameHistory(prev => [...prev, { ...gameState }]);
 
     // Handle server rotation based on possession change
-    let newGameState = { ...gameState };
+    const newGameState = { ...gameState };
     
     // Only change server if possession changes (different team scored)
     if (gameState.possession !== team) {
@@ -180,16 +171,10 @@ export default function RefereeDesk() {
     });
 
     setShowPointCategories(null);
-    setShowAttackSubcategories(null);
   };
 
   const handleCategorySelection = (team: 'A' | 'B', category: string) => {
-    if (category === 'ATTACK') {
-      setShowPointCategories(null);
-      setShowAttackSubcategories(team);
-    } else {
-      addPoint(team, category as PointCategory);
-    }
+    addPoint(team, category as PointCategory);
   };
 
   const switchServerTeam = () => {
@@ -543,39 +528,6 @@ export default function RefereeDesk() {
           </div>
         )}
 
-        {/* Attack Subcategory Modal */}
-        {showAttackSubcategories && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <Card className="w-full max-w-md">
-              <CardHeader>
-                <CardTitle>
-                  Tipo de Ataque - {showAttackSubcategories === 'A' ? game.teamA.name : game.teamB.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-2">
-                  {attackSubcategories.map((subcategory) => (
-                    <Button
-                      key={subcategory.value}
-                      variant="outline"
-                      onClick={() => addPoint(showAttackSubcategories, subcategory.value)}
-                      className="text-left justify-start"
-                    >
-                      {subcategory.label}
-                    </Button>
-                  ))}
-                </div>
-                <Button 
-                  variant="outline" 
-                  className="w-full mt-4"
-                  onClick={() => setShowAttackSubcategories(null)}
-                >
-                  Cancelar
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
     </div>
   );

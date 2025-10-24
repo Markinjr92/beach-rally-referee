@@ -74,15 +74,11 @@ export interface Timer {
   durationSec: number;
 }
 
-export type PointCategory = 
-  | 'ATTACK_WINNER' 
-  | 'ATTACK_DROP' 
-  | 'ATTACK_SECOND_BALL'
-  | 'BLOCK_DIRECT'
-  | 'ACE'
-  | 'DEFENSE_DIRECT'
-  | 'ERROR_ATTACK'
-  | 'ERROR_SERVE';
+export type PointCategory =
+  | 'ATTACK'
+  | 'BLOCK'
+  | 'SERVE_POINT'
+  | 'OPPONENT_ERROR';
 
 export interface Game extends GameConfiguration {
   gameState?: GameState;
