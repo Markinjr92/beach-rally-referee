@@ -10,23 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-const formatDateTime = (value: string | null) => {
-  if (!value) return 'Sem horário definido'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Sem horário definido'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date)
-}
-
-const formatDate = (value: string | null) => {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(date)
-}
+import { formatDatePtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -168,14 +152,7 @@ const TournamentInfoDetail = () => {
       const phase = match.phase?.toLowerCase() || ''
       const court = match.court?.toLowerCase() || ''
       const status = match.status?.toLowerCase() || ''
-      const scheduled = match.scheduled_at
-        ? new Intl.DateTimeFormat('pt-BR', {
-            dateStyle: 'short',
-            timeStyle: 'short',
-          })
-            .format(new Date(match.scheduled_at))
-            .toLowerCase()
-        : ''
+      const scheduled = formatDateTimePtBr(match.scheduled_at, { fallback: '' }).toLowerCase()
 
       const searchPool = [teamA, teamB, phase, court, status, scheduled]
 
@@ -185,8 +162,8 @@ const TournamentInfoDetail = () => {
     const sorted = [...filtered].sort((a, b) => {
       switch (sortOption) {
         case 'date-desc': {
-          const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
-          const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+          const dateA = parseLocalDateTime(a.scheduled_at)?.getTime() ?? 0
+          const dateB = parseLocalDateTime(b.scheduled_at)?.getTime() ?? 0
           return dateB - dateA
         }
         case 'status': {
@@ -201,8 +178,8 @@ const TournamentInfoDetail = () => {
         }
         case 'date-asc':
         default: {
-          const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
-          const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+          const dateA = parseLocalDateTime(a.scheduled_at)?.getTime() ?? 0
+          const dateB = parseLocalDateTime(b.scheduled_at)?.getTime() ?? 0
           return dateA - dateB
         }
       }
@@ -258,9 +235,9 @@ const TournamentInfoDetail = () => {
               </span>
               <span className="flex items-center gap-2">
                 <Calendar size={16} className="text-white/60" />
-                {formatDate(tournament.start_date)}
+                {formatDatePtBr(tournament.start_date)}
                 <span className="text-white/50">até</span>
-                {formatDate(tournament.end_date)}
+                {formatDatePtBr(tournament.end_date)}
               </span>
               {tournament.category && (
                 <Badge variant="outline" className="border-white/30 text-white">
@@ -288,9 +265,9 @@ const TournamentInfoDetail = () => {
             <div className="flex flex-col">
               <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Período</span>
               <span className="font-medium text-white">
-                {formatDate(tournament.start_date)}
+                {formatDatePtBr(tournament.start_date)}
                 <span className="text-white/50"> até </span>
-                {formatDate(tournament.end_date)}
+                {formatDatePtBr(tournament.end_date)}
               </span>
             </div>
             <div className="flex flex-col">
@@ -356,7 +333,7 @@ const TournamentInfoDetail = () => {
                       <div className="flex items-start justify-between gap-2 text-xs text-white/70">
                         <div className="flex items-center gap-2">
                           <Clock size={14} className="text-white/60" />
-                          <span>{formatDateTime(match.scheduled_at)}</span>
+                          <span>{formatDateTimePtBr(match.scheduled_at)}</span>
                         </div>
                         {match.status && (
                           <Badge variant="outline" className="border-white/25 text-white uppercase tracking-wide">
