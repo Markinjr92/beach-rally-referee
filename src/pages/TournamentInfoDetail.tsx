@@ -253,47 +253,19 @@ const TournamentInfoDetail = () => {
           </div>
         </div>
 
-        <Card className="bg-white/8 border border-white/15 text-white backdrop-blur-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Informações gerais</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-xs sm:grid-cols-2 text-white/80">
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Local</span>
-              <span className="font-medium text-white">{tournament.location || 'Não informado'}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Período</span>
-              <span className="font-medium text-white">
-                {formatDatePtBr(tournament.start_date)}
-                <span className="text-white/50"> até </span>
-                {formatDatePtBr(tournament.end_date)}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Categoria</span>
-              <span className="font-medium text-white">{tournament.category || 'Não informado'}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Modalidade</span>
-              <span className="font-medium text-white">{tournament.modality || 'Não informado'}</span>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
           <CardHeader className="space-y-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <CardTitle className="text-xl">Jogos do torneio</CardTitle>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Buscar por equipe, fase, quadra ou status"
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/60"
+                  className="h-9 bg-white/5 border-white/20 text-white placeholder:text-white/60"
                 />
                 <Select value={sortOption} onValueChange={(value) => setSortOption(value as typeof sortOption)}>
-                  <SelectTrigger className="bg-white/5 border-white/20 text-white">
+                  <SelectTrigger className="h-9 bg-white/5 border-white/20 text-white">
                     <SelectValue placeholder="Ordenar jogos" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-900/95 text-white">
@@ -309,11 +281,11 @@ const TournamentInfoDetail = () => {
               Explore todos os confrontos programados e finalizados do torneio em um único painel.
             </p>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             {filteredAndSortedMatches.length === 0 ? (
               <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredAndSortedMatches.map((match) => {
                   const scores = scoresByMatch[match.id] || []
                   const setTotals = scores.reduce(
@@ -328,15 +300,15 @@ const TournamentInfoDetail = () => {
                   return (
                     <div
                       key={match.id}
-                      className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3 text-sm"
+                      className="rounded-md border border-white/10 bg-white/5 p-2.5 space-y-2 text-[13px] sm:text-xs"
                     >
-                      <div className="flex items-start justify-between gap-2 text-xs text-white/70">
-                        <div className="flex items-center gap-2">
-                          <Clock size={14} className="text-white/60" />
-                          <span>{formatDateTimePtBr(match.scheduled_at)}</span>
+                      <div className="flex items-start justify-between gap-2 text-[11px] text-white/70">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={13} className="text-white/60" />
+                          <span className="font-medium">{formatDateTimePtBr(match.scheduled_at)}</span>
                         </div>
                         {match.status && (
-                          <Badge variant="outline" className="border-white/25 text-white uppercase tracking-wide">
+                          <Badge variant="outline" className="border-white/25 text-white uppercase tracking-[0.2em]">
                             {match.status === 'in_progress'
                               ? 'Em andamento'
                               : match.status === 'completed'
@@ -347,43 +319,29 @@ const TournamentInfoDetail = () => {
                       </div>
                       <div className="space-y-1 text-white">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-sm truncate">
-                            {match.teamA?.name || 'Equipe A'}
-                          </span>
+                          <span className="font-semibold truncate">{match.teamA?.name || 'Equipe A'}</span>
                           {match.status === 'completed' && (
-                            <span className="text-xs font-semibold text-white/75">
-                              {setTotals.teamA}
-                            </span>
+                            <span className="text-[11px] font-semibold text-white/80">{setTotals.teamA}</span>
                           )}
                         </div>
-                        <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 text-center">
-                          vs
-                        </div>
+                        <div className="text-[9px] uppercase tracking-[0.35em] text-white/40 text-center">vs</div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-sm truncate">
-                            {match.teamB?.name || 'Equipe B'}
-                          </span>
+                          <span className="font-semibold truncate">{match.teamB?.name || 'Equipe B'}</span>
                           {match.status === 'completed' && (
-                            <span className="text-xs font-semibold text-white/75">
-                              {setTotals.teamB}
-                            </span>
+                            <span className="text-[11px] font-semibold text-white/80">{setTotals.teamB}</span>
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/65">
                         {match.phase && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">
-                            {match.phase}
-                          </span>
+                          <span className="rounded-full border border-white/15 px-2 py-0.5">{match.phase}</span>
                         )}
                         {match.court && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">
-                            Quadra {match.court}
-                          </span>
+                          <span className="rounded-full border border-white/15 px-2 py-0.5">Quadra {match.court}</span>
                         )}
                       </div>
                       {scores.length > 0 && (
-                        <div className="flex flex-wrap gap-1 text-[11px] text-white/75">
+                        <div className="flex flex-wrap gap-1 text-[10px] text-white/75">
                           {scores.map((score) => (
                             <span
                               key={`${score.match_id}-${score.set_number}`}
