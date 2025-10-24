@@ -17,14 +17,22 @@ const corsHeadersBase = {
   "Access-Control-Max-Age": "86400",
 } as const;
 
-const getCorsHeaders = (origin: string | null) => {
+const getCorsHeaders = (
+  origin: string | null,
+  accessControlRequestHeaders: string | null,
+) => {
   const allowOrigin =
     origin && ALLOWED_ORIGINS.includes(origin as (typeof ALLOWED_ORIGINS)[number])
       ? origin
       : ALLOWED_ORIGINS[0];
 
+  const allowHeaders = accessControlRequestHeaders?.trim()
+    ? accessControlRequestHeaders
+    : corsHeadersBase["Access-Control-Allow-Headers"];
+
   return {
     ...corsHeadersBase,
+    "Access-Control-Allow-Headers": allowHeaders,
     "Access-Control-Allow-Origin": allowOrigin,
     Vary: "Origin",
   } satisfies HeadersInit;
@@ -38,7 +46,8 @@ const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersI
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
-  const corsHeaders = getCorsHeaders(origin);
+  const accessControlRequestHeaders = req.headers.get("access-control-request-headers");
+  const corsHeaders = getCorsHeaders(origin, accessControlRequestHeaders);
 
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
