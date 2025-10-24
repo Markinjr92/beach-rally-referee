@@ -1,73 +1,62 @@
-# Welcome to your Lovable project
+# Beach Rally Referee
 
-## Project info
+Painel administrativo construído com Vite + React + TypeScript + Tailwind CSS, integrado ao Supabase.
 
-**URL**: https://lovable.dev/projects/65102ec7-954f-425c-a145-d01f143d3445
+## Desenvolvimento local
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/65102ec7-954f-425c-a145-d01f143d3445) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+npm install
+npm run dev -- --host 0.0.0.0 --port 8080
 ```
 
-**Edit a file directly in GitHub**
+O projeto lê as variáveis de ambiente do Vite. Crie um arquivo `.env` com:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```env
+VITE_SUPABASE_URL="https://lssbsmbjalsugejuxswa.supabase.co"
+VITE_SUPABASE_ANON_KEY="<chave anon do projeto>"
+VITE_SUPABASE_PUBLISHABLE_KEY="<mesma chave anon, mantida por retrocompatibilidade>"
+```
 
-**Use GitHub Codespaces**
+> **Importante:** mantenha a chave de serviço (`SERVICE_ROLE`) fora do front-end. Ela será usada apenas dentro das Edge Functions.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Supabase Edge Function `admin-user-management`
 
-## What technologies are used for this project?
+A função recebe requisições autenticadas e retorna a lista de usuários e suas roles. Ela exige que o token JWT pertença a um usuário com permissão `user.manage`.
 
-This project is built with:
+### Deploy
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+1. Configure os *secrets* do projeto em **Supabase → Project Settings → Functions → Secrets**:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_ANON_KEY`
+2. Execute o deploy:
 
-## How can I deploy this project?
+   ```bash
+   supabase functions deploy admin-user-management
+   ```
 
-Simply open [Lovable](https://lovable.dev/projects/65102ec7-954f-425c-a145-d01f143d3445) and click on Share -> Publish.
+### Respostas e CORS
 
-## Can I connect a custom domain to my Lovable project?
+- OPTIONS → 200 OK com cabeçalhos CORS.
+- GET/POST → JSON com `{ ok: boolean, users?: [...] }` e os cabeçalhos:
+  - `Access-Control-Allow-Origin: <origin do request>`
+  - `Vary: Origin`
+  - `Access-Control-Allow-Methods: GET,POST,OPTIONS`
+  - `Access-Control-Allow-Headers: authorization, x-client-info, apikey, content-type`
 
-Yes, you can!
+## Migrações SQL
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+O diretório `supabase/migrations` inclui uma função `public.get_admin_user_list()` que agrega usuários e suas roles. Execute as migrações localmente antes de publicar alterações.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+```bash
+supabase db reset
+supabase db push
+```
+
+## Testes manuais recomendados
+
+- Acessar `http://localhost:8080/admin/users` autenticado como administrador.
+  - Preflight OPTIONS → 200 com os cabeçalhos CORS.
+  - POST → 200 com JSON contendo a lista de usuários.
+  - Tabela renderiza usuários e roles.
+- Usuário deslogado ou sem permissão deve receber 401/403 e a interface mostra mensagem de erro amigável.
