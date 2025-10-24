@@ -63,11 +63,11 @@ const TeamSearchSelect = ({ value, onChange, placeholder, options }: TeamSearchS
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 bg-slate-950/95 border border-white/20 text-white"
+        className="p-0 border border-white/20 text-white"
         align="start"
         style={{ width: 'var(--radix-popover-trigger-width)' }}
       >
-        <Command>
+        <Command className="bg-slate-950/95 text-white">
           <CommandInput
             placeholder={`Buscar ${placeholder.toLowerCase()}`}
             className="text-white placeholder:text-white/60"
