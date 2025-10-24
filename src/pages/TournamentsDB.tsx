@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowLeft, Calendar, MapPin, Plus, Trophy } from "lucide-react"
 
@@ -25,6 +25,7 @@ type Tournament = Tables<'tournaments'>
 
 export default function TournamentsDB() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [statusFilter, setStatusFilter] = useState<'active' | 'completed' | 'all'>('active')
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ name: "", location: "", start: "", end: "", category: "", modality: "" })
   const { toast } = useToast()
@@ -65,6 +66,14 @@ export default function TournamentsDB() {
     setForm({ name: "", location: "", start: "", end: "", category: "", modality: "" })
     toast({ title: "Torneio criado" })
   }
+
+  const filteredTournaments = useMemo(() => {
+    return tournaments.filter((tournament) => {
+      if (statusFilter === 'completed') return tournament.status === 'completed'
+      if (statusFilter === 'all') return true
+      return tournament.status !== 'completed'
+    })
+  }, [statusFilter, tournaments])
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -200,10 +209,29 @@ export default function TournamentsDB() {
               </div>
             </DialogContent>
           </Dialog>
+          <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/80">
+            <span className="text-white/70">Filtrar por status:</span>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'active' | 'completed' | 'all')}>
+              <SelectTrigger className="w-[160px] border-white/30 bg-white/5 text-white focus:ring-white/60 focus:ring-offset-0">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="border-white/20 bg-slate-900/90 text-white">
+                <SelectItem value="active" className="focus:bg-white/10 focus:text-white">
+                  Ativos
+                </SelectItem>
+                <SelectItem value="completed" className="focus:bg-white/10 focus:text-white">
+                  Finalizados
+                </SelectItem>
+                <SelectItem value="all" className="focus:bg-white/10 focus:text-white">
+                  Todos
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {tournaments.map((tournament) => {
+          {filteredTournaments.map((tournament) => {
             const statusStyles =
               tournament.status === "active"
                 ? "bg-emerald-400/15 text-emerald-50 border-emerald-200/40"
@@ -251,6 +279,32 @@ export default function TournamentsDB() {
                       <Link to={`/tournament/${tournament.id}`} className="flex-1 min-w-[140px]">
                         <Button className="w-full bg-yellow-400/90 text-slate-900 hover:bg-yellow-300">Ver Torneio</Button>
                       </Link>
+                      {tournament.status !== 'completed' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1 border-white/40 bg-white/10 text-white hover:bg-white/20"
+                          onClick={async () => {
+                            if (!confirm('Finalizar este torneio?')) return
+                            const { error } = await supabase
+                              .from('tournaments')
+                              .update({ status: 'completed' })
+                              .eq('id', tournament.id)
+                            if (error) {
+                              toast({ title: 'Erro ao finalizar', description: error.message })
+                              return
+                            }
+                            setTournaments((prev) =>
+                              prev.map((item) =>
+                                item.id === tournament.id ? { ...item, status: 'completed' } : item
+                              )
+                            )
+                            toast({ title: 'Torneio finalizado' })
+                          }}
+                        >
+                          Finalizar
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -277,14 +331,14 @@ export default function TournamentsDB() {
           })}
         </div>
 
-        {tournaments.length === 0 && (
+        {filteredTournaments.length === 0 && (
           <div className="text-center py-16">
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-white/40 bg-white/10">
               <Trophy className="text-yellow-300" size={40} />
             </div>
-            <h3 className="text-2xl font-semibold text-white mb-2">Nenhum torneio cadastrado</h3>
+            <h3 className="text-2xl font-semibold text-white mb-2">Nenhum torneio encontrado</h3>
             <p className="text-white/70 max-w-xl mx-auto">
-              Crie um novo torneio para iniciar o planejamento da temporada e mantenha todas as etapas organizadas em um só lugar.
+              Ajuste o filtro de status ou crie um novo torneio para iniciar o planejamento da temporada.
             </p>
           </div>
         )}
