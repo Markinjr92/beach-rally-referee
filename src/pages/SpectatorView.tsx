@@ -9,24 +9,16 @@ import { Game, GameState, PointCategory } from "@/types/volleyball";
 
 const mockStatistics = {
   teamA: {
-    ATTACK_WINNER: 8,
-    ATTACK_DROP: 3,
-    ATTACK_SECOND_BALL: 2,
-    BLOCK_DIRECT: 1,
-    ACE: 4,
-    DEFENSE_DIRECT: 1,
-    ERROR_ATTACK: 0,
-    ERROR_SERVE: 0
+    ATTACK: 12,
+    BLOCK: 3,
+    SERVE_POINT: 4,
+    OPPONENT_ERROR: 2
   },
   teamB: {
-    ATTACK_WINNER: 5,
-    ATTACK_DROP: 2,
-    ATTACK_SECOND_BALL: 1,
-    BLOCK_DIRECT: 2,
-    ACE: 2,
-    DEFENSE_DIRECT: 0,
-    ERROR_ATTACK: 3,
-    ERROR_SERVE: 2
+    ATTACK: 9,
+    BLOCK: 2,
+    SERVE_POINT: 3,
+    OPPONENT_ERROR: 4
   }
 };
 
@@ -125,14 +117,10 @@ export default function SpectatorView() {
 
   const getCategoryLabel = (category: PointCategory) => {
     const labels: Record<PointCategory, string> = {
-      'ATTACK_WINNER': 'Ataques Vencedores',
-      'ATTACK_DROP': 'Largadas',
-      'ATTACK_SECOND_BALL': 'Ataques 2ª Bola',
-      'BLOCK_DIRECT': 'Bloqueios Diretos',
-      'ACE': 'Aces',
-      'DEFENSE_DIRECT': 'Defesas Diretas',
-      'ERROR_ATTACK': 'Erros de Ataque',
-      'ERROR_SERVE': 'Erros de Saque'
+      'ATTACK': 'Ataque',
+      'BLOCK': 'Bloqueio',
+      'SERVE_POINT': 'Ponto de Saque',
+      'OPPONENT_ERROR': 'Erro adversário'
     };
     return labels[category];
   };
