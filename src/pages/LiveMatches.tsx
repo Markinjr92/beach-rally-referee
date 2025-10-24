@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { formatDateTimePtBr } from '@/utils/date'
+import { parseGameModality, parseNumberArray } from '@/utils/parsers'
 
 type Match = Tables<'matches'>
 type Team = Tables<'teams'>
@@ -146,7 +147,7 @@ const LiveMatches = () => {
             tournamentId: match.tournament_id,
             title: `${match.teamA?.name ?? 'Equipe A'} vs ${match.teamB?.name ?? 'Equipe B'}`,
             category: match.modality ? String(match.modality) : 'Misto',
-            modality: (match.modality as any) || 'dupla',
+            modality: parseGameModality(match.modality),
             format: 'melhorDe3',
             teamA: {
               name: match.teamA?.name || 'Equipe A',
@@ -162,9 +163,9 @@ const LiveMatches = () => {
                 { name: match.teamB?.player_b || 'B2', number: 2 },
               ],
             },
-            pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+            pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
             needTwoPointLead: true,
-            sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+            sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
             hasTechnicalTimeout: false,
             technicalTimeoutSum: 0,
             teamTimeoutsPerSet: 2,

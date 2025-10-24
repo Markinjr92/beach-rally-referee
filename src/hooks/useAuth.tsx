@@ -7,8 +7,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -39,6 +39,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const toError = (error: unknown): Error => {
+    if (error instanceof Error) {
+      return error;
+    }
+    return new Error('Unexpected error');
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -58,15 +65,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           description: "Bem-vindo de volta!",
         });
       }
-      
+
       return { error };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const mappedError = toError(error);
       toast({
         title: "Erro no login",
         description: "Ocorreu um erro inesperado",
         variant: "destructive",
       });
-      return { error };
+      return { error: mappedError };
     }
   };
 
@@ -107,13 +115,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       
       return { error };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const mappedError = toError(error);
       toast({
         title: "Erro no cadastro",
         description: "Ocorreu um erro inesperado",
         variant: "destructive",
       });
-      return { error };
+      return { error: mappedError };
     }
   };
 
@@ -124,12 +133,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         title: "Logout realizado",
         description: "Até logo!",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const mappedError = toError(error);
       toast({
         title: "Erro no logout",
         description: "Ocorreu um erro ao sair",
         variant: "destructive",
       });
+      console.error(mappedError);
     }
   };
 

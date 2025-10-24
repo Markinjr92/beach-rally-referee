@@ -147,14 +147,15 @@ export default function TournamentDetailDB() {
 
       const { data: reg, error: re } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournamentId)
       if (re) { toast({ title: 'Erro ao carregar equipes', description: re.message }) }
-      setTeams((reg || []).map((r: any) => r.teams as Team).filter(Boolean))
+      const registeredTeams = (reg ?? []) as Array<{ teams: Team | null }>
+      setTeams(registeredTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
 
       const { data: m, error: me } = await supabase.from('matches').select('*').eq('tournament_id', tournamentId).order('scheduled_at', { ascending: true })
       if (me) { toast({ title: 'Erro ao carregar jogos', description: me.message }) }
       setMatches(m || [])
     }
     load()
-  }, [tournamentId])
+  }, [tournamentId, toast])
 
   const teamOptions = useMemo(() => teams.map(t => ({ value: t.id, label: t.name })), [teams])
 
@@ -234,7 +235,8 @@ export default function TournamentDetailDB() {
                             await supabase.from('tournament_teams').delete().eq('tournament_id', tournament.id).eq('team_id', team.id)
                             await supabase.from('teams').delete().eq('id', team.id)
                             const { data: reg } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournament.id)
-                            setTeams((reg || []).map((r: any) => r.teams as Team).filter(Boolean))
+                            const updatedTeams = (reg ?? []) as Array<{ teams: Team | null }>
+                            setTeams(updatedTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
                             toast({ title: 'Dupla removida' })
                           }}
                         >
@@ -273,7 +275,8 @@ export default function TournamentDetailDB() {
                       const { error: rerr } = await supabase.from('tournament_teams').insert({ tournament_id: tournament.id, team_id: team.id })
                       if (rerr) { toast({ title: 'Erro ao vincular', description: rerr.message }); return }
                       const { data: reg } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournament.id)
-                      setTeams((reg || []).map((r: any) => r.teams as Team).filter(Boolean))
+                      const refreshedTeams = (reg ?? []) as Array<{ teams: Team | null }>
+                      setTeams(refreshedTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
                       setTeamForm({ name: '', player_a: '', player_b: '' })
                       toast({ title: 'Dupla adicionada' })
                     }}

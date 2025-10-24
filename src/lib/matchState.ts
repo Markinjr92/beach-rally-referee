@@ -1,4 +1,6 @@
 import {
+  CoinChoice,
+  CourtSide,
   Game,
   GameState,
   SetConfiguration,
@@ -12,12 +14,159 @@ export type MatchTimeoutRow = Tables<"match_timeouts">;
 export type MatchScoreRow = Tables<"match_scores">;
 export type MatchScoreInsert = TablesInsert<"match_scores">;
 
-const ensureArray = <T>(value: T[] | null | undefined, fallbackLength: number, fallbackValue: T) => {
-  if (Array.isArray(value) && value.length >= fallbackLength) {
-    return [...value];
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parseNumber = (value: unknown, fallback: number): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
   }
-  return Array.from({ length: fallbackLength }, () => fallbackValue);
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return fallback;
 };
+
+const parseBoolean = (value: unknown, fallback: boolean): boolean =>
+  typeof value === "boolean" ? value : fallback;
+
+const parseNumberArrayWithFallback = (value: unknown, fallback: number[]): number[] => {
+  const fallbackLast = fallback[fallback.length - 1] ?? 0;
+  if (!Array.isArray(value)) {
+    return [...fallback];
+  }
+  const result = value.map((item, index) => {
+    const fallbackValue = fallback[index] ?? fallbackLast;
+    return parseNumber(item, fallbackValue);
+  });
+  if (result.length < fallback.length) {
+    return [...result, ...fallback.slice(result.length)];
+  }
+  return result;
+};
+
+const parseBooleanArrayWithFallback = (value: unknown, fallback: boolean[]): boolean[] => {
+  const fallbackLast = fallback[fallback.length - 1] ?? false;
+  if (!Array.isArray(value)) {
+    return [...fallback];
+  }
+  const result = value.map((item, index) => {
+    const fallbackValue = fallback[index] ?? fallbackLast;
+    return parseBoolean(item, fallbackValue);
+  });
+  if (result.length < fallback.length) {
+    return [...result, ...fallback.slice(result.length)];
+  }
+  return result;
+};
+
+const parseTeamNumberArrayRecord = (
+  value: unknown,
+  fallback: { teamA: number[]; teamB: number[] }
+): { teamA: number[]; teamB: number[] } => {
+  if (!isRecord(value)) {
+    return { teamA: [...fallback.teamA], teamB: [...fallback.teamB] };
+  }
+  return {
+    teamA: parseNumberArrayWithFallback(value.teamA, fallback.teamA),
+    teamB: parseNumberArrayWithFallback(value.teamB, fallback.teamB),
+  };
+};
+
+const parseTeamCountRecord = (
+  value: unknown,
+  fallback: { teamA: number; teamB: number }
+): { teamA: number; teamB: number } => {
+  if (!isRecord(value)) {
+    return { ...fallback };
+  }
+  return {
+    teamA: parseNumber(value.teamA, fallback.teamA),
+    teamB: parseNumber(value.teamB, fallback.teamB),
+  };
+};
+
+const parseTeamIdentifier = (value: unknown, fallback: "A" | "B"): "A" | "B" =>
+  value === "B" ? "B" : fallback;
+
+const parseCoinChoiceValue = (value: unknown, fallback: CoinChoice): CoinChoice =>
+  value === "serve" || value === "receive" || value === "side" ? value : fallback;
+
+const parseCourtSideValue = (
+  value: unknown,
+  fallback: CourtSide
+): CourtSide => (value === "right" ? "right" : fallback);
+
+const parseOptionalCourtSideValue = (
+  value: unknown,
+  fallback: CourtSide | undefined
+): CourtSide | undefined => {
+  if (value === "left" || value === "right") {
+    return value;
+  }
+  return fallback;
+};
+
+const timerTypes: readonly Timer["type"][] = [
+  "TIMEOUT_TEAM",
+  "TIMEOUT_TECHNICAL",
+  "SET_INTERVAL",
+  "MEDICAL",
+];
+
+const parseTimer = (value: unknown): Timer | null => {
+  if (!isRecord(value) || value.id === undefined) {
+    return null;
+  }
+
+  const typeCandidate = typeof value.type === "string" ? (value.type as Timer["type"]) : undefined;
+  const type = timerTypes.includes(typeCandidate ?? "TIMEOUT_TEAM")
+    ? typeCandidate ?? "TIMEOUT_TEAM"
+    : "TIMEOUT_TEAM";
+
+  const startedAt =
+    typeof value.startedAt === "string"
+      ? value.startedAt
+      : typeof value.started_at === "string"
+      ? value.started_at
+      : new Date().toISOString();
+  const endsAt =
+    typeof value.endsAt === "string"
+      ? value.endsAt
+      : typeof value.ends_at === "string"
+      ? value.ends_at
+      : new Date().toISOString();
+  const durationSec = parseNumber(value.durationSec ?? value.duration_seconds, 0);
+  const team = value.team === "A" || value.team === "B" ? value.team : undefined;
+
+  return {
+    id: String(value.id),
+    type,
+    startedAt,
+    endsAt,
+    durationSec,
+    team,
+  };
+};
+
+type StoredTeamSetConfiguration = {
+  jerseyAssignment?: Record<string, unknown>;
+  serviceOrder?: unknown;
+};
+
+type StoredSetConfiguration = Partial<Omit<SetConfiguration, "teams" | "coinToss">> & {
+  coinToss?: Partial<SetConfiguration["coinToss"]>;
+  teams?: {
+    teamA?: StoredTeamSetConfiguration;
+    teamB?: StoredTeamSetConfiguration;
+  };
+};
+
+const isStoredSetConfiguration = (value: unknown): value is StoredSetConfiguration =>
+  isRecord(value);
 
 const buildDefaultServiceOrder = (game: Game, team: "A" | "B"): number[] => {
   const players = team === "A" ? game.teamA.players : game.teamB.players;
@@ -38,6 +187,124 @@ const buildDefaultTeamConfiguration = (game: Game, team: "A" | "B"): TeamSetConf
     jerseyAssignment: assignment,
     serviceOrder: buildDefaultServiceOrder(game, team),
   };
+};
+
+const mergeTeamConfiguration = (
+  game: Game,
+  team: "A" | "B",
+  config: StoredTeamSetConfiguration | undefined
+): TeamSetConfiguration => {
+  const defaultConfig = buildDefaultTeamConfiguration(game, team);
+  if (!config) {
+    return defaultConfig;
+  }
+
+  const jerseyAssignment = { ...defaultConfig.jerseyAssignment };
+  if (isRecord(config.jerseyAssignment)) {
+    Object.entries(config.jerseyAssignment).forEach(([key, value]) => {
+      jerseyAssignment[key] = parseNumber(value, jerseyAssignment[key] ?? 0);
+    });
+  }
+
+  const serviceOrder = parseNumberArrayWithFallback(
+    config.serviceOrder,
+    defaultConfig.serviceOrder
+  );
+
+  return {
+    jerseyAssignment,
+    serviceOrder,
+  };
+};
+
+const parseSetConfigurations = (
+  stored: unknown,
+  defaultConfigs: SetConfiguration[],
+  game: Game
+): SetConfiguration[] => {
+  if (!Array.isArray(stored)) {
+    return defaultConfigs;
+  }
+
+  return defaultConfigs.map((defaultConfig, index) => {
+    const candidate = stored[index];
+    if (!isStoredSetConfiguration(candidate)) {
+      return defaultConfig;
+    }
+
+    const coinToss = candidate.coinToss ?? {};
+    const teams = candidate.teams ?? {};
+
+    const startingServerTeam = parseTeamIdentifier(
+      candidate.startingServerTeam,
+      defaultConfig.startingServerTeam
+    );
+
+    const startingReceiverTeam = parseTeamIdentifier(
+      candidate.startingReceiverTeam,
+      startingServerTeam === "A" ? "B" : "A"
+    );
+
+    return {
+      setNumber: parseNumber(candidate.setNumber, defaultConfig.setNumber),
+      isConfigured:
+        typeof candidate.isConfigured === "boolean"
+          ? candidate.isConfigured
+          : defaultConfig.isConfigured,
+      firstChoiceTeam: parseTeamIdentifier(
+        candidate.firstChoiceTeam,
+        defaultConfig.firstChoiceTeam
+      ),
+      firstChoiceOption: parseCoinChoiceValue(
+        candidate.firstChoiceOption,
+        defaultConfig.firstChoiceOption
+      ),
+      firstChoiceSide: parseOptionalCourtSideValue(
+        candidate.firstChoiceSide,
+        defaultConfig.firstChoiceSide
+      ),
+      secondChoiceOption: parseCoinChoiceValue(
+        candidate.secondChoiceOption,
+        defaultConfig.secondChoiceOption
+      ),
+      secondChoiceSide: parseOptionalCourtSideValue(
+        candidate.secondChoiceSide,
+        defaultConfig.secondChoiceSide
+      ),
+      sideChoiceTeam: parseTeamIdentifier(
+        candidate.sideChoiceTeam,
+        defaultConfig.sideChoiceTeam
+      ),
+      sideSelection: parseCourtSideValue(
+        candidate.sideSelection,
+        defaultConfig.sideSelection
+      ),
+      startingServerTeam,
+      startingReceiverTeam,
+      startingServerPlayer: parseNumber(
+        candidate.startingServerPlayer,
+        defaultConfig.startingServerPlayer
+      ),
+      coinToss: {
+        performed:
+          typeof coinToss.performed === "boolean"
+            ? coinToss.performed
+            : defaultConfig.coinToss.performed,
+        winner:
+          coinToss.winner === "A" || coinToss.winner === "B"
+            ? coinToss.winner
+            : defaultConfig.coinToss.winner,
+        loser:
+          coinToss.loser === "A" || coinToss.loser === "B"
+            ? coinToss.loser
+            : defaultConfig.coinToss.loser,
+      },
+      teams: {
+        teamA: mergeTeamConfiguration(game, "A", teams.teamA),
+        teamB: mergeTeamConfiguration(game, "B", teams.teamB),
+      },
+    } satisfies SetConfiguration;
+  });
 };
 
 const buildDefaultSetConfigurations = (game: Game, sets: number): SetConfiguration[] => {
@@ -102,127 +369,62 @@ export const createDefaultGameState = (game: Game): GameState => {
 };
 
 export const mapRowToGameState = (row: MatchStateRow, game: Game): GameState => {
-  const sets = game.pointsPerSet?.length ?? 3;
-  const activeTimer = row.active_timer as (Record<string, any> | null) | undefined;
-  const storedServiceOrders = (row.service_orders as
-    | { teamA?: number[]; teamB?: number[] }
-    | null
-    | undefined) ?? null;
-  const storedNextServerIndex = (row.next_server_index as
-    | { teamA?: number; teamB?: number }
-    | null
-    | undefined) ?? null;
-  const storedConfigurations = (row.set_configurations as any as SetConfiguration[] | undefined) ?? undefined;
-
-  let timer: Timer | null = null;
-  if (activeTimer && typeof activeTimer === "object" && activeTimer.id) {
-    timer = {
-      id: String(activeTimer.id),
-      type: (activeTimer.type as Timer["type"]) ?? "TIMEOUT_TEAM",
-      startedAt: String(activeTimer.startedAt ?? activeTimer.started_at ?? new Date().toISOString()),
-      endsAt: String(activeTimer.endsAt ?? activeTimer.ends_at ?? new Date().toISOString()),
-      durationSec: Number(activeTimer.durationSec ?? activeTimer.duration_seconds ?? 0),
-      team: activeTimer.team === "A" || activeTimer.team === "B" ? activeTimer.team : undefined,
-    };
-  }
-
   const defaultState = createDefaultGameState(game);
+  const sets = game.pointsPerSet?.length ?? defaultState.scores.teamA.length;
 
-  const mergeTeamConfiguration = (config: TeamSetConfiguration | undefined, team: "A" | "B"): TeamSetConfiguration => {
-    if (!config) {
-      return buildDefaultTeamConfiguration(game, team);
-    }
+  const parsedTimer = parseTimer(row.active_timer ?? null);
+  const serviceOrders = parseTeamNumberArrayRecord(
+    row.service_orders,
+    defaultState.serviceOrders
+  );
+  const nextServerIndex = parseTeamCountRecord(
+    row.next_server_index,
+    defaultState.nextServerIndex
+  );
+  const setConfigurations = parseSetConfigurations(
+    row.set_configurations,
+    defaultState.setConfigurations,
+    game
+  );
 
-    const jerseyAssignment: Record<string, number> = {};
-    Object.entries(config.jerseyAssignment ?? {}).forEach(([key, value]) => {
-      jerseyAssignment[key] = Number(value);
-    });
-
-    const serviceOrder = Array.isArray(config.serviceOrder) && config.serviceOrder.length
-      ? config.serviceOrder.map(Number)
-      : buildDefaultServiceOrder(game, team);
-
-    return {
-      jerseyAssignment,
-      serviceOrder,
-    };
-  };
-
-  const setConfigurations: SetConfiguration[] = defaultState.setConfigurations.map((defaultConfig, index) => {
-    const storedConfig = storedConfigurations?.[index];
-    if (!storedConfig) {
-      return defaultConfig;
-    }
-
-    const coinToss = storedConfig.coinToss ?? defaultConfig.coinToss;
-    const firstChoiceTeam = storedConfig.firstChoiceTeam ?? defaultConfig.firstChoiceTeam;
-    const startingServerTeam = storedConfig.startingServerTeam ?? defaultConfig.startingServerTeam;
-    const startingReceiverTeam = storedConfig.startingReceiverTeam ?? (startingServerTeam === "A" ? "B" : "A");
-    const sideChoiceTeam = storedConfig.sideChoiceTeam ?? defaultConfig.sideChoiceTeam;
-
-    return {
-      setNumber: storedConfig.setNumber ?? defaultConfig.setNumber,
-      isConfigured: storedConfig.isConfigured ?? defaultConfig.isConfigured,
-      firstChoiceTeam,
-      firstChoiceOption: storedConfig.firstChoiceOption ?? defaultConfig.firstChoiceOption,
-      firstChoiceSide: storedConfig.firstChoiceSide ?? defaultConfig.firstChoiceSide,
-      secondChoiceOption: storedConfig.secondChoiceOption ?? defaultConfig.secondChoiceOption,
-      secondChoiceSide: storedConfig.secondChoiceSide ?? defaultConfig.secondChoiceSide,
-      sideChoiceTeam,
-      sideSelection: storedConfig.sideSelection ?? defaultConfig.sideSelection,
-      startingServerTeam,
-      startingReceiverTeam,
-      startingServerPlayer: storedConfig.startingServerPlayer ?? defaultConfig.startingServerPlayer,
-      coinToss: {
-        performed: coinToss?.performed ?? defaultConfig.coinToss.performed,
-        winner: coinToss?.winner ?? defaultConfig.coinToss.winner,
-        loser: coinToss?.loser ?? defaultConfig.coinToss.loser,
-      },
-      teams: {
-        teamA: mergeTeamConfiguration(storedConfig.teams?.teamA, "A"),
-        teamB: mergeTeamConfiguration(storedConfig.teams?.teamB, "B"),
-      },
-    };
+  const scores = parseTeamNumberArrayRecord(row.scores, {
+    teamA: Array.from({ length: sets }, () => 0),
+    teamB: Array.from({ length: sets }, () => 0),
   });
+  const timeoutsUsed = parseTeamNumberArrayRecord(row.timeouts_used, {
+    teamA: Array.from({ length: sets }, () => 0),
+    teamB: Array.from({ length: sets }, () => 0),
+  });
+  const technicalTimeoutUsed = parseBooleanArrayWithFallback(
+    row.technical_timeout_used,
+    Array.from({ length: sets }, () => false)
+  );
+  const sidesSwitched = parseNumberArrayWithFallback(
+    row.sides_switched,
+    Array.from({ length: sets }, () => 0)
+  );
+  const setsWon = parseTeamCountRecord(row.sets_won, defaultState.setsWon);
 
   return {
+    ...defaultState,
     id: `${row.match_id}-state`,
     gameId: row.match_id,
-    currentSet: row.current_set ?? 1,
-    setsWon: {
-      teamA: Number((row.sets_won as any)?.teamA ?? 0),
-      teamB: Number((row.sets_won as any)?.teamB ?? 0),
-    },
-    scores: {
-      teamA: ensureArray<number>((row.scores as any)?.teamA, sets, 0).map(Number),
-      teamB: ensureArray<number>((row.scores as any)?.teamB, sets, 0).map(Number),
-    },
-    currentServerTeam: (row.current_server_team as "A" | "B") ?? "A",
-    currentServerPlayer: row.current_server_player ?? 1,
-    possession: (row.possession as "A" | "B") ?? "A",
-    leftIsTeamA: row.left_is_team_a ?? true,
-    timeoutsUsed: {
-      teamA: ensureArray<number>((row.timeouts_used as any)?.teamA, sets, 0).map(Number),
-      teamB: ensureArray<number>((row.timeouts_used as any)?.teamB, sets, 0).map(Number),
-    },
-    technicalTimeoutUsed: ensureArray<boolean>(row.technical_timeout_used as any, sets, false).map(Boolean),
-    sidesSwitched: ensureArray<number>(row.sides_switched as any, sets, 0).map(Number),
-    serviceOrders: {
-      teamA: Array.isArray(storedServiceOrders?.teamA) && storedServiceOrders?.teamA.length
-        ? storedServiceOrders.teamA.map(Number)
-        : defaultState.serviceOrders.teamA,
-      teamB: Array.isArray(storedServiceOrders?.teamB) && storedServiceOrders?.teamB.length
-        ? storedServiceOrders.teamB.map(Number)
-        : defaultState.serviceOrders.teamB,
-    },
-    nextServerIndex: {
-      teamA: Number(storedNextServerIndex?.teamA ?? defaultState.nextServerIndex.teamA),
-      teamB: Number(storedNextServerIndex?.teamB ?? defaultState.nextServerIndex.teamB),
-    },
+    currentSet: row.current_set ?? defaultState.currentSet,
+    setsWon,
+    scores,
+    currentServerTeam: (row.current_server_team as "A" | "B") ?? defaultState.currentServerTeam,
+    currentServerPlayer: row.current_server_player ?? defaultState.currentServerPlayer,
+    possession: (row.possession as "A" | "B") ?? defaultState.possession,
+    leftIsTeamA: row.left_is_team_a ?? defaultState.leftIsTeamA,
+    timeoutsUsed,
+    technicalTimeoutUsed,
+    sidesSwitched,
+    serviceOrders,
+    nextServerIndex,
     setConfigurations,
     events: [],
-    activeTimer: timer,
-    isGameEnded: row.is_game_ended ?? false,
+    activeTimer: parsedTimer,
+    isGameEnded: row.is_game_ended ?? defaultState.isGameEnded,
   };
 };
 
