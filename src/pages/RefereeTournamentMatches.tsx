@@ -9,16 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-const formatDateTime = (value: string | null) => {
-  if (!value) return 'Horário a definir'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Horário a definir'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date)
-}
+import { formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
 
 type Tournament = Tables<'tournaments'>
 type Team = Pick<Tables<'teams'>, 'id' | 'name'>
@@ -103,9 +94,8 @@ const RefereeTournamentMatches = () => {
 
     const sorted = [...filtered].sort((a, b) => {
       const getTime = (value: string | null) => {
-        if (!value) return order === 'asc' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY
-        const date = new Date(value)
-        if (Number.isNaN(date.getTime())) return order === 'asc' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY
+        const date = parseLocalDateTime(value)
+        if (!date) return order === 'asc' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY
         return date.getTime()
       }
 
@@ -249,7 +239,7 @@ const RefereeTournamentMatches = () => {
                     <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
                       <span className="inline-flex items-center gap-2">
                         <Clock size={16} />
-                        {formatDateTime(match.scheduled_at)}
+                        {formatDateTimePtBr(match.scheduled_at, { fallback: 'Horário a definir' })}
                       </span>
                       {match.court && (
                         <Badge variant="outline" className="border-white/40 text-white">

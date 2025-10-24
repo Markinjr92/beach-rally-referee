@@ -19,22 +19,13 @@ import {
   CommandItem,
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
+import { formatDateTimePtBr } from '@/utils/date'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
 type Match = Tables<'matches'>
 
 type TeamOption = { value: string; label: string }
-
-const formatDateTime = (value: string | null) => {
-  if (!value) return 'Sem horário agendado'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Sem horário agendado'
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date)
-}
 
 type TeamSearchSelectProps = {
   value: string
@@ -278,7 +269,7 @@ export default function TournamentDetailDB() {
                       <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
                       <div className="flex items-center gap-2">
                         <Clock size={16} className="text-white/60" />
-                        {formatDateTime(m.scheduled_at)}
+                        {formatDateTimePtBr(m.scheduled_at, { fallback: 'Sem horário agendado' })}
                       </div>
                       <Badge variant="outline" className="border-white/40 text-white">
                         {m.phase || 'Jogo'}
