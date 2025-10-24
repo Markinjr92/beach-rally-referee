@@ -8,6 +8,8 @@ import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const formatDateTime = (value: string | null) => {
   if (!value) return 'Sem horário definido'
@@ -43,6 +45,8 @@ const TournamentInfoDetail = () => {
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
   const [scoresByMatch, setScoresByMatch] = useState<Record<string, MatchScore[]>>({})
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'status' | 'phase'>('date-asc')
 
   useEffect(() => {
     const load = async () => {
@@ -153,14 +157,59 @@ const TournamentInfoDetail = () => {
     load()
   }, [tournamentId, toast])
 
-  const upcomingMatches = useMemo(
-    () => matches.filter((match) => match.status !== 'completed' && match.status !== 'canceled'),
-    [matches]
-  )
-  const completedMatches = useMemo(
-    () => matches.filter((match) => match.status === 'completed'),
-    [matches]
-  )
+  const filteredAndSortedMatches = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+
+    const filtered = matches.filter((match) => {
+      if (!term) return true
+
+      const teamA = match.teamA?.name?.toLowerCase() || ''
+      const teamB = match.teamB?.name?.toLowerCase() || ''
+      const phase = match.phase?.toLowerCase() || ''
+      const court = match.court?.toLowerCase() || ''
+      const status = match.status?.toLowerCase() || ''
+      const scheduled = match.scheduled_at
+        ? new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          })
+            .format(new Date(match.scheduled_at))
+            .toLowerCase()
+        : ''
+
+      const searchPool = [teamA, teamB, phase, court, status, scheduled]
+
+      return searchPool.some((value) => value.includes(term))
+    })
+
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortOption) {
+        case 'date-desc': {
+          const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
+          const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+          return dateB - dateA
+        }
+        case 'status': {
+          const statusA = a.status || ''
+          const statusB = b.status || ''
+          return statusA.localeCompare(statusB)
+        }
+        case 'phase': {
+          const phaseA = a.phase || ''
+          const phaseB = b.phase || ''
+          return phaseA.localeCompare(phaseB)
+        }
+        case 'date-asc':
+        default: {
+          const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
+          const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
+          return dateA - dateB
+        }
+      }
+    })
+
+    return sorted
+  }, [matches, searchTerm, sortOption])
 
   if (loading) {
     return (
@@ -227,89 +276,68 @@ const TournamentInfoDetail = () => {
           </div>
         </div>
 
-        <Card className="bg-white/10 border border-white/20 text-white backdrop-blur-lg">
-          <CardHeader>
-            <CardTitle className="text-xl">Informações gerais</CardTitle>
+        <Card className="bg-white/8 border border-white/15 text-white backdrop-blur-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">Informações gerais</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-white/80">
-            <div>
-              <span className="font-semibold text-white">Local:</span> {tournament.location || 'Não informado'}
+          <CardContent className="grid gap-2 text-xs sm:grid-cols-2 text-white/80">
+            <div className="flex flex-col">
+              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Local</span>
+              <span className="font-medium text-white">{tournament.location || 'Não informado'}</span>
             </div>
-            <div>
-              <span className="font-semibold text-white">Período:</span> {formatDate(tournament.start_date)}
-              <span className="text-white/50"> até </span>
-              {formatDate(tournament.end_date)}
+            <div className="flex flex-col">
+              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Período</span>
+              <span className="font-medium text-white">
+                {formatDate(tournament.start_date)}
+                <span className="text-white/50"> até </span>
+                {formatDate(tournament.end_date)}
+              </span>
             </div>
-            <div>
-              <span className="font-semibold text-white">Categoria:</span> {tournament.category || 'Não informado'}
+            <div className="flex flex-col">
+              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Categoria</span>
+              <span className="font-medium text-white">{tournament.category || 'Não informado'}</span>
             </div>
-            <div>
-              <span className="font-semibold text-white">Modalidade:</span> {tournament.modality || 'Não informado'}
+            <div className="flex flex-col">
+              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Modalidade</span>
+              <span className="font-medium text-white">{tournament.modality || 'Não informado'}</span>
             </div>
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
-            <CardHeader>
-              <CardTitle className="text-xl">Próximos jogos</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {upcomingMatches.length === 0 ? (
-                <p className="text-sm text-white/70">Nenhum jogo agendado ou em andamento.</p>
-              ) : (
-                upcomingMatches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="rounded-lg border border-white/15 bg-white/5 p-4 space-y-3"
-                  >
-                    <div className="flex items-center justify-between text-sm text-white/70">
-                      <div className="flex items-center gap-2">
-                        <Clock size={16} className="text-white/60" />
-                        {formatDateTime(match.scheduled_at)}
-                      </div>
-                      <Badge variant="outline" className="border-white/30 text-white uppercase">
-                        {match.status === 'in_progress' ? 'Em andamento' : 'Agendado'}
-                      </Badge>
-                    </div>
-                    <div className="space-y-1 text-white">
-                      <div className="text-base font-semibold">{match.teamA?.name || 'Equipe A'}</div>
-                      <div className="text-xs uppercase tracking-[0.2em] text-white/50">vs</div>
-                      <div className="text-base font-semibold">{match.teamB?.name || 'Equipe B'}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        className="border-white/30 text-white hover:bg-white/15"
-                      >
-                        <Link to={`/scoreboard/${match.id}`}>Placar ao vivo</Link>
-                      </Button>
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        className="border-white/30 text-white hover:bg-white/15"
-                      >
-                        <Link to={`/spectator/${match.id}`}>Visão da torcida</Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
-            <CardHeader>
-              <CardTitle className="text-xl">Resultados</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {completedMatches.length === 0 ? (
-                <p className="text-sm text-white/70">Nenhum resultado registrado ainda.</p>
-              ) : (
-                completedMatches.map((match) => {
+        <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+          <CardHeader className="space-y-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <CardTitle className="text-xl">Jogos do torneio</CardTitle>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Buscar por equipe, fase, quadra ou status"
+                  className="bg-white/5 border-white/20 text-white placeholder:text-white/60"
+                />
+                <Select value={sortOption} onValueChange={(value) => setSortOption(value as typeof sortOption)}>
+                  <SelectTrigger className="bg-white/5 border-white/20 text-white">
+                    <SelectValue placeholder="Ordenar jogos" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900/95 text-white">
+                    <SelectItem value="date-asc">Data crescente</SelectItem>
+                    <SelectItem value="date-desc">Data decrescente</SelectItem>
+                    <SelectItem value="status">Status</SelectItem>
+                    <SelectItem value="phase">Fase</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-sm text-white/70">
+              Explore todos os confrontos programados e finalizados do torneio em um único painel.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {filteredAndSortedMatches.length === 0 ? (
+              <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredAndSortedMatches.map((match) => {
                   const scores = scoresByMatch[match.id] || []
                   const setTotals = scores.reduce(
                     (acc, score) => {
@@ -323,63 +351,79 @@ const TournamentInfoDetail = () => {
                   return (
                     <div
                       key={match.id}
-                      className="rounded-lg border border-white/15 bg-white/5 p-4 space-y-3"
+                      className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3 text-sm"
                     >
-                      <div className="flex items-center justify-between text-sm text-white/70">
+                      <div className="flex items-start justify-between gap-2 text-xs text-white/70">
                         <div className="flex items-center gap-2">
-                          <Clock size={16} className="text-white/60" />
-                          {formatDateTime(match.scheduled_at)}
+                          <Clock size={14} className="text-white/60" />
+                          <span>{formatDateTime(match.scheduled_at)}</span>
                         </div>
-                        <Badge variant="outline" className="border-emerald-400/40 text-emerald-200 bg-emerald-500/10">
-                          Finalizado
-                        </Badge>
+                        {match.status && (
+                          <Badge variant="outline" className="border-white/25 text-white uppercase tracking-wide">
+                            {match.status === 'in_progress'
+                              ? 'Em andamento'
+                              : match.status === 'completed'
+                                ? 'Finalizado'
+                                : match.status}
+                          </Badge>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between text-white">
-                        <span className="font-semibold">{match.teamA?.name || 'Equipe A'}</span>
-                        <span className="text-lg font-semibold text-white/80">
-                          {setTotals.teamA} x {setTotals.teamB}
-                        </span>
-                        <span className="font-semibold text-right">{match.teamB?.name || 'Equipe B'}</span>
+                      <div className="space-y-1 text-white">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm truncate">
+                            {match.teamA?.name || 'Equipe A'}
+                          </span>
+                          {match.status === 'completed' && (
+                            <span className="text-xs font-semibold text-white/75">
+                              {setTotals.teamA}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 text-center">
+                          vs
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm truncate">
+                            {match.teamB?.name || 'Equipe B'}
+                          </span>
+                          {match.status === 'completed' && (
+                            <span className="text-xs font-semibold text-white/75">
+                              {setTotals.teamB}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 text-sm text-white/80">
-                        {scores.length === 0 ? (
-                          <span className="text-white/60">Sem placar registrado.</span>
-                        ) : (
-                          scores.map((score) => (
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                        {match.phase && (
+                          <span className="rounded-full border border-white/15 px-2 py-0.5">
+                            {match.phase}
+                          </span>
+                        )}
+                        {match.court && (
+                          <span className="rounded-full border border-white/15 px-2 py-0.5">
+                            Quadra {match.court}
+                          </span>
+                        )}
+                      </div>
+                      {scores.length > 0 && (
+                        <div className="flex flex-wrap gap-1 text-[11px] text-white/75">
+                          {scores.map((score) => (
                             <span
                               key={`${score.match_id}-${score.set_number}`}
-                              className="rounded border border-white/20 px-2 py-1"
+                              className="rounded border border-white/15 px-1.5 py-0.5"
                             >
                               Set {score.set_number}: {score.team_a_points} x {score.team_b_points}
                             </span>
-                          ))
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="outline"
-                          className="border-white/30 text-white hover:bg-white/15"
-                        >
-                          <Link to={`/scoreboard/${match.id}`}>Rever placar</Link>
-                        </Button>
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="outline"
-                          className="border-white/30 text-white hover:bg-white/15"
-                        >
-                          <Link to={`/spectator/${match.id}`}>Destaques da torcida</Link>
-                        </Button>
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
-                })
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
