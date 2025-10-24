@@ -1,26 +1,37 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreButton } from "@/components/ui/score-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  Plus, 
-  Minus, 
-  RotateCcw, 
-  RotateCw, 
-  Clock, 
+import {
+  Plus,
+  RotateCcw,
+  Clock,
   Trophy,
   Users,
   Flag,
   Zap,
   Pause,
+  ArrowLeft,
   ArrowLeftRight,
+  Coins,
   UserCheck
 } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
 import { Game, GameState, PointCategory } from "@/types/volleyball";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+
+type CoinSide = "heads" | "tails";
 
 const mainCategories = [
   { value: 'ATTACK', label: 'Ataque' },
@@ -29,14 +40,28 @@ const mainCategories = [
   { value: 'OPPONENT_ERROR', label: 'Erro adversário' }
 ];
 
+const coinLabels: Record<CoinSide, string> = {
+  heads: 'Cara',
+  tails: 'Coroa'
+};
+
 export default function RefereeDesk() {
   const { gameId } = useParams();
+  const navigate = useNavigate();
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showPointCategories, setShowPointCategories] = useState<'A' | 'B' | null>(null);
   const [timer, setTimer] = useState<number | null>(null);
   const [showSideSwitchAlert, setShowSideSwitchAlert] = useState(false);
   const [gameHistory, setGameHistory] = useState<GameState[]>([]);
+  const [coinDialogOpen, setCoinDialogOpen] = useState(false);
+  const [selectedCoinSide, setSelectedCoinSide] = useState<CoinSide | null>(null);
+  const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
+  const [isFlippingCoin, setIsFlippingCoin] = useState(false);
+  const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const coinResultLabel = useMemo(() => (coinResult ? coinLabels[coinResult] : null), [coinResult]);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -107,6 +132,12 @@ export default function RefereeDesk() {
       return () => clearInterval(interval);
     }
   }, [timer]);
+
+  useEffect(() => {
+    return () => {
+      clearCoinAnimations();
+    };
+  }, []);
 
   const addPoint = (team: 'A' | 'B', category: PointCategory) => {
     if (!gameState || !game) return;
@@ -207,10 +238,51 @@ export default function RefereeDesk() {
 
   const undoLastAction = () => {
     if (gameHistory.length === 0) return;
-    
+
     const lastState = gameHistory[gameHistory.length - 1];
     setGameState(lastState);
     setGameHistory(prev => prev.slice(0, -1));
+  };
+
+  const clearCoinAnimations = () => {
+    if (flipIntervalRef.current) {
+      clearInterval(flipIntervalRef.current);
+      flipIntervalRef.current = null;
+    }
+    if (flipTimeoutRef.current) {
+      clearTimeout(flipTimeoutRef.current);
+      flipTimeoutRef.current = null;
+    }
+  };
+
+  const resetCoinState = () => {
+    clearCoinAnimations();
+    setSelectedCoinSide(null);
+    setCoinResult(null);
+    setIsFlippingCoin(false);
+  };
+
+  const handleCoinFlip = (side: CoinSide) => {
+    setSelectedCoinSide(side);
+    setIsFlippingCoin(true);
+    setCoinResult(null);
+
+    clearCoinAnimations();
+
+    const interval = setInterval(() => {
+      setCoinResult(prev => (prev === 'heads' ? 'tails' : 'heads'));
+    }, 150);
+
+    flipIntervalRef.current = interval;
+
+    const timeout = setTimeout(() => {
+      const finalResult: CoinSide = Math.random() < 0.5 ? 'heads' : 'tails';
+      setCoinResult(finalResult);
+      setIsFlippingCoin(false);
+      clearCoinAnimations();
+    }, 1500);
+
+    flipTimeoutRef.current = timeout;
   };
 
   const startTimeout = (type: 'team' | 'technical' | 'medical', team?: 'A' | 'B') => {
@@ -231,8 +303,8 @@ export default function RefereeDesk() {
 
   if (!game || !gameState) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-xl text-muted-foreground">Jogo não encontrado</p>
+      <div className="min-h-screen bg-gradient-ocean flex items-center justify-center text-white">
+        <p className="text-xl text-white/80">Jogo não encontrado</p>
       </div>
     );
   }
@@ -242,89 +314,121 @@ export default function RefereeDesk() {
   const scoreB = gameState.scores.teamB[currentSetIndex] || 0;
   const leftTeam = gameState.leftIsTeamA ? 'A' : 'B';
   const rightTeam = gameState.leftIsTeamA ? 'B' : 'A';
+  const leftTeamName = leftTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const rightTeamName = rightTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const leftTeamScores = leftTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
+  const rightTeamScores = rightTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
+  const serverTeamName = gameState.currentServerTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const coinStatusMessage = useMemo(() => {
+    if (!selectedCoinSide) return 'Selecione uma face para iniciar o sorteio.';
+    if (isFlippingCoin) return 'Girando moeda...';
+    if (coinResultLabel) return `Resultado: ${coinResultLabel}`;
+    return 'Toque novamente para sortear.';
+  }, [coinResultLabel, isFlippingCoin, selectedCoinSide]);
+
+  const coinOutcomeMessage = useMemo(() => {
+    if (!selectedCoinSide || !coinResult || isFlippingCoin) return null;
+    return selectedCoinSide === coinResult
+      ? 'Sua escolha venceu o sorteio!'
+      : 'A outra equipe inicia com a escolha vencedora.';
+  }, [coinResult, isFlippingCoin, selectedCoinSide]);
+
+  const coinFaceToShow = (coinResult ?? selectedCoinSide ?? 'heads') as CoinSide;
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="container mx-auto max-w-7xl">
+    <div className="min-h-screen bg-gradient-ocean text-white">
+      <div className="container mx-auto max-w-7xl px-4 py-8 space-y-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">{game.title}</h1>
-          <p className="text-muted-foreground">{game.category} • {game.modality} • {game.format}</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <Button
+              variant="outline"
+              className="w-fit border-white/30 text-white hover:bg-white/20 hover:text-white"
+              onClick={() => navigate(-1)}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar
+            </Button>
+            <div className="md:text-right">
+              <h1 className="text-3xl font-bold">{game.title}</h1>
+              <p className="text-white/70">{game.category} • {game.modality} • {game.format}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-white/80">
+            <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
+              Set atual: {gameState.currentSet}
+            </Badge>
+            <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
+              Parcial de sets {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
+            </Badge>
+            <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
+              Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+            </Badge>
+          </div>
         </div>
 
         {/* Main Scoreboard */}
-        <Card className="mb-8 bg-gradient-scoreboard text-score-text shadow-scoreboard">
-          <CardContent className="p-8">
-            <div className="grid grid-cols-3 gap-8 items-center">
-              {/* Left Team */}
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2">
-                  {leftTeam === 'A' ? game.teamA.name : game.teamB.name}
-                </h2>
-                <div className="text-8xl font-bold mb-4 animate-pulse">
+        <Card className="bg-slate-900/80 border border-white/20 text-score-text shadow-scoreboard backdrop-blur-xl">
+          <CardContent className="p-6 lg:p-10">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-center">
+              <div className="space-y-4 text-center">
+                <h2 className="text-2xl font-semibold text-white/90">{leftTeamName}</h2>
+                <div className="text-7xl sm:text-8xl font-extrabold">
                   {leftTeam === 'A' ? scoreA : scoreB}
                 </div>
-                <div className="flex gap-2 justify-center">
-                  {gameState.scores[leftTeam === 'A' ? 'teamA' : 'teamB'].map((setScore, index) => (
-                    <Badge 
-                      key={index} 
-                      variant="outline" 
-                      className="text-score-text border-score-text"
+                <div className="flex flex-wrap justify-center gap-2">
+                  {leftTeamScores.map((setScore, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="border-score-text/40 bg-white/10 text-score-text"
                     >
                       {setScore}
                     </Badge>
                   ))}
                 </div>
                 {gameState.currentServerTeam === leftTeam && (
-                  <div className="mt-4">
-                    <Badge className="bg-serving text-white">
-                      <Zap className="mr-1" size={16} />
-                      Sacando ({gameState.currentServerPlayer})
-                    </Badge>
-                  </div>
+                  <Badge className="bg-serving text-white">
+                    <Zap className="mr-1 h-4 w-4" />
+                    Sacando ({gameState.currentServerPlayer})
+                  </Badge>
                 )}
               </div>
 
-              {/* Center - Set Info */}
-              <div className="text-center">
-                <div className="text-lg mb-2">Set {gameState.currentSet}</div>
-                <div className="text-sm opacity-75">
+              <div className="space-y-4 text-center">
+                <div className="text-lg font-medium text-white/80">Set {gameState.currentSet}</div>
+                <div className="text-sm text-white/70">
                   Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
                 </div>
-                {timer && (
-                  <div className="mt-4 text-xl font-bold text-timeout">
-                    <Clock className="inline mr-2" size={20} />
+                {timer !== null && (
+                  <div className="mx-auto w-fit rounded-full border border-amber-200/60 bg-amber-200/10 px-5 py-2 text-lg font-semibold text-amber-100 shadow-inner">
+                    <Clock className="mr-2 inline h-5 w-5" />
                     {formatTime(timer)}
                   </div>
                 )}
               </div>
 
-              {/* Right Team */}
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2">
-                  {rightTeam === 'A' ? game.teamA.name : game.teamB.name}
-                </h2>
-                <div className="text-8xl font-bold mb-4 animate-pulse">
+              <div className="space-y-4 text-center">
+                <h2 className="text-2xl font-semibold text-white/90">{rightTeamName}</h2>
+                <div className="text-7xl sm:text-8xl font-extrabold">
                   {rightTeam === 'A' ? scoreA : scoreB}
                 </div>
-                <div className="flex gap-2 justify-center">
-                  {gameState.scores[rightTeam === 'A' ? 'teamA' : 'teamB'].map((setScore, index) => (
-                    <Badge 
-                      key={index} 
-                      variant="outline" 
-                      className="text-score-text border-score-text"
+                <div className="flex flex-wrap justify-center gap-2">
+                  {rightTeamScores.map((setScore, index) => (
+                    <Badge
+                      key={index}
+                      variant="outline"
+                      className="border-score-text/40 bg-white/10 text-score-text"
                     >
                       {setScore}
                     </Badge>
                   ))}
                 </div>
                 {gameState.currentServerTeam === rightTeam && (
-                  <div className="mt-4">
-                    <Badge className="bg-serving text-white">
-                      <Zap className="mr-1" size={16} />
-                      Sacando ({gameState.currentServerPlayer})
-                    </Badge>
-                  </div>
+                  <Badge className="bg-serving text-white">
+                    <Zap className="mr-1 h-4 w-4" />
+                    Sacando ({gameState.currentServerPlayer})
+                  </Badge>
                 )}
               </div>
             </div>
@@ -332,152 +436,170 @@ export default function RefereeDesk() {
         </Card>
 
         {/* Control Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
           {/* Scoring Controls */}
-          <Card>
+          <Card className="xl:col-span-7 bg-white/10 border border-white/20 text-white backdrop-blur-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Trophy size={20} />
                 Controle de Pontos
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <h4 className="font-semibold">{leftTeam === 'A' ? game.teamA.name : game.teamB.name}</h4>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <h4 className="text-lg font-semibold text-white/90">{leftTeamName}</h4>
                   <ScoreButton
                     variant="team"
                     size="score"
                     onClick={() => setShowPointCategories(leftTeam)}
-                    className="w-full"
+                    className="h-28 w-full text-5xl"
                   >
-                    <Plus size={24} />
+                    <Plus size={28} />
                   </ScoreButton>
                 </div>
-                <div className="space-y-2">
-                  <h4 className="font-semibold">{rightTeam === 'A' ? game.teamA.name : game.teamB.name}</h4>
+                <div className="space-y-3">
+                  <h4 className="text-lg font-semibold text-white/90">{rightTeamName}</h4>
                   <ScoreButton
                     variant="teamB"
                     size="score"
                     onClick={() => setShowPointCategories(rightTeam)}
-                    className="w-full"
+                    className="h-28 w-full text-5xl"
                   >
-                    <Plus size={24} />
+                    <Plus size={28} />
                   </ScoreButton>
                 </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
+                <p className="font-semibold text-white">Histórico rápido</p>
+                <p>Desfazer últimas ações disponíveis: {gameHistory.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 border-white/40 text-white hover:bg-white/20"
+                  onClick={undoLastAction}
+                  disabled={gameHistory.length === 0}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Desfazer
+                </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Timeouts & Controls */}
-          <Card>
+          {/* Timeouts & Controles */}
+          <Card className="xl:col-span-3 bg-white/10 border border-white/20 text-white backdrop-blur-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Clock size={20} />
                 Timeouts & Controles
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  variant="outline" 
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  className="border-white/30 text-white hover:bg-white/20"
                   onClick={() => startTimeout('team', 'A')}
                   disabled={!!timer}
                 >
-                  <Pause className="mr-2" size={16} />
+                  <Pause className="mr-2 h-4 w-4" />
                   Timeout A
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
+                  className="border-white/30 text-white hover:bg-white/20"
                   onClick={() => startTimeout('team', 'B')}
                   disabled={!!timer}
                 >
-                  <Pause className="mr-2" size={16} />
+                  <Pause className="mr-2 h-4 w-4" />
                   Timeout B
                 </Button>
               </div>
-              <Button 
-                variant="outline" 
-                className="w-full"
+              <Button
+                variant="outline"
+                className="w-full border-white/30 text-white hover:bg-white/20"
                 onClick={() => startTimeout('technical')}
                 disabled={!!timer}
               >
-                <Clock className="mr-2" size={16} />
+                <Clock className="mr-2 h-4 w-4" />
                 Tempo Técnico
               </Button>
-              <Button 
-                variant="outline" 
-                className="w-full"
+              <Button
+                variant="outline"
+                className="w-full border-white/30 text-white hover:bg-white/20"
                 onClick={() => startTimeout('medical')}
                 disabled={!!timer}
               >
                 Tempo Médico (5min)
               </Button>
-              <div className="space-y-2">
-                <div className="text-sm font-medium mb-2">Controles de Override:</div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
+              <Button
+                variant="outline"
+                className="w-full border-amber-200/60 text-amber-100 hover:bg-amber-200/20"
+                onClick={() => {
+                  resetCoinState();
+                  setCoinDialogOpen(true);
+                }}
+              >
+                <Coins className="mr-2 h-4 w-4" />
+                Moeda
+              </Button>
+              <div className="space-y-3 border-t border-white/10 pt-3">
+                <div className="text-sm font-medium text-white/80">Controles de Override:</div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-white/30 text-white hover:bg-white/20"
                   onClick={switchServerTeam}
                 >
-                  <ArrowLeftRight className="mr-2" size={16} />
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
                   Trocar Posse ({gameState.currentServerTeam === 'A' ? 'B' : 'A'})
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-white/30 text-white hover:bg-white/20"
                   onClick={changeCurrentServer}
                 >
-                  <UserCheck className="mr-2" size={16} />
+                  <UserCheck className="mr-2 h-4 w-4" />
                   Próximo Sacador ({gameState.currentServerTeam} - {((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={undoLastAction}
-                  disabled={gameHistory.length === 0}
-                >
-                  <RotateCcw className="mr-2" size={16} />
-                  Desfazer ({gameHistory.length})
                 </Button>
               </div>
             </CardContent>
           </Card>
 
           {/* Game Info */}
-          <Card>
+          <Card className="xl:col-span-2 bg-white/10 border border-white/20 text-white backdrop-blur-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Users size={20} />
                 Informações do Jogo
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-sm space-y-2">
-                <div className="flex justify-between">
-                  <span>Formato:</span>
-                  <span className="font-medium">{game.format}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Vantagem 2 pontos:</span>
-                  <span className="font-medium">{game.needTwoPointLead ? 'Sim' : 'Não'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Troca aos:</span>
-                  <span className="font-medium">{game.sideSwitchSum[currentSetIndex]} pontos</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Timeouts por set:</span>
-                  <span className="font-medium">{game.teamTimeoutsPerSet}</span>
-                </div>
+            <CardContent className="space-y-4 text-xs sm:text-sm text-white/80">
+              <div className="flex justify-between">
+                <span>Formato:</span>
+                <span className="font-medium text-white">{game.format}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Vantagem 2 pontos:</span>
+                <span className="font-medium text-white">{game.needTwoPointLead ? 'Sim' : 'Não'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Troca aos:</span>
+                <span className="font-medium text-white">{game.sideSwitchSum[currentSetIndex]} pontos</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Timeouts por set:</span>
+                <span className="font-medium text-white">{game.teamTimeoutsPerSet}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Modo da moeda:</span>
+                <span className="font-medium text-white">{game.coinTossMode === 'initialThenAlternate' ? 'Inicial e alternado' : game.coinTossMode}</span>
               </div>
             </CardContent>
           </Card>
+
         </div>
 
         {/* Side Switch Alert */}
@@ -527,6 +649,105 @@ export default function RefereeDesk() {
             </Card>
           </div>
         )}
+
+        <Dialog
+          open={coinDialogOpen}
+          onOpenChange={(open) => {
+            setCoinDialogOpen(open);
+            if (!open) {
+              resetCoinState();
+            }
+          }}
+        >
+          <DialogContent className="bg-slate-950/95 text-white border border-white/20">
+            <DialogHeader>
+              <DialogTitle>Sorteio de moeda</DialogTitle>
+              <DialogDescription className="text-white/70">
+                Simule o lançamento da moeda oficial de R$ 1 e defina quem começa.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6">
+              <div className="flex flex-col items-center gap-5">
+                <div
+                  className={cn(
+                    "relative flex h-40 w-40 items-center justify-center rounded-full bg-gradient-to-br from-[#f0f2f7] to-[#b5bcc6] shadow-[0_20px_40px_rgba(0,0,0,0.35)] transition-transform duration-500 ease-in-out",
+                    isFlippingCoin && "animate-coin-flip"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "relative flex h-[82%] w-[82%] flex-col items-center justify-center gap-2 rounded-full bg-gradient-to-br text-[#2c2416] font-bold uppercase tracking-[0.25em]",
+                      coinFaceToShow === 'tails'
+                        ? "from-[#d7dce3] to-[#9ea5b4] text-[#102539]"
+                        : "from-[#f8d98f] to-[#c68c2d]"
+                    )}
+                  >
+                    {coinFaceToShow === 'heads' ? (
+                      <>
+                        <span className="text-5xl leading-none tracking-normal">1</span>
+                        <span className="text-lg font-semibold tracking-[0.4em]">REAL</span>
+                        <span className="text-[0.7rem] tracking-[0.45em] text-[#3f3b2d]">BRASIL</span>
+                        <div className="pointer-events-none absolute inset-1 rounded-full border border-white/40" />
+                        <div className="pointer-events-none absolute -top-3 right-6 h-12 w-12 rounded-full border border-white/30 bg-white/20" />
+                        <div className="pointer-events-none absolute -bottom-7 left-8 h-20 w-20 rotate-[-25deg] bg-white/10" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xs font-semibold tracking-[0.4em] text-white/80">REPÚBLICA</span>
+                        <span className="text-2xl font-black tracking-[0.2em] text-white">BRASIL</span>
+                        <span className="text-[0.7rem] tracking-[0.45em] text-white/70">ORDEM E PROGRESSO</span>
+                        <div className="pointer-events-none absolute inset-2 rounded-full border border-white/30" />
+                        <div className="pointer-events-none absolute -bottom-6 right-7 h-16 w-16 rotate-12 rounded-full bg-gradient-to-br from-[#1f3d54]/25 to-transparent" />
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="grid w-full max-w-xs grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "border-white/30 text-white hover:bg-white/20",
+                      selectedCoinSide === 'heads' && !isFlippingCoin && "bg-white/20 border-white/60"
+                    )}
+                    disabled={isFlippingCoin}
+                    onClick={() => handleCoinFlip('heads')}
+                  >
+                    Cara
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "border-white/30 text-white hover:bg-white/20",
+                      selectedCoinSide === 'tails' && !isFlippingCoin && "bg-white/20 border-white/60"
+                    )}
+                    disabled={isFlippingCoin}
+                    onClick={() => handleCoinFlip('tails')}
+                  >
+                    Coroa
+                  </Button>
+                </div>
+              </div>
+              <div className="text-center text-sm text-white/80 min-h-[1.5rem]">{coinStatusMessage}</div>
+              {coinOutcomeMessage && (
+                <div className="text-center text-base font-semibold text-amber-200">
+                  {coinOutcomeMessage}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                className="border-white/30 text-white hover:bg-white/20"
+                onClick={() => {
+                  setCoinDialogOpen(false);
+                  resetCoinState();
+                }}
+              >
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </div>
     </div>

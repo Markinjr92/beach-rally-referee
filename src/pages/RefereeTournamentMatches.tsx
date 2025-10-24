@@ -275,16 +275,6 @@ const RefereeTournamentMatches = () => {
                         Abrir mesa
                       </Button>
                     </Link>
-                    <Link to={`/scoreboard/${match.id}`}>
-                      <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/15">
-                        Placar
-                      </Button>
-                    </Link>
-                    <Link to={`/spectator/${match.id}`}>
-                      <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/15">
-                        Torcida
-                      </Button>
-                    </Link>
                   </div>
                 </CardContent>
               </Card>
