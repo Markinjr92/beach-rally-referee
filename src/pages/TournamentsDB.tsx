@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { Tables } from "@/integrations/supabase/types"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/hooks/useAuth"
 
 type Tournament = Tables<'tournaments'>
 
@@ -38,6 +39,7 @@ export default function TournamentsDB() {
     hasStatistics: true,
   })
   const { toast } = useToast()
+  const { user } = useAuth()
 
   useEffect(() => {
     const load = async () => {
@@ -49,6 +51,10 @@ export default function TournamentsDB() {
   }, [])
 
   const createTournament = async () => {
+    if (!user) {
+      toast({ title: "Faça login para criar um torneio" })
+      return
+    }
     if (!form.name) {
       toast({ title: "Informe o nome do torneio" })
       return
@@ -62,6 +68,7 @@ export default function TournamentsDB() {
       modality: form.modality || null,
       status: "active",
       has_statistics: form.hasStatistics,
+      created_by: user.id,
     })
     if (error) {
       toast({ title: "Erro ao criar", description: error.message })

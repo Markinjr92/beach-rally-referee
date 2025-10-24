@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 type TournamentRow = Tables<'tournaments'>
 
@@ -41,6 +42,7 @@ export default function TournamentList() {
   });
   const [tournaments, setTournaments] = useState<TournamentWithGames[]>([]);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const activeTournaments = useMemo(
     () => tournaments.filter((tournament) => tournament.status === "active"),
@@ -211,6 +213,11 @@ export default function TournamentList() {
                   <Button
                     className="bg-yellow-400/90 text-slate-900 hover:bg-yellow-300"
                     onClick={async () => {
+                      if (!user) {
+                        toast({ title: 'Faça login para criar um torneio' })
+                        return
+                      }
+
                       const payload = {
                         name: formData.name,
                         location: formData.location || null,
@@ -220,6 +227,7 @@ export default function TournamentList() {
                         modality: formData.modality || null,
                         has_statistics: formData.hasStatistics,
                         status: 'active',
+                        created_by: user.id,
                       } as const
 
                       const { error } = await supabase.from('tournaments').insert(payload)
