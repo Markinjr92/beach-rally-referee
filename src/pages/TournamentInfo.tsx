@@ -8,13 +8,9 @@ import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { formatDateMediumPtBr } from '@/utils/date'
 
-const formatDate = (value: string | null) => {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(date)
-}
+const formatDate = (value: string | null) => formatDateMediumPtBr(value)
 
 const TournamentInfo = () => {
   const [tournaments, setTournaments] = useState<Tables<'tournaments'>[]>([])

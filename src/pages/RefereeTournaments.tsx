@@ -8,11 +8,12 @@ import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { parseLocalDateTime } from '@/utils/date'
 
 const formatDateRange = (start?: string | null, end?: string | null) => {
   if (!start && !end) return 'Datas a definir'
-  const startDate = start ? new Date(start) : null
-  const endDate = end ? new Date(end) : null
+  const startDate = start ? parseLocalDateTime(start) : null
+  const endDate = end ? parseLocalDateTime(end) : null
 
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
