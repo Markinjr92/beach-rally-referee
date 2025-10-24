@@ -45,7 +45,7 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "arbitration",
     title: "Mesa de Arbitragem",
     description: "Controle completo do jogo em tempo real",
-    to: "/referee/game-1",
+    to: "/referee",
     icon: Users,
     roles: ["arbitro", "admin_sistema"],
     iconClass: "text-blue-200",
