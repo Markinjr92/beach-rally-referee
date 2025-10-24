@@ -1,3 +1,4 @@
+import { useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -83,10 +84,28 @@ const Index = () => {
   const { roles, loading: rolesLoading, error: rolesError } = useUserRoles(user, loading);
 
   const isAdmin = roles.includes("admin_sistema");
-  const accessibleModules = MODULE_DEFINITIONS.filter((module) =>
-    isAdmin || module.roles.some((role) => roles.includes(role))
+  const accessibleModules = useMemo(
+    () =>
+      MODULE_DEFINITIONS.filter((module) =>
+        isAdmin || module.roles.some((role) => roles.includes(role))
+      ),
+    [isAdmin, roles]
   );
   const heroActions = accessibleModules.slice(0, 3);
+
+  useEffect(() => {
+    if (!user) {
+      console.log("[Index] Nenhum usuário autenticado - exibindo tela de login");
+      return;
+    }
+
+    console.log("[Index] Perfis e módulos acessíveis para o usuário", {
+      userId: user.id,
+      email: user.email,
+      roles,
+      accessibleModules: accessibleModules.map((module) => module.key),
+    });
+  }, [user, roles, accessibleModules]);
 
   if (loading || (user && rolesLoading)) {
     return (

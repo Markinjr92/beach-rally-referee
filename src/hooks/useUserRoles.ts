@@ -9,6 +9,7 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
 
   const fetchRoles = useCallback(async () => {
     if (!user?.id) {
+      console.log('[useUserRoles] No authenticated user found when fetching roles.');
       setRoles([]);
       setError(null);
       setLoading(false);
@@ -18,6 +19,13 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
     setLoading(true);
     const { data, error } = await supabase.rpc<string[]>("get_user_roles", {
       user_uuid: user.id,
+    });
+
+    console.log('[useUserRoles] Result from get_user_roles RPC', {
+      userId: user.id,
+      email: user.email,
+      data,
+      error,
     });
 
     if (error) {
@@ -30,7 +38,7 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
     }
 
     setLoading(false);
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     if (authLoading) {
