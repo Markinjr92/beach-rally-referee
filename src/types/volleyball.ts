@@ -54,8 +54,8 @@ export interface GameState {
   timeoutsUsed: { teamA: number[]; teamB: number[] }; // per set
   technicalTimeoutUsed: boolean[];
   sidesSwitched: number[]; // track switches per set
-  events: GameEvent[];
-  activeTimer?: Timer;
+  events?: GameEvent[];
+  activeTimer?: Timer | null;
   isGameEnded: boolean;
 }
 
@@ -69,9 +69,12 @@ export interface GameEvent {
 }
 
 export interface Timer {
+  id: string;
   type: 'TIMEOUT_TEAM' | 'TIMEOUT_TECHNICAL' | 'SET_INTERVAL' | 'MEDICAL';
+  startedAt: string;
   endsAt: string;
   durationSec: number;
+  team?: 'A' | 'B';
 }
 
 export type PointCategory =

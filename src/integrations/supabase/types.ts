@@ -95,6 +95,138 @@ export type Database = {
           { foreignKeyName: "match_scores_match_id_fkey", columns: ["match_id"], isOneToOne: false, referencedRelation: "matches", referencedColumns: ["id"] },
         ]
       }
+      match_states: {
+        Row: {
+          match_id: string
+          current_set: number
+          sets_won: Json
+          scores: Json
+          current_server_team: string
+          current_server_player: number
+          possession: string
+          left_is_team_a: boolean
+          timeouts_used: Json
+          technical_timeout_used: Json
+          sides_switched: Json
+          active_timer: Json | null
+          is_game_ended: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          match_id: string
+          current_set?: number
+          sets_won?: Json
+          scores?: Json
+          current_server_team?: string
+          current_server_player?: number
+          possession?: string
+          left_is_team_a?: boolean
+          timeouts_used?: Json
+          technical_timeout_used?: Json
+          sides_switched?: Json
+          active_timer?: Json | null
+          is_game_ended?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          match_id?: string
+          current_set?: number
+          sets_won?: Json
+          scores?: Json
+          current_server_team?: string
+          current_server_player?: number
+          possession?: string
+          left_is_team_a?: boolean
+          timeouts_used?: Json
+          technical_timeout_used?: Json
+          sides_switched?: Json
+          active_timer?: Json | null
+          is_game_ended?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "match_states_match_id_fkey", columns: ["match_id"], isOneToOne: true, referencedRelation: "matches", referencedColumns: ["id"] },
+        ]
+      }
+      match_events: {
+        Row: {
+          id: string
+          match_id: string
+          set_number: number | null
+          event_type: string
+          team: string | null
+          point_category: string | null
+          description: string | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          match_id: string
+          set_number?: number | null
+          event_type: string
+          team?: string | null
+          point_category?: string | null
+          description?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          match_id?: string
+          set_number?: number | null
+          event_type?: string
+          team?: string | null
+          point_category?: string | null
+          description?: string | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "match_events_match_id_fkey", columns: ["match_id"], isOneToOne: false, referencedRelation: "matches", referencedColumns: ["id"] },
+        ]
+      }
+      match_timeouts: {
+        Row: {
+          id: string
+          match_id: string
+          set_number: number | null
+          team: string | null
+          timeout_type: string
+          started_at: string
+          ended_at: string | null
+          duration_seconds: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          match_id: string
+          set_number?: number | null
+          team?: string | null
+          timeout_type: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          match_id?: string
+          set_number?: number | null
+          team?: string | null
+          timeout_type?: string
+          started_at?: string
+          ended_at?: string | null
+          duration_seconds?: number
+          created_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "match_timeouts_match_id_fkey", columns: ["match_id"], isOneToOne: false, referencedRelation: "matches", referencedColumns: ["id"] },
+        ]
+      }
       teams: {
         Row: {
           id: string
