@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type ListUsersResponse = {
@@ -7,20 +6,27 @@ type ListUsersResponse = {
   message?: string;
 };
 
-const allowedOrigins = [
+const ALLOWED_ORIGINS = [
   "http://localhost:8080",
-  Deno.env.get("PRODUCTION_SITE_URL") ?? "",
-  Deno.env.get("PUBLIC_SITE_URL") ?? "",
-].filter(Boolean);
+  "https://beach-rally-referee.vercel.app",
+] as const;
 
-const cors = (req: Request) => {
-  const origin = req.headers.get("Origin") ?? "";
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : "*";
+const corsHeadersBase = {
+  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, content-type, x-client-info, apikey",
+  "Access-Control-Max-Age": "86400",
+} as const;
+
+const getCorsHeaders = (origin: string | null) => {
+  const allowOrigin =
+    origin && ALLOWED_ORIGINS.includes(origin as (typeof ALLOWED_ORIGINS)[number])
+      ? origin
+      : ALLOWED_ORIGINS[0];
 
   return {
+    ...corsHeadersBase,
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey, x-client-info",
+    Vary: "Origin",
   } satisfies HeadersInit;
 };
 
@@ -30,60 +36,61 @@ const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersI
     headers: { ...headers, "Content-Type": "application/json" },
   });
 
-serve(async (req) => {
-  const corsHeaders = cors(req);
+Deno.serve(async (req) => {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 200, headers: corsHeaders });
-  }
-
-  if (req.method !== "GET" && req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
-  }
-
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);
-  }
-
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) {
-    console.error("Missing Supabase configuration variables");
-    return jsonResponse(500, { ok: false, message: "Server configuration error" }, corsHeaders);
-  }
-
-  const serviceClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data: userData, error: userError } = await userClient.auth.getUser();
-  if (userError || !userData?.user) {
-    console.error("Failed to validate user JWT", userError);
-    return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);
-  }
-
-  const userId = userData.user.id;
-  const { data: permissionData, error: permissionError } = await serviceClient.rpc(
-    "user_has_permission",
-    { user_uuid: userId, permission_name: "user.manage" },
-  );
-
-  const hasPermission = Boolean(permissionData);
-
-  if (permissionError || !hasPermission) {
-    console.error("Permission check failed", permissionError);
-    return jsonResponse(403, { ok: false, message: "Forbidden" }, corsHeaders);
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
+    if (req.method !== "GET" && req.method !== "POST") {
+      return jsonResponse(405, { ok: false, message: "Method not allowed" }, corsHeaders);
+    }
+
+    const authHeader = req.headers.get("authorization") ?? "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) {
+      console.error("Missing Supabase configuration variables");
+      return jsonResponse(500, { ok: false, message: "Server configuration error" }, corsHeaders);
+    }
+
+    const serviceClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: userData, error: userError } = await userClient.auth.getUser();
+    if (userError || !userData?.user) {
+      console.error("Failed to validate user JWT", userError);
+      return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);
+    }
+
+    const userId = userData.user.id;
+    const { data: permissionData, error: permissionError } = await serviceClient.rpc(
+      "user_has_permission",
+      { user_uuid: userId, permission_name: "user.manage" },
+    );
+
+    const hasPermission = Boolean(permissionData);
+
+    if (permissionError || !hasPermission) {
+      console.error("Permission check failed", permissionError);
+      return jsonResponse(403, { ok: false, message: "Forbidden" }, corsHeaders);
+    }
+
     if (req.method === "GET") {
       const { data, error } = await serviceClient.rpc("get_admin_user_list");
       if (error) throw error;
@@ -105,7 +112,7 @@ serve(async (req) => {
     return jsonResponse(400, { ok: false, message: "Unknown action" }, corsHeaders);
   } catch (error) {
     console.error("admin-user-management unexpected error", error);
-    const message = error instanceof Error ? error.message : "Unexpected error";
+    const message = error instanceof Error ? error.message : String(error ?? "Unexpected error");
     return jsonResponse(500, { ok: false, message }, corsHeaders);
   }
 });
