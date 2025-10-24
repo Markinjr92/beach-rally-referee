@@ -56,7 +56,6 @@ export default function RefereeDesk() {
   const [showSideSwitchAlert, setShowSideSwitchAlert] = useState(false);
   const [gameHistory, setGameHistory] = useState<GameState[]>([]);
   const [coinDialogOpen, setCoinDialogOpen] = useState(false);
-  const [selectedCoinSide, setSelectedCoinSide] = useState<CoinSide | null>(null);
   const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
   const [isFlippingCoin, setIsFlippingCoin] = useState(false);
   const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -108,14 +107,10 @@ export default function RefereeDesk() {
   }, []);
 
   const playAlert = useCallback(
-    (type: 'timeout' | 'sideSwitch') => {
-      if (type === 'timeout') {
-        playTone(880, 0, 0.7);
-        playTone(660, 0.28, 0.6);
-      } else {
-        playTone(540, 0, 0.5);
-        playTone(540, 0.22, 0.4);
-      }
+    (_type: 'timeout' | 'sideSwitch') => {
+      playTone(1568, 0, 0.35);
+      playTone(2093, 0.1, 0.35);
+      playTone(2637, 0.2, 0.45);
     },
     [playTone]
   );
@@ -201,6 +196,12 @@ export default function RefereeDesk() {
   }, [playAlert, timer]);
 
   useEffect(() => {
+    if (timer !== null) {
+      setShowPointCategories(null);
+    }
+  }, [timer]);
+
+  useEffect(() => {
     return () => {
       clearCoinAnimations();
     };
@@ -213,7 +214,7 @@ export default function RefereeDesk() {
   }, [playAlert, showSideSwitchAlert]);
 
   const addPoint = (team: 'A' | 'B', category: PointCategory) => {
-    if (!gameState || !game) return;
+    if (!gameState || !game || timer !== null) return;
 
     const newScores = { ...gameState.scores };
     const currentSet = gameState.currentSet - 1;
@@ -330,13 +331,11 @@ export default function RefereeDesk() {
 
   const resetCoinState = () => {
     clearCoinAnimations();
-    setSelectedCoinSide(null);
     setCoinResult(null);
     setIsFlippingCoin(false);
   };
 
-  const handleCoinFlip = (side: CoinSide) => {
-    setSelectedCoinSide(side);
+  const handleCoinFlip = () => {
     setIsFlippingCoin(true);
     setCoinResult(null);
 
@@ -375,18 +374,10 @@ export default function RefereeDesk() {
   };
 
   const coinStatusMessage = useMemo(() => {
-    if (!selectedCoinSide) return 'Selecione uma face para iniciar o sorteio.';
     if (isFlippingCoin) return 'Girando moeda...';
     if (coinResultLabel) return `Resultado: ${coinResultLabel}`;
-    return 'Toque novamente para sortear.';
-  }, [coinResultLabel, isFlippingCoin, selectedCoinSide]);
-
-  const coinOutcomeMessage = useMemo(() => {
-    if (!selectedCoinSide || !coinResult || isFlippingCoin) return null;
-    return selectedCoinSide === coinResult
-      ? 'Sua escolha venceu o sorteio!'
-      : 'A outra equipe inicia com a escolha vencedora.';
-  }, [coinResult, isFlippingCoin, selectedCoinSide]);
+    return 'Toque em "Jogar Moeda" para iniciar.';
+  }, [coinResultLabel, isFlippingCoin]);
 
   if (!game || !gameState) {
     return (
@@ -411,7 +402,7 @@ export default function RefereeDesk() {
   const leftScoreButtonVariant = leftTeam === 'A' ? 'team' : 'teamB';
   const rightScoreButtonVariant = rightTeam === 'A' ? 'team' : 'teamB';
 
-  const coinFaceToShow = (coinResult ?? selectedCoinSide ?? 'heads') as CoinSide;
+  const coinFaceToShow = (coinResult ?? 'heads') as CoinSide;
   const mobileControlButtons = [
     {
       icon: RotateCcw,
@@ -447,6 +438,15 @@ export default function RefereeDesk() {
       icon: UserCheck,
       label: 'Trocar Sacador',
       onClick: changeCurrentServer,
+      disabled: false
+    },
+    {
+      icon: Coins,
+      label: 'Moeda',
+      onClick: () => {
+        resetCoinState();
+        setCoinDialogOpen(true);
+      },
       disabled: false
     }
   ];
@@ -553,7 +553,11 @@ export default function RefereeDesk() {
             <ScoreButton
               variant={leftScoreButtonVariant}
               size="score"
-              onClick={() => setShowPointCategories(leftTeam)}
+              onClick={() => {
+                if (timer !== null) return;
+                setShowPointCategories(leftTeam);
+              }}
+              disabled={timer !== null}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
@@ -561,7 +565,11 @@ export default function RefereeDesk() {
             <ScoreButton
               variant={rightScoreButtonVariant}
               size="score"
-              onClick={() => setShowPointCategories(rightTeam)}
+              onClick={() => {
+                if (timer !== null) return;
+                setShowPointCategories(rightTeam);
+              }}
+              disabled={timer !== null}
               className="h-20 w-full text-4xl"
             >
               <Plus size={24} />
@@ -668,7 +676,11 @@ export default function RefereeDesk() {
                   <ScoreButton
                     variant={leftScoreButtonVariant}
                     size="score"
-                    onClick={() => setShowPointCategories(leftTeam)}
+                    onClick={() => {
+                      if (timer !== null) return;
+                      setShowPointCategories(leftTeam);
+                    }}
+                    disabled={timer !== null}
                     className="h-28 w-full text-5xl"
                   >
                     <Plus size={28} />
@@ -679,7 +691,11 @@ export default function RefereeDesk() {
                   <ScoreButton
                     variant={rightScoreButtonVariant}
                     size="score"
-                    onClick={() => setShowPointCategories(rightTeam)}
+                    onClick={() => {
+                      if (timer !== null) return;
+                      setShowPointCategories(rightTeam);
+                    }}
+                    disabled={timer !== null}
                     className="h-28 w-full text-5xl"
                   >
                     <Plus size={28} />
@@ -918,37 +934,18 @@ export default function RefereeDesk() {
                     )}
                   </div>
                 </div>
-                <div className="grid w-full max-w-xs grid-cols-2 gap-3">
+                <div className="w-full max-w-xs">
                   <Button
                     variant="outline"
-                    className={cn(
-                      "border-white/30 text-white hover:bg-white/20",
-                      selectedCoinSide === 'heads' && !isFlippingCoin && "bg-white/20 border-white/60"
-                    )}
+                    className="w-full border-white/30 text-white hover:bg-white/20 disabled:opacity-70"
                     disabled={isFlippingCoin}
-                    onClick={() => handleCoinFlip('heads')}
+                    onClick={handleCoinFlip}
                   >
-                    Cara
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "border-white/30 text-white hover:bg-white/20",
-                      selectedCoinSide === 'tails' && !isFlippingCoin && "bg-white/20 border-white/60"
-                    )}
-                    disabled={isFlippingCoin}
-                    onClick={() => handleCoinFlip('tails')}
-                  >
-                    Coroa
+                    Jogar Moeda
                   </Button>
                 </div>
               </div>
               <div className="text-center text-sm text-white/80 min-h-[1.5rem]">{coinStatusMessage}</div>
-              {coinOutcomeMessage && (
-                <div className="text-center text-base font-semibold text-amber-200">
-                  {coinOutcomeMessage}
-                </div>
-              )}
             </div>
             <DialogFooter>
               <Button
