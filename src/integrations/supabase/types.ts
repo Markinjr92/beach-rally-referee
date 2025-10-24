@@ -29,6 +29,7 @@ export type Database = {
           side_switch_sum: number[] | null
           modality: string | null
           created_at: string | null
+          referee_id: string | null
         }
         Insert: {
           id?: string
@@ -44,6 +45,7 @@ export type Database = {
           side_switch_sum?: number[] | null
           modality?: string | null
           created_at?: string | null
+          referee_id?: string | null
         }
         Update: {
           id?: string
@@ -59,6 +61,7 @@ export type Database = {
           side_switch_sum?: number[] | null
           modality?: string | null
           created_at?: string | null
+          referee_id?: string | null
         }
         Relationships: [
           { foreignKeyName: "matches_tournament_id_fkey", columns: ["tournament_id"], isOneToOne: false, referencedRelation: "tournaments", referencedColumns: ["id"] },
@@ -302,6 +305,7 @@ export type Database = {
           status: string | null
           created_by: string | null
           created_at: string | null
+          has_statistics: boolean | null
         }
         Insert: {
           id?: string
@@ -314,6 +318,7 @@ export type Database = {
           status?: string | null
           created_by?: string | null
           created_at?: string | null
+          has_statistics?: boolean | null
         }
         Update: {
           id?: string
@@ -326,6 +331,7 @@ export type Database = {
           status?: string | null
           created_by?: string | null
           created_at?: string | null
+          has_statistics?: boolean | null
         }
         Relationships: [
           { foreignKeyName: "tournaments_created_by_fkey", columns: ["created_by"], isOneToOne: false, referencedRelation: "users", referencedColumns: ["id"] },

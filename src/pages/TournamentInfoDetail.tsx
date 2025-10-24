@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, MapPin, Trophy } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, MapPin, Trophy, Activity, UserCheck } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -19,6 +19,7 @@ type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
 type Team = Tables<'teams'>
 type MatchScore = Tables<'match_scores'>
+type User = Tables<'users'>
 
 type MatchWithTeams = Match & {
   teamA?: Team | null
@@ -33,9 +34,11 @@ const TournamentInfoDetail = () => {
   const [scoresByMatch, setScoresByMatch] = useState<Record<string, MatchScore[]>>({})
   const [matchStates, setMatchStates] = useState<Record<string, GameState>>({})
   const [gameConfigs, setGameConfigs] = useState<Record<string, Game>>({})
+  const [referees, setReferees] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'status' | 'phase'>('date-asc')
+  const [showLiveOnly, setShowLiveOnly] = useState(false)
   const [timerTick, setTimerTick] = useState(() => Date.now())
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false)
 
@@ -44,174 +47,218 @@ const TournamentInfoDetail = () => {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    const load = async () => {
+  const loadTournamentData = useCallback(
+    async (withSpinner = false) => {
       if (!tournamentId) return
-      setLoading(true)
-
-      const { data: tournamentData, error: tournamentError } = await supabase
-        .from('tournaments')
-        .select('*')
-        .eq('id', tournamentId)
-        .single()
-
-      if (tournamentError) {
-        toast({
-          title: 'Não foi possível carregar o torneio',
-          description: tournamentError.message,
-          variant: 'destructive',
-        })
-        setTournament(null)
-        setMatches([])
-        setScoresByMatch({})
-        setLoading(false)
-        return
+      if (withSpinner) {
+        setLoading(true)
       }
 
-      setTournament(tournamentData)
-
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('tournament_id', tournamentId)
-        .order('scheduled_at', { ascending: true })
-
-      if (matchError) {
-        toast({
-          title: 'Não foi possível carregar os jogos',
-          description: matchError.message,
-          variant: 'destructive',
-        })
-        setMatches([])
-        setScoresByMatch({})
-        setLoading(false)
-        return
-      }
-
-      const teamIds = Array.from(
-        new Set([
-          ...(matchData?.map((match) => match.team_a_id) || []),
-          ...(matchData?.map((match) => match.team_b_id) || []),
-        ])
-      )
-
-      let teamMap = new Map<string, Team>()
-      if (teamIds.length > 0) {
-        const { data: teamData, error: teamError } = await supabase
-          .from('teams')
+      try {
+        const { data: tournamentData, error: tournamentError } = await supabase
+          .from('tournaments')
           .select('*')
-          .in('id', teamIds)
+          .eq('id', tournamentId)
+          .single()
 
-        if (teamError) {
+        if (tournamentError) {
           toast({
-            title: 'Não foi possível carregar as equipes',
-            description: teamError.message,
+            title: 'Não foi possível carregar o torneio',
+            description: tournamentError.message,
             variant: 'destructive',
           })
-        } else {
-          teamMap = new Map(teamData?.map((team) => [team.id, team]) || [])
-        }
-      }
-
-      const enrichedMatches: MatchWithTeams[] = (matchData || []).map((match) => ({
-        ...match,
-        teamA: teamMap.get(match.team_a_id),
-        teamB: teamMap.get(match.team_b_id),
-      }))
-
-      setMatches(enrichedMatches)
-
-      const configs: Record<string, Game> = {}
-      for (const match of enrichedMatches) {
-        const config: Game = {
-          id: match.id,
-          tournamentId: match.tournament_id,
-          title: `${match.teamA?.name ?? 'Equipe A'} vs ${match.teamB?.name ?? 'Equipe B'}`,
-          category: match.modality ? String(match.modality) : 'Misto',
-          modality: (match.modality as any) || 'dupla',
-          format: 'melhorDe3',
-          teamA: {
-            name: match.teamA?.name || 'Equipe A',
-            players: [
-              { name: match.teamA?.player_a || 'A1', number: 1 },
-              { name: match.teamA?.player_b || 'A2', number: 2 },
-            ],
-          },
-          teamB: {
-            name: match.teamB?.name || 'Equipe B',
-            players: [
-              { name: match.teamB?.player_a || 'B1', number: 1 },
-              { name: match.teamB?.player_b || 'B2', number: 2 },
-            ],
-          },
-          pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
-          needTwoPointLead: true,
-          sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
-          hasTechnicalTimeout: false,
-          technicalTimeoutSum: 0,
-          teamTimeoutsPerSet: 2,
-          teamTimeoutDurationSec: 30,
-          coinTossMode: 'initialThenAlternate',
-          status:
-            match.status === 'in_progress'
-              ? 'em_andamento'
-              : match.status === 'completed'
-                ? 'finalizado'
-                : 'agendado',
-          createdAt: match.created_at || new Date().toISOString(),
-          updatedAt: match.created_at || new Date().toISOString(),
-        }
-        configs[match.id] = config
-      }
-      setGameConfigs(configs)
-
-      if ((matchData?.length || 0) > 0) {
-        try {
-          const { states, usedFallback } = await loadMatchStates(
-            matchData!.map((match) => match.id),
-            configs,
-          )
-          setMatchStates(states)
-          setUsingMatchStateFallback(usedFallback)
-        } catch (error) {
-          console.error('Não foi possível carregar os estados das partidas', error)
-          setMatchStates({})
-        }
-      } else {
-        setMatchStates({})
-      }
-
-      if ((matchData?.length || 0) > 0) {
-        const { data: scoreData, error: scoreError } = await supabase
-          .from('match_scores')
-          .select('*')
-          .in('match_id', matchData!.map((match) => match.id))
-          .order('set_number', { ascending: true })
-
-        if (scoreError) {
-          toast({
-            title: 'Não foi possível carregar os placares',
-            description: scoreError.message,
-            variant: 'destructive',
-          })
+          setTournament(null)
+          setMatches([])
           setScoresByMatch({})
-        } else {
-          const grouped = scoreData?.reduce<Record<string, MatchScore[]>>((acc, score) => {
-            acc[score.match_id] = acc[score.match_id] || []
-            acc[score.match_id].push(score)
-            return acc
-          }, {}) || {}
-          setScoresByMatch(grouped)
+          setMatchStates({})
+          setGameConfigs({})
+          setReferees({})
+          return
         }
-      } else {
-        setScoresByMatch({})
+
+        setTournament(tournamentData)
+        const hasStatistics = tournamentData?.has_statistics ?? true
+
+        const { data: matchData, error: matchError } = await supabase
+          .from('matches')
+          .select('*')
+          .eq('tournament_id', tournamentId)
+          .order('scheduled_at', { ascending: true })
+
+        if (matchError) {
+          toast({
+            title: 'Não foi possível carregar os jogos',
+            description: matchError.message,
+            variant: 'destructive',
+          })
+          setMatches([])
+          setScoresByMatch({})
+          setMatchStates({})
+          setGameConfigs({})
+          setReferees({})
+          return
+        }
+
+        const teamIds = Array.from(
+          new Set([
+            ...(matchData?.map((match) => match.team_a_id) || []),
+            ...(matchData?.map((match) => match.team_b_id) || []),
+          ])
+        )
+
+        let teamMap = new Map<string, Team>()
+        if (teamIds.length > 0) {
+          const { data: teamData, error: teamError } = await supabase
+            .from('teams')
+            .select('*')
+            .in('id', teamIds)
+
+          if (teamError) {
+            toast({
+              title: 'Não foi possível carregar as equipes',
+              description: teamError.message,
+              variant: 'destructive',
+            })
+          } else {
+            teamMap = new Map(teamData?.map((team) => [team.id, team]) || [])
+          }
+        }
+
+        const enrichedMatches: MatchWithTeams[] = (matchData || []).map((match) => ({
+          ...match,
+          teamA: teamMap.get(match.team_a_id),
+          teamB: teamMap.get(match.team_b_id),
+        }))
+
+        setMatches(enrichedMatches)
+
+        const refereeIds = Array.from(
+          new Set(
+            enrichedMatches
+              .map((match) => match.referee_id)
+              .filter((value): value is string => Boolean(value)),
+          ),
+        )
+
+        if (refereeIds.length > 0) {
+          const { data: refereeData, error: refereeError } = await supabase
+            .from('users')
+            .select('id, name, email')
+            .in('id', refereeIds)
+
+          if (refereeError) {
+            console.error('Não foi possível carregar árbitros', refereeError)
+          } else {
+            const map = Object.fromEntries((refereeData as User[]).map((user) => [user.id, user]))
+            setReferees(map)
+          }
+        } else {
+          setReferees({})
+        }
+
+        const configs: Record<string, Game> = {}
+        for (const match of enrichedMatches) {
+          const config: Game = {
+            id: match.id,
+            tournamentId: match.tournament_id,
+            title: `${match.teamA?.name ?? 'Equipe A'} vs ${match.teamB?.name ?? 'Equipe B'}`,
+            category: match.modality ? String(match.modality) : 'Misto',
+            modality: (match.modality as any) || 'dupla',
+            format: 'melhorDe3',
+            teamA: {
+              name: match.teamA?.name || 'Equipe A',
+              players: [
+                { name: match.teamA?.player_a || 'A1', number: 1 },
+                { name: match.teamA?.player_b || 'A2', number: 2 },
+              ],
+            },
+            teamB: {
+              name: match.teamB?.name || 'Equipe B',
+              players: [
+                { name: match.teamB?.player_a || 'B1', number: 1 },
+                { name: match.teamB?.player_b || 'B2', number: 2 },
+              ],
+            },
+            pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+            needTwoPointLead: true,
+            sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+            hasTechnicalTimeout: false,
+            technicalTimeoutSum: 0,
+            teamTimeoutsPerSet: 2,
+            teamTimeoutDurationSec: 30,
+            coinTossMode: 'initialThenAlternate',
+            status:
+              match.status === 'in_progress'
+                ? 'em_andamento'
+                : match.status === 'completed'
+                  ? 'finalizado'
+                  : 'agendado',
+            createdAt: match.created_at || new Date().toISOString(),
+            updatedAt: match.created_at || new Date().toISOString(),
+            hasStatistics,
+          }
+          configs[match.id] = config
+        }
+
+        setGameConfigs(configs)
+
+        const matchIds = enrichedMatches.map((match) => match.id)
+
+        if (matchIds.length > 0) {
+          try {
+            const { states, usedFallback } = await loadMatchStates(matchIds, configs)
+            setMatchStates(states)
+            setUsingMatchStateFallback(usedFallback)
+          } catch (error) {
+            console.error('Não foi possível carregar os estados das partidas', error)
+            setMatchStates({})
+            setUsingMatchStateFallback(false)
+          }
+        } else {
+          setMatchStates({})
+          setUsingMatchStateFallback(false)
+        }
+
+        if (matchIds.length > 0) {
+          const { data: scoreData, error: scoreError } = await supabase
+            .from('match_scores')
+            .select('*')
+            .in('match_id', matchIds)
+            .order('set_number', { ascending: true })
+
+          if (scoreError) {
+            toast({
+              title: 'Não foi possível carregar os placares',
+              description: scoreError.message,
+              variant: 'destructive',
+            })
+            setScoresByMatch({})
+          } else {
+            const grouped =
+              scoreData?.reduce<Record<string, MatchScore[]>>((acc, score) => {
+                acc[score.match_id] = acc[score.match_id] || []
+                acc[score.match_id].push(score)
+                return acc
+              }, {}) || {}
+            setScoresByMatch(grouped)
+          }
+        } else {
+          setScoresByMatch({})
+        }
+      } finally {
+        setLoading(false)
       }
+    },
+    [tournamentId, toast],
+  )
 
-      setLoading(false)
-    }
-
-    load()
-  }, [tournamentId, toast])
+  useEffect(() => {
+    void loadTournamentData(true)
+    const interval = setInterval(() => {
+      void loadTournamentData()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [loadTournamentData])
 
   useEffect(() => {
     if (Object.keys(gameConfigs).length === 0) return
@@ -234,6 +281,10 @@ const TournamentInfoDetail = () => {
     const term = searchTerm.trim().toLowerCase()
 
     const filtered = matches.filter((match) => {
+      if (showLiveOnly && match.status !== 'in_progress') {
+        return false
+      }
+
       if (!term) return true
 
       const teamA = match.teamA?.name?.toLowerCase() || ''
@@ -275,7 +326,7 @@ const TournamentInfoDetail = () => {
     })
 
     return sorted
-  }, [matches, searchTerm, sortOption])
+  }, [matches, searchTerm, showLiveOnly, sortOption])
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -352,7 +403,7 @@ const TournamentInfoDetail = () => {
           <CardHeader className="space-y-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <Input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
@@ -370,6 +421,19 @@ const TournamentInfoDetail = () => {
                     <SelectItem value="phase">Fase</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowLiveOnly((prev) => !prev)}
+                  className={`h-9 border-white/20 px-4 font-semibold text-white transition ${
+                    showLiveOnly
+                      ? 'border-emerald-300/50 bg-emerald-500/80 text-emerald-950 hover:bg-emerald-500'
+                      : 'bg-white/5 hover:bg-white/10'
+                  }`}
+                >
+                  <Activity className="mr-2 h-4 w-4" />
+                  Ao vivo
+                </Button>
               </div>
             </div>
             <p className="text-sm text-white/70">
@@ -451,10 +515,47 @@ const TournamentInfoDetail = () => {
                       : match.teamB?.name ?? 'Equipe B'
                     : null
 
+                  const isLive = match.status === 'in_progress'
+                  const lastDisplayScore = displayScores.length > 0 ? displayScores[displayScores.length - 1] : null
+                  const currentSetNumber = liveState?.currentSet ?? (isLive ? lastDisplayScore?.set_number ?? 1 : null)
+                  const fallbackCurrentScore = currentSetNumber
+                    ? displayScores.find((score) => score.set_number === currentSetNumber)
+                    : undefined
+                  const currentSetScoreA =
+                    currentSetNumber !== null && currentSetNumber !== undefined
+                      ? liveState?.scores.teamA[currentSetNumber - 1] ?? fallbackCurrentScore?.team_a_points ?? 0
+                      : null
+                  const currentSetScoreB =
+                    currentSetNumber !== null && currentSetNumber !== undefined
+                      ? liveState?.scores.teamB[currentSetNumber - 1] ?? fallbackCurrentScore?.team_b_points ?? 0
+                      : null
+                  const recordedScores = displayScores.filter(
+                    (score) => score.team_a_points > 0 || score.team_b_points > 0,
+                  )
+                  const previousSetScores =
+                    currentSetNumber !== null && currentSetNumber !== undefined
+                      ? recordedScores.filter((score) => score.set_number < currentSetNumber)
+                      : recordedScores
+
+                  const referee = match.referee_id ? referees[match.referee_id] : undefined
+                  const serverLabel = liveState
+                    ? `${serverName ?? 'Equipe'} #${liveState.currentServerPlayer}`
+                    : null
+                  const statusLabel =
+                    match.status === 'in_progress'
+                      ? 'Em andamento'
+                      : match.status === 'completed'
+                        ? 'Finalizado'
+                        : match.status || 'Agendado'
+
                   return (
                     <div
                       key={match.id}
-                      className="rounded-md border border-white/10 bg-white/5 p-2.5 space-y-2 text-[13px] sm:text-xs"
+                      className={`rounded-md border p-2.5 space-y-2 text-[13px] transition sm:text-xs ${
+                        isLive
+                          ? 'border-emerald-400/40 bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
+                          : 'border-white/10 bg-white/5'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2 text-[11px] text-white/70">
                         <div className="flex items-center gap-1.5">
@@ -462,12 +563,13 @@ const TournamentInfoDetail = () => {
                           <span className="font-medium">{formatDateTimePtBr(match.scheduled_at)}</span>
                         </div>
                         {match.status && (
-                          <Badge variant="outline" className="border-white/25 text-white uppercase tracking-[0.2em]">
-                            {match.status === 'in_progress'
-                              ? 'Em andamento'
-                              : match.status === 'completed'
-                                ? 'Finalizado'
-                                : match.status}
+                          <Badge
+                            variant="outline"
+                            className={`border-white/25 uppercase tracking-[0.2em] ${
+                              isLive ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-50' : 'text-white'
+                            }`}
+                          >
+                            {statusLabel}
                           </Badge>
                         )}
                       </div>
@@ -486,17 +588,45 @@ const TournamentInfoDetail = () => {
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/65">
-                        {match.phase && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">{match.phase}</span>
-                        )}
-                        {match.court && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">Quadra {match.court}</span>
-                        )}
-                      </div>
-                      {displayScores.length > 0 && (
+                      {isLive && currentSetNumber ? (
+                        <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/15 px-3 py-2 text-white">
+                          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-emerald-100/80">
+                            <span>Set {currentSetNumber}</span>
+                            <span>Ao vivo</span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-2 text-base font-semibold sm:text-lg">
+                            <span className="truncate pr-2">{match.teamA?.name || 'Equipe A'}</span>
+                            <span className="text-2xl font-bold text-emerald-100 sm:text-3xl">
+                              {currentSetScoreA ?? 0} x {currentSetScoreB ?? 0}
+                            </span>
+                            <span className="truncate pl-2 text-right">{match.teamB?.name || 'Equipe B'}</span>
+                          </div>
+                          {previousSetScores.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-emerald-50/90">
+                              {previousSetScores.map((score) => (
+                                <span
+                                  key={`${score.match_id}-${score.set_number}-prev`}
+                                  className="rounded border border-emerald-300/40 bg-emerald-500/20 px-2 py-0.5"
+                                >
+                                  Set {score.set_number}: {score.team_a_points} x {score.team_b_points}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-[10px] text-emerald-50/90">
+                            <span>Servindo: {serverLabel ?? '—'}</span>
+                            <span>Posse: {possessionName ?? '—'}</span>
+                          </div>
+                          {activeTimerRemaining !== null && liveState?.activeTimer && (
+                            <div className="mt-2 flex items-center gap-1 text-[10px] text-amber-100">
+                              <Clock size={12} />
+                              {(timerLabel ?? 'Tempo Oficial')} · {formatTime(activeTimerRemaining)}
+                            </div>
+                          )}
+                        </div>
+                      ) : recordedScores.length > 0 ? (
                         <div className="flex flex-wrap gap-1 text-[10px] text-white/75">
-                          {displayScores.map((score) => (
+                          {recordedScores.map((score) => (
                             <span
                               key={`${score.match_id}-${score.set_number}`}
                               className="rounded border border-white/15 px-1.5 py-0.5"
@@ -505,28 +635,21 @@ const TournamentInfoDetail = () => {
                             </span>
                           ))}
                         </div>
-                      )}
-                      {liveState && (
-                        <div className="rounded border border-white/15 bg-white/5 px-2 py-1 text-[10px] text-white/80">
-                          <div className="flex items-center justify-between">
-                            <span>Set atual {liveState.currentSet}</span>
-                            <span>
-                              {liveState.scores.teamA[liveState.currentSet - 1] || 0} x{' '}
-                              {liveState.scores.teamB[liveState.currentSet - 1] || 0}
-                            </span>
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-white/70">
-                            <span>Servindo: {serverName} #{liveState.currentServerPlayer}</span>
-                            <span>Posse: {possessionName}</span>
-                          </div>
-                          {activeTimerRemaining !== null && liveState.activeTimer && (
-                            <div className="mt-1 flex items-center gap-1 text-yellow-200">
-                              <Clock size={12} />
-                              {(timerLabel ?? 'Tempo Oficial')} · {formatTime(activeTimerRemaining)}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/65">
+                        {match.phase && (
+                          <span className="rounded-full border border-white/15 px-2 py-0.5">{match.phase}</span>
+                        )}
+                        {match.court && (
+                          <span className="rounded-full border border-white/15 px-2 py-0.5">Quadra {match.court}</span>
+                        )}
+                        {referee?.name && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-white/80">
+                            <UserCheck size={12} className="text-white/60" />
+                            {referee.name}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

@@ -39,6 +39,7 @@ export interface GameConfiguration {
   status: 'agendado' | 'em_andamento' | 'finalizado' | 'cancelado';
   createdAt: string;
   updatedAt: string;
+  hasStatistics?: boolean;
 }
 
 export type CoinChoice = 'side' | 'serve' | 'receive';

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Users, Monitor, Eye, Settings, Shield } from "lucide-react";
+import { Activity, Trophy, Users, Monitor, Eye, Settings, Shield } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,6 +31,15 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: Trophy,
     roles: ["atleta", "organizador", "admin_sistema"],
     iconClass: "text-yellow-300",
+  },
+  {
+    key: "live-matches",
+    title: "Jogos ao vivo",
+    description: "Veja todos os confrontos em andamento agora mesmo",
+    to: "/live",
+    icon: Activity,
+    roles: ["publico", "atleta", "arbitro", "organizador", "admin_sistema"],
+    iconClass: "text-emerald-300",
   },
   {
     key: "organizer-tools",
