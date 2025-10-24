@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDatePtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
+import { parseGameModality, parseNumberArray } from '@/utils/parsers'
 import { Game, GameState } from '@/types/volleyball'
 import { createDefaultGameState } from '@/lib/matchState'
 import { loadMatchStates, subscribeToMatchState } from '@/lib/matchStateService'
@@ -163,7 +164,7 @@ const TournamentInfoDetail = () => {
             tournamentId: match.tournament_id,
             title: `${match.teamA?.name ?? 'Equipe A'} vs ${match.teamB?.name ?? 'Equipe B'}`,
             category: match.modality ? String(match.modality) : 'Misto',
-            modality: (match.modality as any) || 'dupla',
+            modality: parseGameModality(match.modality),
             format: 'melhorDe3',
             teamA: {
               name: match.teamA?.name || 'Equipe A',
@@ -179,9 +180,9 @@ const TournamentInfoDetail = () => {
                 { name: match.teamB?.player_b || 'B2', number: 2 },
               ],
             },
-            pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+            pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
             needTwoPointLead: true,
-            sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+            sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
             hasTechnicalTimeout: false,
             technicalTimeoutSum: 0,
             teamTimeoutsPerSet: 2,

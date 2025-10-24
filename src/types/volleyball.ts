@@ -102,7 +102,8 @@ export interface GameEvent {
   type: 'POINT' | 'TIMEOUT_TEAM' | 'TIMEOUT_TECHNICAL' | 'SIDE_SWITCH' | 'SET_END' | 'GAME_END' | 'OVERRIDE';
   timestamp: string;
   team?: 'A' | 'B';
-  data: any;
+  data: unknown;
+  // Additional metadata attached to the event.
   pointCategory?: PointCategory;
 }
 

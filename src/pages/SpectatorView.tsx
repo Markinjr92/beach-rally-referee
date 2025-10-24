@@ -1,14 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Zap, Trophy, TrendingUp, Target, Clock, ArrowLeftRight } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
-import { Game, GameState, PointCategory } from "@/types/volleyball";
+import { Game, GameState, PointCategory, Timer } from "@/types/volleyball";
 import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
 import { cn } from "@/lib/utils";
+import { parseGameModality, parseNumberArray } from "@/utils/parsers";
+
+const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
+  if (!activeTimer) {
+    return null;
+  }
+
+  const typeLabels: Record<Timer["type"], string> = {
+    TIMEOUT_TEAM: "Tempo de Equipe",
+    TIMEOUT_TECHNICAL: "Tempo Técnico",
+    MEDICAL: "Tempo Médico",
+    SET_INTERVAL: "Intervalo de Set",
+  };
+
+  const baseLabel = typeLabels[activeTimer.type] ?? "Tempo Oficial";
+  const teamLabel = activeTimer.team
+    ? activeTimer.team === "A"
+      ? game.teamA.name
+      : game.teamB.name
+    : null;
+
+  return teamLabel ? `${baseLabel} • ${teamLabel}` : baseLabel;
+};
 
 const mockStatistics = {
   teamA: {
@@ -76,13 +99,13 @@ export default function SpectatorView() {
         tournamentId: match.tournament_id,
         title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
         category: 'Misto',
-        modality: (match.modality as any) || 'dupla',
+        modality: parseGameModality(match.modality),
         format: 'melhorDe3',
         teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
         teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
-        pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+        pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
         needTwoPointLead: true,
-        sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+        sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
         hasTechnicalTimeout: false,
         technicalTimeoutSum: 0,
         teamTimeoutsPerSet: 2,
@@ -170,22 +193,7 @@ export default function SpectatorView() {
   const possessionGlow = 'shadow-[0_0_40px_rgba(250,204,21,0.35)]';
   const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
 
-  const timerDescriptor = useMemo(() => {
-    if (!gameState.activeTimer) return null;
-    const typeLabels: Record<string, string> = {
-      TIMEOUT_TEAM: 'Tempo de Equipe',
-      TIMEOUT_TECHNICAL: 'Tempo Técnico',
-      MEDICAL: 'Tempo Médico',
-      SET_INTERVAL: 'Intervalo de Set',
-    };
-    const baseLabel = typeLabels[gameState.activeTimer.type] ?? 'Tempo Oficial';
-    const teamLabel = gameState.activeTimer.team
-      ? gameState.activeTimer.team === 'A'
-        ? game.teamA.name
-        : game.teamB.name
-      : null;
-    return teamLabel ? `${baseLabel} • ${teamLabel}` : baseLabel;
-  }, [gameState.activeTimer, game]);
+  const timerDescriptor = buildTimerDescriptor(game, gameState.activeTimer ?? null);
 
   const getCategoryLabel = (category: PointCategory) => {
     const labels: Record<PointCategory, string> = {

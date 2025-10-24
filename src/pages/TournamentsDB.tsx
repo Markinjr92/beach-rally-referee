@@ -48,7 +48,7 @@ export default function TournamentsDB() {
       setTournaments(data || [])
     }
     load()
-  }, [])
+  }, [toast])
 
   const createTournament = async () => {
     if (!user) {

@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
+import { parseGameModality, parseNumberArray } from "@/utils/parsers";
 
 type CoinSide = "heads" | "tails";
 
@@ -295,7 +296,9 @@ export default function RefereeDesk() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContextClass();
@@ -501,13 +504,13 @@ export default function RefereeDesk() {
         tournamentId: match.tournament_id,
         title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
         category: 'Misto',
-        modality: (match.modality as any) || 'dupla',
+        modality: parseGameModality(match.modality),
         format: 'melhorDe3',
         teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
         teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
-        pointsPerSet: (match.points_per_set as any) || [21, 21, 15],
+        pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
         needTwoPointLead: true,
-        sideSwitchSum: (match.side_switch_sum as any) || [7, 7, 5],
+        sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
         hasTechnicalTimeout: false,
         technicalTimeoutSum: 0,
         teamTimeoutsPerSet: 2,
