@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreButton } from "@/components/ui/score-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Plus,
   RotateCcw,
@@ -701,6 +702,38 @@ export default function RefereeDesk() {
       return;
     }
 
+    const hypotheticalSetIndex = Math.max(gameState.currentSet - 1, 0);
+    const currentScoreA = gameState.scores.teamA[hypotheticalSetIndex] ?? 0;
+    const currentScoreB = gameState.scores.teamB[hypotheticalSetIndex] ?? 0;
+    const prospectiveWinnerScore = team === 'A' ? currentScoreA + 1 : currentScoreB + 1;
+    const prospectiveOpponentScore = team === 'A' ? currentScoreB : currentScoreA;
+    const targetPoints =
+      game.pointsPerSet?.[hypotheticalSetIndex] ??
+      game.pointsPerSet?.[game.pointsPerSet.length - 1] ??
+      21;
+    const minimumLead = game.needTwoPointLead ? 2 : 1;
+    const wouldFinishSet =
+      prospectiveWinnerScore >= targetPoints &&
+      prospectiveWinnerScore - prospectiveOpponentScore >= minimumLead;
+
+    if (wouldFinishSet) {
+      const winnerKey = team === 'A' ? 'teamA' : 'teamB';
+      const updatedSetsWon = {
+        teamA: gameState.setsWon.teamA + (winnerKey === 'teamA' ? 1 : 0),
+        teamB: gameState.setsWon.teamB + (winnerKey === 'teamB' ? 1 : 0),
+      };
+      const totalSets = game.pointsPerSet?.length ?? gameState.scores.teamA.length;
+      const setsToWin = Math.ceil(totalSets / 2);
+      const wouldFinishMatch = updatedSetsWon[winnerKey] >= setsToWin;
+
+      const confirmationMessage = wouldFinishMatch
+        ? 'Este ponto finaliza o set e a partida. Tem certeza de que deseja prosseguir?'
+        : 'Este ponto finaliza o set. Tem certeza de que deseja prosseguir?';
+      if (typeof window !== 'undefined' && !window.confirm(confirmationMessage)) {
+        return;
+      }
+    }
+
     const previousState = snapshotState(gameState);
     setGameHistory(prev => [...prev, previousState]);
 
@@ -1395,9 +1428,10 @@ export default function RefereeDesk() {
 
   const coinFaceToShow = (coinResult ?? 'heads') as CoinSide;
   const gameIsEnded = gameState.isGameEnded;
+  const isFirstSet = currentSetNumber === 1;
   const setConfigButtonLabel = isCurrentSetConfigured
     ? 'Editar início'
-    : currentSetNumber === 1
+    : isFirstSet
       ? 'Início da partida'
       : 'Configurar início do set';
   const mobileControlButtons = [
@@ -1405,7 +1439,7 @@ export default function RefereeDesk() {
       icon: RotateCcw,
       label: 'Desfazer',
       onClick: () => void undoLastAction(),
-      disabled: gameHistory.length === 0,
+      disabled: gameHistory.length === 0 || gameIsEnded,
     },
     {
       icon: Pause,
@@ -1433,7 +1467,7 @@ export default function RefereeDesk() {
           void finalizeTimeout(gameState.activeTimer);
         }
       },
-      disabled: !gameState?.activeTimer,
+      disabled: !gameState?.activeTimer || gameIsEnded,
     },
     {
       icon: ArrowLeftRight,
@@ -1454,7 +1488,7 @@ export default function RefereeDesk() {
         resetCoinState();
         setCoinDialogOpen(true);
       },
-      disabled: false,
+      disabled: gameIsEnded,
     }
   ];
 
@@ -1480,6 +1514,7 @@ export default function RefereeDesk() {
                   !isCurrentSetConfigured && 'animate-pulse'
                 )}
                 onClick={() => setSetConfigDialogOpen(true)}
+                disabled={gameIsEnded}
               >
                 {setConfigButtonLabel}
               </Button>
@@ -1489,6 +1524,14 @@ export default function RefereeDesk() {
               <p className="text-white/70">{game.category} • {game.modality} • {game.format}</p>
             </div>
           </div>
+          {gameIsEnded && (
+            <Alert className="border-emerald-300/50 bg-emerald-500/10 text-emerald-100">
+              <AlertTitle>Partida finalizada</AlertTitle>
+              <AlertDescription>
+                Os controles foram bloqueados e a partida está encerrada. Revise os resultados acima.
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="hidden flex-wrap gap-3 text-xs sm:text-sm text-white/80 md:flex">
             <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
               Set atual: {gameState.currentSet}
@@ -1771,7 +1814,7 @@ export default function RefereeDesk() {
                   size="sm"
                   className="mt-3 border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                   onClick={() => void undoLastAction()}
-                  disabled={gameHistory.length === 0}
+                  disabled={gameHistory.length === 0 || gameIsEnded}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Desfazer
@@ -1925,46 +1968,48 @@ export default function RefereeDesk() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
-              <section className="space-y-3">
-                <h3 className="text-base font-semibold text-slate-100">Numeração das duplas</h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {(['A', 'B'] as const).map(teamKey => {
-                    const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
-                    const jerseyNumbers = teamKey === 'A' ? jerseyNumbersA : jerseyNumbersB;
-                    const players = teamKey === 'A' ? playersTeamA : playersTeamB;
-                    return (
-                      <div key={teamKey} className="space-y-3">
-                        <h4 className="text-sm font-semibold text-slate-100">{teamName}</h4>
-                        <div className="space-y-3">
-                          {jerseyNumbers.map(number => {
-                            const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
-                            return (
-                              <div key={number} className="space-y-1">
-                                <Label className="text-xs font-medium text-slate-300">Jogador número {number}</Label>
-                                <Select
-                                  value={typeof value === 'number' ? String(value) : undefined}
-                                  onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
-                                >
-                                  <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
-                                    <SelectValue placeholder="Selecione um atleta" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {players.map((player, index) => (
-                                      <SelectItem key={player.name} value={String(index)}>
-                                        {player.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            );
-                          })}
+              {isFirstSet && (
+                <section className="space-y-3">
+                  <h3 className="text-base font-semibold text-slate-100">Numeração das duplas</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {(['A', 'B'] as const).map(teamKey => {
+                      const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
+                      const jerseyNumbers = teamKey === 'A' ? jerseyNumbersA : jerseyNumbersB;
+                      const players = teamKey === 'A' ? playersTeamA : playersTeamB;
+                      return (
+                        <div key={teamKey} className="space-y-3">
+                          <h4 className="text-sm font-semibold text-slate-100">{teamName}</h4>
+                          <div className="space-y-3">
+                            {jerseyNumbers.map(number => {
+                              const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
+                              return (
+                                <div key={number} className="space-y-1">
+                                  <Label className="text-xs font-medium text-slate-300">Jogador número {number}</Label>
+                                  <Select
+                                    value={typeof value === 'number' ? String(value) : undefined}
+                                    onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
+                                  >
+                                    <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                                      <SelectValue placeholder="Selecione um atleta" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {players.map((player, index) => (
+                                        <SelectItem key={player.name} value={String(index)}>
+                                          {player.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
               <section className="space-y-3">
                 <h3 className="text-base font-semibold text-slate-100">Escolhas iniciais</h3>
