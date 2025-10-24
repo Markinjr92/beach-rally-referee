@@ -1,17 +1,14 @@
 import { useEffect, useMemo } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Users, Monitor, Eye, Settings } from "lucide-react";
+import { Trophy, Users, Monitor, Eye, Settings, Shield } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
-import { PasswordResetPanel } from "@/components/admin/PasswordResetPanel";
-import { AdminUserManagement } from "@/components/admin/AdminUserManagement";
 
 type Role = "atleta" | "publico" | "arbitro" | "admin_sistema" | "organizador";
 
@@ -19,7 +16,6 @@ type ModuleDefinition = {
   key: string;
   title: string;
   description: string;
-  actionLabel: string;
   to: string;
   icon: LucideIcon;
   roles: Role[];
@@ -31,7 +27,6 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "tournament-info",
     title: "Informações do Torneio",
     description: "Consulte jogos, placares e tabelas atualizadas",
-    actionLabel: "Acessar",
     to: "/tournaments",
     icon: Trophy,
     roles: ["atleta", "organizador", "admin_sistema"],
@@ -41,7 +36,6 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "organizer-tools",
     title: "Gestão do Torneio",
     description: "Edite horários, duplas e detalhes das partidas",
-    actionLabel: "Gerenciar",
     to: "/tournaments",
     icon: Settings,
     roles: ["organizador", "admin_sistema"],
@@ -51,7 +45,6 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "arbitration",
     title: "Mesa de Arbitragem",
     description: "Controle completo do jogo em tempo real",
-    actionLabel: "Abrir",
     to: "/referee/game-1",
     icon: Users,
     roles: ["arbitro", "admin_sistema"],
@@ -61,7 +54,6 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "scoreboard",
     title: "Placar Oficial",
     description: "Visualização limpa para transmissões oficiais",
-    actionLabel: "Ver Placar",
     to: "/scoreboard/game-1",
     icon: Monitor,
     roles: ["publico", "admin_sistema"],
@@ -71,11 +63,19 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "spectator",
     title: "Visão da Torcida",
     description: "Experiência imersiva com estatísticas e patrocinadores",
-    actionLabel: "Abrir Visão",
     to: "/spectator/game-1",
     icon: Eye,
     roles: ["publico", "admin_sistema"],
     iconClass: "text-purple-300",
+  },
+  {
+    key: "admin-users",
+    title: "Gerenciar Usuários",
+    description: "Acesse a administração e gerencie perfis do sistema",
+    to: "/admin/users",
+    icon: Shield,
+    roles: ["admin_sistema"],
+    iconClass: "text-rose-200",
   },
 ];
 
@@ -91,7 +91,6 @@ const Index = () => {
       ),
     [isAdmin, roles]
   );
-  const heroActions = accessibleModules.slice(0, 3);
 
   useEffect(() => {
     if (!user) {
@@ -163,25 +162,11 @@ const Index = () => {
                   ? "Selecione um módulo ou acesse as ferramentas administrativas."
                   : "Escolha um dos módulos disponíveis para o seu perfil."}
               </p>
-              <div className="flex flex-wrap gap-4 justify-center">
-                {heroActions.length > 0 ? (
-                  heroActions.map((module) => {
-                    const Icon = module.icon;
-                    return (
-                      <Link to={module.to} key={module.key}>
-                        <Button size="lg" className="bg-white text-primary hover:bg-white/90">
-                          <Icon className="mr-2" size={20} />
-                          {module.actionLabel}
-                        </Button>
-                      </Link>
-                    );
-                  })
-                ) : (
-                  <div className="text-white/80 text-lg">
-                    Nenhum módulo disponível para o seu perfil no momento.
-                  </div>
-                )}
-              </div>
+              {accessibleModules.length === 0 && (
+                <div className="text-white/80 text-lg">
+                  Nenhum módulo disponível para o seu perfil no momento.
+                </div>
+              )}
             </div>
 
             {/* Roles error */}
@@ -202,25 +187,26 @@ const Index = () => {
                 {accessibleModules.map((module) => {
                   const Icon = module.icon;
                   return (
-                    <Card
+                    <Link
+                      to={module.to}
                       key={module.key}
-                      className="bg-white/10 border-white/20 text-white hover:bg-white/20 transition-colors"
+                      className="group focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 rounded-xl"
                     >
-                      <CardHeader className="text-center">
-                        <Icon className={`mx-auto mb-4 ${module.iconClass}`} size={40} />
-                        <CardTitle>{module.title}</CardTitle>
-                        <CardDescription className="text-white/80">
-                          {module.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Link to={module.to}>
-                          <Button variant="outline" className="w-full text-white border-white hover:bg-white/20">
-                            {module.actionLabel}
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
+                      <Card className="bg-white/10 border-white/20 text-white transition-colors group-hover:bg-white/20">
+                        <CardHeader className="text-center">
+                          <Icon className={`mx-auto mb-4 ${module.iconClass}`} size={40} />
+                          <CardTitle>{module.title}</CardTitle>
+                          <CardDescription className="text-white/80">
+                            {module.description}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-white/70">
+                            Clique para abrir este módulo.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </Link>
                   );
                 })}
               </div>
@@ -239,17 +225,6 @@ const Index = () => {
                 </div>
               )
             )}
-
-            {/* Admin Panel */}
-            {isAdmin && (
-              <div className="mb-16 space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)] lg:gap-6 xl:grid-cols-[minmax(0,1fr),minmax(0,2fr)]">
-                <div className="flex justify-center lg:justify-start">
-                  <PasswordResetPanel />
-                </div>
-                <AdminUserManagement />
-              </div>
-            )}
-
             {/* Features List */}
             <div className="text-center text-white">
               <h2 className="text-3xl font-bold mb-8">Funcionalidades Principais</h2>
