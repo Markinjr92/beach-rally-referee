@@ -276,34 +276,6 @@ const TournamentInfoDetail = () => {
           </div>
         </div>
 
-        <Card className="bg-white/8 border border-white/15 text-white backdrop-blur-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-semibold">Informações gerais</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-xs sm:grid-cols-2 text-white/80">
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Local</span>
-              <span className="font-medium text-white">{tournament.location || 'Não informado'}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Período</span>
-              <span className="font-medium text-white">
-                {formatDate(tournament.start_date)}
-                <span className="text-white/50"> até </span>
-                {formatDate(tournament.end_date)}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Categoria</span>
-              <span className="font-medium text-white">{tournament.category || 'Não informado'}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white/60 uppercase tracking-[0.2em] text-[10px]">Modalidade</span>
-              <span className="font-medium text-white">{tournament.modality || 'Não informado'}</span>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
           <CardHeader className="space-y-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -336,7 +308,7 @@ const TournamentInfoDetail = () => {
             {filteredAndSortedMatches.length === 0 ? (
               <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                 {filteredAndSortedMatches.map((match) => {
                   const scores = scoresByMatch[match.id] || []
                   const setTotals = scores.reduce(
@@ -351,15 +323,17 @@ const TournamentInfoDetail = () => {
                   return (
                     <div
                       key={match.id}
-                      className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-3 text-sm"
+                      className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-3.5 space-y-2 text-xs sm:text-sm"
                     >
-                      <div className="flex items-start justify-between gap-2 text-xs text-white/70">
+                      <div className="flex items-start justify-between gap-2 text-[10px] uppercase tracking-[0.2em] text-white/60">
                         <div className="flex items-center gap-2">
-                          <Clock size={14} className="text-white/60" />
-                          <span>{formatDateTime(match.scheduled_at)}</span>
+                          <Clock size={14} className="text-white/50" />
+                          <span className="tracking-normal text-white/70">
+                            {formatDateTime(match.scheduled_at)}
+                          </span>
                         </div>
                         {match.status && (
-                          <Badge variant="outline" className="border-white/25 text-white uppercase tracking-wide">
+                          <Badge variant="outline" className="border-white/25 bg-white/5 text-white uppercase tracking-[0.2em]">
                             {match.status === 'in_progress'
                               ? 'Em andamento'
                               : match.status === 'completed'
@@ -368,18 +342,18 @@ const TournamentInfoDetail = () => {
                           </Badge>
                         )}
                       </div>
-                      <div className="space-y-1 text-white">
+                      <div className="space-y-1.5 text-white">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold text-sm truncate">
                             {match.teamA?.name || 'Equipe A'}
                           </span>
                           {match.status === 'completed' && (
-                            <span className="text-xs font-semibold text-white/75">
+                            <span className="text-xs font-semibold text-white/80">
                               {setTotals.teamA}
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 text-center">
+                        <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 text-center">
                           vs
                         </div>
                         <div className="flex items-center justify-between gap-2">
@@ -387,30 +361,30 @@ const TournamentInfoDetail = () => {
                             {match.teamB?.name || 'Equipe B'}
                           </span>
                           {match.status === 'completed' && (
-                            <span className="text-xs font-semibold text-white/75">
+                            <span className="text-xs font-semibold text-white/80">
                               {setTotals.teamB}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-[11px] text-white/70">
                         {match.phase && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">
+                          <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5">
                             {match.phase}
                           </span>
                         )}
                         {match.court && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">
+                          <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5">
                             Quadra {match.court}
                           </span>
                         )}
                       </div>
                       {scores.length > 0 && (
-                        <div className="flex flex-wrap gap-1 text-[11px] text-white/75">
+                        <div className="flex flex-wrap gap-1 text-[10px] sm:text-[11px] text-white/75">
                           {scores.map((score) => (
                             <span
                               key={`${score.match_id}-${score.set_number}`}
-                              className="rounded border border-white/15 px-1.5 py-0.5"
+                              className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5"
                             >
                               Set {score.set_number}: {score.team_a_points} x {score.team_b_points}
                             </span>
