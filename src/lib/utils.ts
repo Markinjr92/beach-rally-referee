@@ -22,7 +22,9 @@ export function formatDateToISO(value?: string | null) {
 
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(normalized)) {
     const [day, month, year] = normalized.split("/")
-    return `${year}-${month}-${day}`
+    const paddedMonth = month.padStart(2, "0")
+    const paddedDay = day.padStart(2, "0")
+    return `${year}-${paddedMonth}-${paddedDay}`
   }
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {

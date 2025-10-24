@@ -81,16 +81,15 @@ export default function TournamentsDB() {
 
     const payload: Tables<'tournaments'>['Insert'] = {
       name: trimmedName,
-      status: "active",
-      has_statistics: form.hasStatistics,
+      status: "upcoming",
+      has_statistics: !!form.hasStatistics,
       created_by: user.id,
+      location: location ?? null,
+      category: category ?? null,
+      modality: modality ?? null,
+      start_date: startDateISO ?? null,
+      end_date: endDateISO ?? null,
     }
-
-    if (location) payload.location = location
-    if (category) payload.category = category
-    if (modality) payload.modality = modality
-    if (startDateISO) payload.start_date = startDateISO
-    if (endDateISO) payload.end_date = endDateISO
 
     const { error } = await supabase.from("tournaments").insert(payload)
     if (error) {
