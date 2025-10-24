@@ -1,4 +1,4 @@
-# Beach Rally Referee
+# VP Jukin
 
 Painel administrativo construído com Vite + React + TypeScript + Tailwind CSS, integrado ao Supabase.
 

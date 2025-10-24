@@ -128,11 +128,9 @@ const Index = () => {
             <div className="text-center text-white mb-8">
               <div className="flex items-center justify-center gap-4 mb-6">
                 <Trophy className="text-yellow-300" size={48} />
-                <h1 className="text-4xl font-bold">Vôlei de Praia Pro</h1>
+                <h1 className="text-4xl font-bold">VP Jukin</h1>
               </div>
-              <p className="text-xl opacity-90">
-                Sistema completo para gestão e transmissão de jogos de vôlei de praia
-              </p>
+              <p className="text-xl opacity-90">Plataforma completa para gestão e transmissão de jogos</p>
             </div>
             <LoginForm />
           </div>
@@ -142,7 +140,7 @@ const Index = () => {
             <div className="text-center text-white mb-16">
               <div className="flex items-center justify-center gap-4 mb-6">
                 <Trophy className="text-yellow-300" size={48} />
-                <h1 className="text-5xl font-bold">Vôlei de Praia Pro</h1>
+                <h1 className="text-5xl font-bold">VP Jukin</h1>
               </div>
               {roles.length > 0 && (
                 <div className="flex flex-wrap gap-2 justify-center mb-6">
