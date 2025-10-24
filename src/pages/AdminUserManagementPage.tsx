@@ -5,7 +5,6 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PasswordResetPanel } from "@/components/admin/PasswordResetPanel";
 import { AdminUserManagement } from "@/components/admin/AdminUserManagement";
 
 const AdminUserManagementPage = () => {
@@ -88,10 +87,7 @@ const AdminUserManagementPage = () => {
           </Alert>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr),minmax(0,2fr)]">
-          <div className="flex justify-center xl:justify-start">
-            <PasswordResetPanel />
-          </div>
+        <div className="grid gap-6">
           <AdminUserManagement />
         </div>
       </div>
