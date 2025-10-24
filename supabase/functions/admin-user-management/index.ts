@@ -6,10 +6,24 @@ type ListUsersResponse = {
   message?: string;
 };
 
-const ALLOWED_ORIGINS = [
+const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:8080",
+  "http://localhost:3000",
+  "http://127.0.0.1:8080",
+  "http://127.0.0.1:3000",
   "https://beach-rally-referee.vercel.app",
-] as const;
+];
+
+const ALLOWED_ORIGINS = (() => {
+  const configuredOrigins = Deno.env.get("ADMIN_FN_ALLOWED_ORIGINS")
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  return configuredOrigins && configuredOrigins.length > 0
+    ? configuredOrigins
+    : DEFAULT_ALLOWED_ORIGINS;
+})();
 
 const corsHeadersBase = {
   "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
@@ -21,21 +35,25 @@ const getCorsHeaders = (
   origin: string | null,
   accessControlRequestHeaders: string | null,
 ) => {
-  const allowOrigin =
-    origin && ALLOWED_ORIGINS.includes(origin as (typeof ALLOWED_ORIGINS)[number])
-      ? origin
-      : ALLOWED_ORIGINS[0];
+  const allowOrigin = origin && ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : null;
 
   const allowHeaders = accessControlRequestHeaders?.trim()
     ? accessControlRequestHeaders
     : corsHeadersBase["Access-Control-Allow-Headers"];
 
-  return {
+  const headers = {
     ...corsHeadersBase,
     "Access-Control-Allow-Headers": allowHeaders,
-    "Access-Control-Allow-Origin": allowOrigin,
     Vary: "Origin",
+    ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
   } satisfies HeadersInit;
+
+  return {
+    headers,
+    isAllowed: allowOrigin !== null || origin === null,
+  };
 };
 
 const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersInit) =>
@@ -47,7 +65,11 @@ const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersI
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
   const accessControlRequestHeaders = req.headers.get("access-control-request-headers");
-  const corsHeaders = getCorsHeaders(origin, accessControlRequestHeaders);
+  const { headers: corsHeaders, isAllowed } = getCorsHeaders(origin, accessControlRequestHeaders);
+
+  if (!isAllowed) {
+    return jsonResponse(403, { ok: false, message: "Origin not allowed" }, corsHeaders);
+  }
 
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
