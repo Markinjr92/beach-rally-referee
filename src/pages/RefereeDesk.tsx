@@ -301,6 +301,20 @@ export default function RefereeDesk() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const coinStatusMessage = useMemo(() => {
+    if (!selectedCoinSide) return 'Selecione uma face para iniciar o sorteio.';
+    if (isFlippingCoin) return 'Girando moeda...';
+    if (coinResultLabel) return `Resultado: ${coinResultLabel}`;
+    return 'Toque novamente para sortear.';
+  }, [coinResultLabel, isFlippingCoin, selectedCoinSide]);
+
+  const coinOutcomeMessage = useMemo(() => {
+    if (!selectedCoinSide || !coinResult || isFlippingCoin) return null;
+    return selectedCoinSide === coinResult
+      ? 'Sua escolha venceu o sorteio!'
+      : 'A outra equipe inicia com a escolha vencedora.';
+  }, [coinResult, isFlippingCoin, selectedCoinSide]);
+
   if (!game || !gameState) {
     return (
       <div className="min-h-screen bg-gradient-ocean flex items-center justify-center text-white">
@@ -319,19 +333,6 @@ export default function RefereeDesk() {
   const leftTeamScores = leftTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
   const rightTeamScores = rightTeam === 'A' ? gameState.scores.teamA : gameState.scores.teamB;
   const serverTeamName = gameState.currentServerTeam === 'A' ? game.teamA.name : game.teamB.name;
-  const coinStatusMessage = useMemo(() => {
-    if (!selectedCoinSide) return 'Selecione uma face para iniciar o sorteio.';
-    if (isFlippingCoin) return 'Girando moeda...';
-    if (coinResultLabel) return `Resultado: ${coinResultLabel}`;
-    return 'Toque novamente para sortear.';
-  }, [coinResultLabel, isFlippingCoin, selectedCoinSide]);
-
-  const coinOutcomeMessage = useMemo(() => {
-    if (!selectedCoinSide || !coinResult || isFlippingCoin) return null;
-    return selectedCoinSide === coinResult
-      ? 'Sua escolha venceu o sorteio!'
-      : 'A outra equipe inicia com a escolha vencedora.';
-  }, [coinResult, isFlippingCoin, selectedCoinSide]);
 
   const coinFaceToShow = (coinResult ?? selectedCoinSide ?? 'heads') as CoinSide;
 
