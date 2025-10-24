@@ -344,18 +344,18 @@ export default function RefereeDesk() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <Button
               variant="outline"
-              className="w-fit border-white/30 text-white hover:bg-white/20 hover:text-white"
+              className="w-fit bg-amber-400 text-slate-900 font-semibold border-transparent hover:bg-amber-300 md:border-white/30 md:bg-transparent md:text-white md:hover:bg-white/20"
               onClick={() => navigate(-1)}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Voltar
             </Button>
-            <div className="md:text-right">
+            <div className="hidden md:block md:text-right">
               <h1 className="text-3xl font-bold">{game.title}</h1>
               <p className="text-white/70">{game.category} • {game.modality} • {game.format}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3 text-xs sm:text-sm text-white/80">
+          <div className="hidden flex-wrap gap-3 text-xs sm:text-sm text-white/80 md:flex">
             <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
               Set atual: {gameState.currentSet}
             </Badge>
@@ -368,8 +368,48 @@ export default function RefereeDesk() {
           </div>
         </div>
 
+        {/* Mobile Scoreboard */}
+        <div className="space-y-4 md:hidden">
+          <div className="rounded-2xl border border-white/20 bg-slate-900/80 p-4 text-white shadow-scoreboard">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-base font-semibold">
+              <span className="flex-1 text-left">{game.teamA.name}</span>
+              <div className="flex items-center gap-2 text-2xl font-extrabold">
+                <span>{scoreA}</span>
+                <span className="text-lg font-semibold text-white/70">x</span>
+                <span>{scoreB}</span>
+              </div>
+              <span className="flex-1 text-right">{game.teamB.name}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-white/70">
+              <span>Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</span>
+              <span className="flex items-center gap-1 text-amber-200">
+                <Zap className="h-4 w-4" />
+                Sacando: {serverTeamName} ({gameState.currentServerPlayer})
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <ScoreButton
+              variant="team"
+              size="score"
+              onClick={() => setShowPointCategories('A')}
+              className="h-20 w-full text-4xl"
+            >
+              <Plus size={24} />
+            </ScoreButton>
+            <ScoreButton
+              variant="teamB"
+              size="score"
+              onClick={() => setShowPointCategories('B')}
+              className="h-20 w-full text-4xl"
+            >
+              <Plus size={24} />
+            </ScoreButton>
+          </div>
+        </div>
+
         {/* Main Scoreboard */}
-        <Card className="bg-slate-900/80 border border-white/20 text-score-text shadow-scoreboard backdrop-blur-xl">
+        <Card className="hidden bg-slate-900/80 border border-white/20 text-score-text shadow-scoreboard backdrop-blur-xl md:block">
           <CardContent className="p-6 lg:p-10">
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-center">
               <div className="space-y-4 text-center">
@@ -477,7 +517,7 @@ export default function RefereeDesk() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-3 border-white/40 text-white hover:bg-white/20"
+                  className="mt-3 border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                   onClick={undoLastAction}
                   disabled={gameHistory.length === 0}
                 >
@@ -500,7 +540,7 @@ export default function RefereeDesk() {
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="outline"
-                  className="border-white/30 text-white hover:bg-white/20"
+                  className="border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                   onClick={() => startTimeout('team', 'A')}
                   disabled={!!timer}
                 >
@@ -509,7 +549,7 @@ export default function RefereeDesk() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-white/30 text-white hover:bg-white/20"
+                  className="border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                   onClick={() => startTimeout('team', 'B')}
                   disabled={!!timer}
                 >
@@ -519,7 +559,7 @@ export default function RefereeDesk() {
               </div>
               <Button
                 variant="outline"
-                className="w-full border-white/30 text-white hover:bg-white/20"
+                className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                 onClick={() => startTimeout('technical')}
                 disabled={!!timer}
               >
@@ -528,7 +568,7 @@ export default function RefereeDesk() {
               </Button>
               <Button
                 variant="outline"
-                className="w-full border-white/30 text-white hover:bg-white/20"
+                className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                 onClick={() => startTimeout('medical')}
                 disabled={!!timer}
               >
@@ -536,7 +576,7 @@ export default function RefereeDesk() {
               </Button>
               <Button
                 variant="outline"
-                className="w-full border-amber-200/60 text-amber-100 hover:bg-amber-200/20"
+                className="w-full border-transparent bg-amber-300 text-slate-900 font-semibold hover:bg-amber-200"
                 onClick={() => {
                   resetCoinState();
                   setCoinDialogOpen(true);
@@ -550,7 +590,7 @@ export default function RefereeDesk() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full border-white/30 text-white hover:bg-white/20"
+                  className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
                   onClick={switchServerTeam}
                 >
                   <ArrowLeftRight className="mr-2 h-4 w-4" />
@@ -559,7 +599,7 @@ export default function RefereeDesk() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full border-white/30 text-white hover:bg-white/20"
+                  className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
                   onClick={changeCurrentServer}
                 >
                   <UserCheck className="mr-2 h-4 w-4" />
