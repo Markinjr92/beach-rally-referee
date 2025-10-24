@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRoles } from "@/hooks/useUserRoles";
 
 type TournamentRow = Tables<'tournaments'>
 
@@ -42,7 +43,16 @@ export default function TournamentList() {
   });
   const [tournaments, setTournaments] = useState<TournamentWithGames[]>([]);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const {
+    roles,
+    loading: rolesLoading,
+  } = useUserRoles(user, authLoading);
+
+  const canManageTournaments = useMemo(
+    () => roles.includes('admin_sistema') || roles.includes('organizador'),
+    [roles]
+  );
 
   const activeTournaments = useMemo(
     () => tournaments.filter((tournament) => tournament.status === "active"),
@@ -101,14 +111,18 @@ export default function TournamentList() {
 
         {/* Tournament Management Actions */}
         <div className="mb-12 flex flex-wrap gap-4 justify-center">
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2 bg-white/15 border border-white/20 text-white hover:bg-white/25">
-                <Plus size={20} />
-                Criar Novo Torneio
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md bg-slate-900/80 text-white border-white/20 backdrop-blur-xl">
+          {canManageTournaments ? (
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button
+                  className="flex items-center gap-2 bg-white/15 border border-white/20 text-white hover:bg-white/25"
+                  disabled={authLoading || rolesLoading}
+                >
+                  <Plus size={20} />
+                  Criar Novo Torneio
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md bg-slate-900/80 text-white border-white/20 backdrop-blur-xl">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-semibold">Criar Novo Torneio</DialogTitle>
                 <DialogDescription className="text-white/70">
@@ -218,6 +232,11 @@ export default function TournamentList() {
                         return
                       }
 
+                      if (!canManageTournaments) {
+                        toast({ title: 'Sem permissão', description: 'Você não tem acesso para criar torneios.' })
+                        return
+                      }
+
                       const payload = {
                         name: formData.name,
                         location: formData.location || null,
@@ -255,7 +274,22 @@ export default function TournamentList() {
                 </div>
               </div>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          ) : (
+            <Button
+              className="flex items-center gap-2 bg-white/15 border border-white/20 text-white hover:bg-white/25"
+              onClick={() =>
+                toast({
+                  title: 'Acesso restrito',
+                  description: 'Solicite ao administrador permissão para gerenciar torneios.',
+                })
+              }
+              disabled={authLoading || rolesLoading || !user}
+            >
+              <Plus size={20} />
+              Criar Novo Torneio
+            </Button>
+          )}
           <Button
             variant="ghost"
             className="flex items-center gap-2 bg-white/10 border border-white/20 text-white hover:bg-white/20"
