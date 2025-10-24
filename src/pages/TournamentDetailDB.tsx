@@ -19,7 +19,7 @@ import {
   CommandItem,
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
-import { formatDateTimePtBr } from '@/utils/date'
+import { formatDateShortPtBr, formatDateTimePtBr } from '@/utils/date'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -165,8 +165,8 @@ export default function TournamentDetailDB() {
     </div>
   )
 
-  const formattedStartDate = tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('pt-BR') : '-'
-  const formattedEndDate = tournament.end_date ? new Date(tournament.end_date).toLocaleDateString('pt-BR') : '-'
+  const formattedStartDate = formatDateShortPtBr(tournament.start_date)
+  const formattedEndDate = formatDateShortPtBr(tournament.end_date)
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">

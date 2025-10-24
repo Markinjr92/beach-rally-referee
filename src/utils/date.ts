@@ -60,3 +60,27 @@ export const formatDatePtBr = (
 
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(date)
 }
+
+export const formatDateShortPtBr = (
+  value: string | null,
+  { fallback = '-' }: { fallback?: string } = {}
+) => {
+  const date = parseLocalDateTime(value)
+  if (!date) return fallback
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+export const formatDateMediumPtBr = (
+  value: string | null,
+  { fallback = '-' }: { fallback?: string } = {}
+) => {
+  const date = parseLocalDateTime(value)
+  if (!date) return fallback
+
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(date)
+}

@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 import { cn, formatDateToISO, normalizeString } from "@/lib/utils";
+import { formatDateShortPtBr } from "@/utils/date";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 
@@ -350,9 +351,9 @@ export default function TournamentList() {
                       </CardDescription>
                       <CardDescription className="flex items-center gap-2 text-white/70">
                         <Calendar size={16} className="text-white/60" />
-                        {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString('pt-BR') : '-'}
+                        {formatDateShortPtBr(tournament.start_date)}
                         <span className="text-white/40">até</span>
-                        {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString('pt-BR') : '-'}
+                        {formatDateShortPtBr(tournament.end_date)}
                       </CardDescription>
                     </div>
                     <Badge variant="outline" className={cn("uppercase tracking-wide", statusStyles)}>

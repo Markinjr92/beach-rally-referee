@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
+import { formatDateShortPtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
 
 type Tournament = Tables<'tournaments'>
 type Team = Pick<Tables<'teams'>, 'id' | 'name'>
@@ -142,7 +142,7 @@ const RefereeTournamentMatches = () => {
                   )}
                   <span className="inline-flex items-center gap-2">
                     <Calendar size={16} />
-                    {tournament.start_date || '-'} — {tournament.end_date || '-'}
+                    {formatDateShortPtBr(tournament.start_date)} — {formatDateShortPtBr(tournament.end_date)}
                   </span>
                   {tournament.category && (
                     <Badge variant="secondary" className="bg-white/10 text-white">

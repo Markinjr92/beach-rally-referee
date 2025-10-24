@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Users, Trophy, Calendar, Settings, Plus, FileText } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { mockTournaments, mockGames } from "@/data/mockData";
+import { formatDateShortPtBr } from "@/utils/date";
 import { useState } from "react";
 
 const tournamentFormats = [
@@ -135,7 +136,7 @@ export default function TournamentDetail() {
               <p className="text-muted-foreground flex items-center gap-4">
                 <span className="flex items-center gap-1">
                   <Calendar size={16} />
-                  {new Date(tournament.startDate).toLocaleDateString('pt-BR')} - {new Date(tournament.endDate).toLocaleDateString('pt-BR')}
+                  {formatDateShortPtBr(tournament.startDate)} - {formatDateShortPtBr(tournament.endDate)}
                 </span>
                 <span>📍 {tournament.location}</span>
               </p>

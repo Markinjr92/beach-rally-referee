@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { Tables } from "@/integrations/supabase/types"
 import { cn, formatDateToISO, normalizeString } from "@/lib/utils"
+import { formatDateShortPtBr } from "@/utils/date"
 import { useAuth } from "@/hooks/useAuth"
 import { useUserRoles } from "@/hooks/useUserRoles"
 
@@ -330,9 +331,9 @@ export default function TournamentsDB() {
                       </CardDescription>
                       <CardDescription className="flex items-center gap-2 text-white/70">
                         <Calendar size={16} className="text-white/60" />
-                        {tournament.start_date ? new Date(tournament.start_date).toLocaleDateString("pt-BR") : "-"}
+                        {formatDateShortPtBr(tournament.start_date)}
                         <span className="text-white/40">até</span>
-                        {tournament.end_date ? new Date(tournament.end_date).toLocaleDateString("pt-BR") : "-"}
+                        {formatDateShortPtBr(tournament.end_date)}
                       </CardDescription>
                     </div>
                     <Badge variant="outline" className={cn("uppercase tracking-wide", statusStyles)}>
@@ -356,30 +357,58 @@ export default function TournamentsDB() {
                         <Button className="w-full bg-yellow-400/90 text-slate-900 hover:bg-yellow-300">Ver Torneio</Button>
                       </Link>
                       {tournament.status !== 'completed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex items-center gap-1 border-white/40 bg-white/10 text-white hover:bg-white/20"
-                          onClick={async () => {
-                            if (!confirm('Finalizar este torneio?')) return
-                            const { error } = await supabase
-                              .from('tournaments')
-                              .update({ status: 'completed' })
-                              .eq('id', tournament.id)
-                            if (error) {
-                              toast({ title: 'Erro ao finalizar', description: error.message })
-                              return
-                            }
-                            setTournaments((prev) =>
-                              prev.map((item) =>
-                                item.id === tournament.id ? { ...item, status: 'completed' } : item
+                        <>
+                          {tournament.status !== 'active' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-1 border-emerald-300/40 bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30"
+                              onClick={async () => {
+                                if (!confirm('Iniciar este torneio?')) return
+                                const { error } = await supabase
+                                  .from('tournaments')
+                                  .update({ status: 'active' })
+                                  .eq('id', tournament.id)
+                                if (error) {
+                                  toast({ title: 'Erro ao iniciar', description: error.message })
+                                  return
+                                }
+                                setTournaments((prev) =>
+                                  prev.map((item) =>
+                                    item.id === tournament.id ? { ...item, status: 'active' } : item
+                                  )
+                                )
+                                toast({ title: 'Torneio iniciado' })
+                              }}
+                            >
+                              Iniciar
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-1 border-white/40 bg-white/10 text-white hover:bg-white/20"
+                            onClick={async () => {
+                              if (!confirm('Finalizar este torneio?')) return
+                              const { error } = await supabase
+                                .from('tournaments')
+                                .update({ status: 'completed' })
+                                .eq('id', tournament.id)
+                              if (error) {
+                                toast({ title: 'Erro ao finalizar', description: error.message })
+                                return
+                              }
+                              setTournaments((prev) =>
+                                prev.map((item) =>
+                                  item.id === tournament.id ? { ...item, status: 'completed' } : item
+                                )
                               )
-                            )
-                            toast({ title: 'Torneio finalizado' })
-                          }}
-                        >
-                          Finalizar
-                        </Button>
+                              toast({ title: 'Torneio finalizado' })
+                            }}
+                          >
+                            Finalizar
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="ghost"
