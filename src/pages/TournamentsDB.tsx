@@ -83,7 +83,6 @@ export default function TournamentsDB() {
       name: trimmedName,
       status: "upcoming",
       has_statistics: !!form.hasStatistics,
-      created_by: user.id,
       location: location ?? null,
       category: category ?? null,
       modality: modality ?? null,
