@@ -45,7 +45,6 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 import { buildTimer, calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, saveMatchState, subscribeToMatchState } from "@/lib/matchStateService";
-import { createOfflineId, isOfflineError, queueOfflineOperation, useOfflineQueue } from "@/lib/offlineQueue";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -93,7 +92,6 @@ export default function RefereeDesk() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastCompletedTimeoutId = useRef<string | null>(null);
   const fallbackWarningDisplayed = useRef(false);
-  const offlineSyncNoticeShown = useRef(false);
   const [setConfigDialogOpen, setSetConfigDialogOpen] = useState(false);
   const [teamSetupForm, setTeamSetupForm] = useState<Record<'A' | 'B', { jerseyAssignment: Record<string, number | null>; serviceOrder: number[] }>>({
     A: { jerseyAssignment: {}, serviceOrder: [] },
@@ -104,8 +102,6 @@ export default function RefereeDesk() {
   const [firstChoiceOption, setFirstChoiceOption] = useState<CoinChoice>('serve');
   const [secondChoiceServeDecision, setSecondChoiceServeDecision] = useState<'serve' | 'receive' | null>(null);
   const [sideSelections, setSideSelections] = useState<{ A: CourtSide | null; B: CourtSide | null }>({ A: null, B: null });
-
-  useOfflineQueue();
 
   const getPlayersByTeam = useCallback(
     (team: 'A' | 'B') => {
@@ -375,23 +371,7 @@ export default function RefereeDesk() {
           fallbackWarningDisplayed.current = false;
         }
         setUsingMatchStateFallback(usedFallback);
-        return 'synced' as const;
       } catch (error) {
-        if (isOfflineError(error)) {
-          await queueOfflineOperation({
-            type: 'saveMatchState',
-            payload: { state: newState },
-          });
-          if (!offlineSyncNoticeShown.current) {
-            offlineSyncNoticeShown.current = true;
-            toast({
-              title: 'Conexão instável',
-              description: 'Ação salva localmente. Tentaremos sincronizar automaticamente quando a conexão retornar.',
-            });
-          }
-          return 'queued' as const;
-        }
-
         console.error('Failed to persist match state', error);
         toast({
           title: 'Erro ao salvar estado do jogo',
@@ -406,7 +386,7 @@ export default function RefereeDesk() {
         setIsSyncing(false);
       }
     },
-    [gameState, notifyFallbackActivated, offlineSyncNoticeShown, snapshotState, toast]
+    [gameState, notifyFallbackActivated, snapshotState, toast]
   );
 
   const logMatchEvent = useCallback(
@@ -420,7 +400,7 @@ export default function RefereeDesk() {
     }) => {
       if (!gameId) return;
       const { eventType, team, pointCategory, description, metadata, setNumber } = params;
-      const payload = {
+      const { error } = await supabase.from('match_events').insert({
         match_id: gameId,
         set_number: setNumber ?? gameState?.currentSet ?? null,
         event_type: eventType,
@@ -428,13 +408,8 @@ export default function RefereeDesk() {
         point_category: pointCategory ?? null,
         description: description ?? null,
         metadata: metadata ?? null,
-      };
-      const { error } = await supabase.from('match_events').insert(payload);
+      });
       if (error) {
-        if (isOfflineError(error)) {
-          await queueOfflineOperation({ type: 'logMatchEvent', payload });
-          return;
-        }
         console.error('Failed to log match event', error);
       }
     },
@@ -453,31 +428,16 @@ export default function RefereeDesk() {
         return;
       }
 
-      const endedAt = new Date().toISOString();
       try {
         const { error } = await supabase
           .from('match_timeouts')
-          .update({ ended_at: endedAt })
+          .update({ ended_at: new Date().toISOString() })
           .eq('id', activeTimer.id);
         if (error) {
-          if (isOfflineError(error)) {
-            await queueOfflineOperation({
-              type: 'endTimeout',
-              payload: { id: activeTimer.id, ended_at: endedAt },
-            });
-          } else {
-            throw error;
-          }
+          throw error;
         }
       } catch (error) {
-        if (!isOfflineError(error)) {
-          console.error('Failed to close timeout record', error);
-        } else {
-          await queueOfflineOperation({
-            type: 'endTimeout',
-            payload: { id: activeTimer.id, ended_at: endedAt },
-          });
-        }
+        console.error('Failed to close timeout record', error);
       }
 
       const updatedState: GameState = {
@@ -636,19 +596,6 @@ export default function RefereeDesk() {
   useEffect(() => {
     return () => {
       clearCoinAnimations();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const resetNotice = () => {
-      offlineSyncNoticeShown.current = false;
-    };
-    window.addEventListener('online', resetNotice);
-    return () => {
-      window.removeEventListener('online', resetNotice);
     };
   }, []);
 
@@ -889,7 +836,6 @@ export default function RefereeDesk() {
     ];
 
     let shouldUpdateMatchRecord = false;
-    let shouldOpenNextSetConfigModal = false;
     if (setWon) {
       const updatedSetsWon = {
         teamA: previousState.setsWon.teamA + (team === 'A' ? 1 : 0),
@@ -926,7 +872,6 @@ export default function RefereeDesk() {
         });
         shouldUpdateMatchRecord = true;
       } else {
-        shouldOpenNextSetConfigModal = true;
         updatedState.currentSet = previousState.currentSet + 1;
         updatedState.currentServerPlayer = 1;
         updatedState.currentServerTeam = 'A';
@@ -939,34 +884,9 @@ export default function RefereeDesk() {
 
         const nextSetIndex = previousState.currentSet;
         const defaultConfigurations = createDefaultGameState(game).setConfigurations;
-        const previousConfig = previousState.setConfigurations[currentSet];
-        const baseConfig = defaultConfigurations[nextSetIndex];
-        if (baseConfig) {
-          const cloneTeamConfig = (teamKey: 'teamA' | 'teamB') => {
-            const fallbackConfig = baseConfig.teams[teamKey];
-            const priorConfig = previousConfig?.teams?.[teamKey];
-            return {
-              ...fallbackConfig,
-              jerseyAssignment: priorConfig?.jerseyAssignment
-                ? { ...priorConfig.jerseyAssignment }
-                : { ...fallbackConfig.jerseyAssignment },
-              serviceOrder: priorConfig?.serviceOrder?.length
-                ? [...priorConfig.serviceOrder]
-                : [...fallbackConfig.serviceOrder],
-            };
-          };
-
-          const nextConfiguration = {
-            ...baseConfig,
-            isConfigured: false,
-            teams: {
-              teamA: cloneTeamConfig('teamA'),
-              teamB: cloneTeamConfig('teamB'),
-            },
-          };
-
+        if (defaultConfigurations[nextSetIndex]) {
           updatedState.setConfigurations = previousState.setConfigurations.map((config, index) =>
-            index === nextSetIndex ? nextConfiguration : config
+            index === nextSetIndex ? defaultConfigurations[nextSetIndex] : config
           );
         }
       }
@@ -979,27 +899,11 @@ export default function RefereeDesk() {
       }
 
       if (shouldUpdateMatchRecord) {
-        const { error: statusError } = await supabase
+        await supabase
           .from('matches')
           .update({ status: 'completed' })
           .eq('id', game.id);
-        if (statusError) {
-          if (isOfflineError(statusError)) {
-            await queueOfflineOperation({
-              type: 'updateMatchStatus',
-              payload: { match_id: game.id, status: 'completed' },
-            });
-          } else {
-            throw statusError;
-          }
-        }
         setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
-      }
-
-      if (shouldOpenNextSetConfigModal) {
-        setTimeout(() => {
-          setSetConfigDialogOpen(true);
-        }, 0);
       }
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
@@ -1396,51 +1300,30 @@ export default function RefereeDesk() {
     const timerType: Timer['type'] =
       type === 'team' ? 'TIMEOUT_TEAM' : type === 'technical' ? 'TIMEOUT_TECHNICAL' : 'MEDICAL';
 
-    const timeoutId = createOfflineId('timeout');
-    const startTimestamp = new Date().toISOString();
-    const timeoutPayload = {
-      id: timeoutId,
-      match_id: game.id,
-      set_number: gameState.currentSet,
-      team: team ?? null,
-      timeout_type: type,
-      duration_seconds: duration,
-      started_at: startTimestamp,
-    };
-
     let timeoutRecord: { id: string; started_at: string } | null = null;
     try {
       const { data, error } = await supabase
         .from('match_timeouts')
-        .insert(timeoutPayload)
+        .insert({
+          match_id: game.id,
+          set_number: gameState.currentSet,
+          team: team ?? null,
+          timeout_type: type,
+          duration_seconds: duration,
+        })
         .select('id, started_at')
         .single();
       if (error || !data) {
-        if (error && isOfflineError(error)) {
-          await queueOfflineOperation({ type: 'startTimeout', payload: timeoutPayload });
-          timeoutRecord = { id: timeoutId, started_at: startTimestamp };
-        } else {
-          throw error ?? new Error('Falha ao registrar timeout');
-        }
-      } else {
-        timeoutRecord = data;
+        throw error ?? new Error('Falha ao registrar timeout');
       }
+      timeoutRecord = data;
     } catch (error) {
-      if (isOfflineError(error)) {
-        await queueOfflineOperation({ type: 'startTimeout', payload: timeoutPayload });
-        timeoutRecord = { id: timeoutId, started_at: startTimestamp };
-      } else {
-        console.error('Failed to start timeout', error);
-        toast({
-          title: 'Erro ao iniciar tempo',
-          description: error instanceof Error ? error.message : 'Erro desconhecido ao iniciar o tempo.',
-          variant: 'destructive',
-        });
-        return;
-      }
-    }
-
-    if (!timeoutRecord) {
+      console.error('Failed to start timeout', error);
+      toast({
+        title: 'Erro ao iniciar tempo',
+        description: error instanceof Error ? error.message : 'Erro desconhecido ao iniciar o tempo.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -1489,17 +1372,10 @@ export default function RefereeDesk() {
       });
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
-      const revertEndedAt = new Date().toISOString();
-      const { error: revertError } = await supabase
+      await supabase
         .from('match_timeouts')
-        .update({ ended_at: revertEndedAt })
+        .update({ ended_at: new Date().toISOString() })
         .eq('id', timeoutRecord.id);
-      if (revertError && isOfflineError(revertError)) {
-        await queueOfflineOperation({
-          type: 'endTimeout',
-          payload: { id: timeoutRecord.id, ended_at: revertEndedAt },
-        });
-      }
     }
   };
 
@@ -1562,20 +1438,6 @@ export default function RefereeDesk() {
   const playersTeamB = getPlayersByTeam('B');
   const jerseyNumbersA = getDefaultServiceOrder('A');
   const jerseyNumbersB = getDefaultServiceOrder('B');
-  const buildTimeoutLabel = useCallback(
-    (team: 'A' | 'B') => {
-      const players = getPlayersByTeam(team);
-      const fallbackName = team === 'A' ? game?.teamA.name ?? 'Equipe A' : game?.teamB.name ?? 'Equipe B';
-      const primaryRaw = players[0]?.name?.trim() ?? fallbackName;
-      const primaryToken = primaryRaw.split(/\s+/)[0] ?? fallbackName;
-      const secondaryRaw = players[1]?.name?.trim() ?? '';
-      const secondaryInitial = secondaryRaw ? secondaryRaw.charAt(0).toUpperCase() : '';
-      return `Time Out ${primaryToken}${secondaryInitial ? ` ${secondaryInitial}` : ''}`;
-    },
-    [game?.teamA.name, game?.teamB.name, getPlayersByTeam]
-  );
-  const timeoutLabelA = buildTimeoutLabel('A');
-  const timeoutLabelB = buildTimeoutLabel('B');
   const servicePositionsA = jerseyNumbersA;
   const servicePositionsB = jerseyNumbersB;
   const secondTeamForChoices = firstChoiceTeamState === 'A' ? 'B' : 'A';
@@ -1601,13 +1463,13 @@ export default function RefereeDesk() {
     },
     {
       icon: Pause,
-      label: timeoutLabelA,
+      label: 'Timeout A',
       onClick: () => void startTimeout('team', 'A'),
       disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: Pause,
-      label: timeoutLabelB,
+      label: 'Timeout B',
       onClick: () => void startTimeout('team', 'B'),
       disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
@@ -2011,19 +1873,19 @@ export default function RefereeDesk() {
                   variant="outline"
                   className="border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                   onClick={() => void startTimeout('team', 'A')}
-                  disabled={!!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured}
+                  disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
                   <Pause className="mr-2 h-4 w-4" />
-                  {timeoutLabelA}
+                  Timeout A
                 </Button>
                 <Button
                   variant="outline"
                   className="border-transparent bg-white/25 text-white font-semibold hover:bg-white/35 disabled:opacity-60"
                   onClick={() => void startTimeout('team', 'B')}
-                  disabled={!!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured}
+                  disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
                   <Pause className="mr-2 h-4 w-4" />
-                  {timeoutLabelB}
+                  Timeout B
                 </Button>
               </div>
               <Button
