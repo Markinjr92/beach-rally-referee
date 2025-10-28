@@ -23,7 +23,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
+import { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import {
   CoinChoice,
   CourtSide,
@@ -45,6 +45,18 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 import { buildTimer, calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, saveMatchState, subscribeToMatchState } from "@/lib/matchStateService";
+import {
+  enqueueOfflineOperation,
+  hasPendingOfflineOperation,
+  isLikelyOfflineError,
+  processOfflineQueue,
+} from "@/lib/offlineQueue";
+import {
+  loadLocalGameConfig,
+  loadLocalMatchState,
+  saveLocalGameConfig,
+  saveLocalMatchState,
+} from "@/lib/localStorage";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -92,6 +104,7 @@ export default function RefereeDesk() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const lastCompletedTimeoutId = useRef<string | null>(null);
   const fallbackWarningDisplayed = useRef(false);
+  const offlineNoticeDisplayed = useRef(false);
   const [setConfigDialogOpen, setSetConfigDialogOpen] = useState(false);
   const [teamSetupForm, setTeamSetupForm] = useState<Record<'A' | 'B', { jerseyAssignment: Record<string, number | null>; serviceOrder: number[] }>>({
     A: { jerseyAssignment: {}, serviceOrder: [] },
@@ -141,6 +154,20 @@ export default function RefereeDesk() {
       return players[assignment ?? 0]?.name ?? `Jogador ${jersey}`;
     },
     [getPlayersByTeam, teamSetupForm]
+  );
+
+  const getTimeoutLabel = useCallback(
+    (team: 'A' | 'B') => {
+      const players = getPlayersByTeam(team);
+      if (!players.length) {
+        return team === 'A' ? 'Time Out A' : 'Time Out B';
+      }
+      const [firstPlayer, secondPlayer] = players;
+      const primaryName = firstPlayer?.name?.trim() ?? (team === 'A' ? 'A' : 'B');
+      const secondaryInitial = secondPlayer?.name?.trim()?.charAt(0)?.toUpperCase() ?? '';
+      return `Time Out ${primaryName}${secondaryInitial ? ` ${secondaryInitial}` : ''}`;
+    },
+    [getPlayersByTeam]
   );
 
   const currentSetIndex = Math.max(0, (gameState?.currentSet ?? 1) - 1);
@@ -294,6 +321,19 @@ export default function RefereeDesk() {
     });
   }, [toast]);
 
+  const showOfflineSyncNotice = useCallback(() => {
+    if (offlineNoticeDisplayed.current) return;
+    offlineNoticeDisplayed.current = true;
+    toast({
+      title: 'Conexão instável',
+      description: 'As ações foram salvas localmente e serão sincronizadas assim que possível.',
+    });
+  }, [toast]);
+
+  useEffect(() => {
+    void processOfflineQueue();
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const AudioContextClass =
@@ -361,6 +401,7 @@ export default function RefereeDesk() {
       if (!options?.skipLocalUpdate) {
         setGameState(newState);
       }
+      saveLocalMatchState(newState);
 
       setIsSyncing(true);
       try {
@@ -371,7 +412,13 @@ export default function RefereeDesk() {
           fallbackWarningDisplayed.current = false;
         }
         setUsingMatchStateFallback(usedFallback);
+        offlineNoticeDisplayed.current = false;
       } catch (error) {
+        if (isLikelyOfflineError(error)) {
+          enqueueOfflineOperation('saveMatchState', { state: newState });
+          showOfflineSyncNotice();
+          return;
+        }
         console.error('Failed to persist match state', error);
         toast({
           title: 'Erro ao salvar estado do jogo',
@@ -380,13 +427,20 @@ export default function RefereeDesk() {
         });
         if (previousState && !options?.skipLocalUpdate) {
           setGameState(previousState);
+          saveLocalMatchState(previousState);
         }
         throw error;
       } finally {
         setIsSyncing(false);
       }
     },
-    [gameState, notifyFallbackActivated, snapshotState, toast]
+    [
+      gameState,
+      notifyFallbackActivated,
+      showOfflineSyncNotice,
+      snapshotState,
+      toast,
+    ]
   );
 
   const logMatchEvent = useCallback(
@@ -400,7 +454,7 @@ export default function RefereeDesk() {
     }) => {
       if (!gameId) return;
       const { eventType, team, pointCategory, description, metadata, setNumber } = params;
-      const { error } = await supabase.from('match_events').insert({
+      const payload = {
         match_id: gameId,
         set_number: setNumber ?? gameState?.currentSet ?? null,
         event_type: eventType,
@@ -408,12 +462,23 @@ export default function RefereeDesk() {
         point_category: pointCategory ?? null,
         description: description ?? null,
         metadata: metadata ?? null,
-      });
-      if (error) {
-        console.error('Failed to log match event', error);
+      } satisfies TablesInsert<'match_events'>;
+
+      try {
+        const { error } = await supabase.from('match_events').insert(payload);
+        if (error) {
+          throw error;
+        }
+      } catch (error) {
+        if (isLikelyOfflineError(error)) {
+          enqueueOfflineOperation('logMatchEvent', { event: payload });
+          showOfflineSyncNotice();
+        } else {
+          console.error('Failed to log match event', error);
+        }
       }
     },
-    [gameId, gameState?.currentSet]
+    [gameId, gameState?.currentSet, showOfflineSyncNotice]
   );
 
   const finalizeTimeout = useCallback(
@@ -428,16 +493,22 @@ export default function RefereeDesk() {
         return;
       }
 
+      const endedAt = new Date().toISOString();
       try {
         const { error } = await supabase
           .from('match_timeouts')
-          .update({ ended_at: new Date().toISOString() })
+          .update({ ended_at: endedAt })
           .eq('id', activeTimer.id);
         if (error) {
           throw error;
         }
       } catch (error) {
-        console.error('Failed to close timeout record', error);
+        if (isLikelyOfflineError(error)) {
+          enqueueOfflineOperation('finalizeTimeout', { id: activeTimer.id, ended_at: endedAt });
+          showOfflineSyncNotice();
+        } else {
+          console.error('Failed to close timeout record', error);
+        }
       }
 
       const updatedState: GameState = {
@@ -459,7 +530,7 @@ export default function RefereeDesk() {
         // Errors already surfaced in persistState
       }
     },
-    [gameState, logMatchEvent, persistState, snapshotState]
+    [gameState, logMatchEvent, persistState, showOfflineSyncNotice, snapshotState]
   );
 
   useEffect(() => {
@@ -476,78 +547,134 @@ export default function RefereeDesk() {
       if (!gameId) return;
       setIsLoading(true);
       setGameHistory([]);
-      const { data: match, error: matchError } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', gameId)
-        .single();
-      if (matchError || !match) {
-        console.error('Match not found', matchError);
-        setIsLoading(false);
-        return;
-      }
 
-      const { data: teams } = await supabase
-        .from('teams')
-        .select('*')
-        .in('id', [match.team_a_id, match.team_b_id]);
-      const teamA = teams?.find(t => t.id === match.team_a_id);
-      const teamB = teams?.find(t => t.id === match.team_b_id);
-      const { data: tournament } = await supabase
-        .from('tournaments')
-        .select('has_statistics')
-        .eq('id', match.tournament_id)
-        .maybeSingle();
-      const hasStatistics = tournament?.has_statistics ?? true;
-      const newGame: Game = {
-        id: match.id,
-        tournamentId: match.tournament_id,
-        title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
-        category: 'Misto',
-        modality: parseGameModality(match.modality),
-        format: 'melhorDe3',
-        teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
-        teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
-        pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
-        needTwoPointLead: true,
-        sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
-        hasTechnicalTimeout: false,
-        technicalTimeoutSum: 0,
-        teamTimeoutsPerSet: 2,
-        teamTimeoutDurationSec: 30,
-        coinTossMode: 'initialThenAlternate',
-        status: match.status === 'in_progress' ? 'em_andamento' : match.status === 'completed' ? 'finalizado' : 'agendado',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        hasStatistics,
+      const applyLocalFallback = () => {
+        const storedGame = loadLocalGameConfig(gameId);
+        const storedState = loadLocalMatchState(gameId);
+        if (storedGame) {
+          setGame(storedGame.game);
+        }
+        if (storedState) {
+          setGameState(storedState.state);
+        }
+        return Boolean(storedGame || storedState);
       };
-      setGame(newGame);
 
-      const { state, usedFallback } = await loadMatchState(match.id, newGame);
-      setGameState(state);
-      setUsingMatchStateFallback(usedFallback);
-      if (usedFallback) {
-        notifyFallbackActivated();
-      } else {
-        fallbackWarningDisplayed.current = false;
-      }
+      try {
+        const { data: match, error: matchError } = await supabase
+          .from('matches')
+          .select('*')
+          .eq('id', gameId)
+          .single();
+        if (matchError || !match) {
+          if (isLikelyOfflineError(matchError) && applyLocalFallback()) {
+            showOfflineSyncNotice();
+            return;
+          }
+          console.error('Match not found', matchError);
+          return;
+        }
 
-      const updatePayload: Partial<Tables<'matches'>> = {};
-      if (match.status === 'scheduled') {
-        updatePayload.status = 'in_progress';
-      }
-      if (!match.referee_id && user?.id) {
-        updatePayload.referee_id = user.id;
-      }
-      if (Object.keys(updatePayload).length > 0) {
-        await supabase.from('matches').update(updatePayload).eq('id', match.id);
-      }
+        const { data: teams } = await supabase
+          .from('teams')
+          .select('*')
+          .in('id', [match.team_a_id, match.team_b_id]);
+        const teamA = teams?.find(t => t.id === match.team_a_id);
+        const teamB = teams?.find(t => t.id === match.team_b_id);
+        const { data: tournament } = await supabase
+          .from('tournaments')
+          .select('has_statistics')
+          .eq('id', match.tournament_id)
+          .maybeSingle();
+        const hasStatistics = tournament?.has_statistics ?? true;
+        const newGame: Game = {
+          id: match.id,
+          tournamentId: match.tournament_id,
+          title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
+          category: 'Misto',
+          modality: parseGameModality(match.modality),
+          format: 'melhorDe3',
+          teamA: {
+            name: teamA?.name || 'Equipe A',
+            players: [
+              { name: teamA?.player_a || 'A1', number: 1 },
+              { name: teamA?.player_b || 'A2', number: 2 },
+            ],
+          },
+          teamB: {
+            name: teamB?.name || 'Equipe B',
+            players: [
+              { name: teamB?.player_a || 'B1', number: 1 },
+              { name: teamB?.player_b || 'B2', number: 2 },
+            ],
+          },
+          pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
+          needTwoPointLead: true,
+          sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
+          hasTechnicalTimeout: false,
+          technicalTimeoutSum: 0,
+          teamTimeoutsPerSet: 2,
+          teamTimeoutDurationSec: 30,
+          coinTossMode: 'initialThenAlternate',
+          status: match.status === 'in_progress' ? 'em_andamento' : match.status === 'completed' ? 'finalizado' : 'agendado',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          hasStatistics,
+        };
+        setGame(newGame);
+        saveLocalGameConfig(newGame);
 
-      setIsLoading(false);
+        const { state, usedFallback } = await loadMatchState(match.id, newGame);
+        const storedState = loadLocalMatchState(match.id);
+        const hasPendingStateSync = hasPendingOfflineOperation('saveMatchState');
+        const resolvedState = hasPendingStateSync && storedState ? storedState.state : state;
+        setGameState(resolvedState);
+        saveLocalMatchState(resolvedState);
+        setUsingMatchStateFallback(usedFallback);
+        if (usedFallback) {
+          notifyFallbackActivated();
+        } else {
+          fallbackWarningDisplayed.current = false;
+        }
+
+        const updatePayload: TablesUpdate<'matches'> = {};
+        if (match.status === 'scheduled') {
+          updatePayload.status = 'in_progress';
+        }
+        if (!match.referee_id && user?.id) {
+          updatePayload.referee_id = user.id;
+        }
+        if (Object.keys(updatePayload).length > 0) {
+          try {
+            const { error: updateError } = await supabase
+              .from('matches')
+              .update(updatePayload)
+              .eq('id', match.id);
+            if (updateError) {
+              throw updateError;
+            }
+          } catch (error) {
+            if (isLikelyOfflineError(error)) {
+              enqueueOfflineOperation('updateMatch', { matchId: match.id, values: updatePayload });
+              showOfflineSyncNotice();
+            } else {
+              console.error('Failed to update match record', error);
+            }
+          }
+        }
+      } catch (error) {
+        if (isLikelyOfflineError(error) && applyLocalFallback()) {
+          showOfflineSyncNotice();
+          return;
+        }
+        console.error('Failed to load match data', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     void loadFromDB();
-  }, [gameId, notifyFallbackActivated, user?.id]);
+  }, [gameId, notifyFallbackActivated, showOfflineSyncNotice, user?.id]);
 
   useEffect(() => {
     if (!gameId || !game) return;
@@ -560,6 +687,18 @@ export default function RefereeDesk() {
       unsubscribe?.();
     };
   }, [gameId, game, snapshotState, usingMatchStateFallback]);
+
+  useEffect(() => {
+    if (game) {
+      saveLocalGameConfig(game);
+    }
+  }, [game]);
+
+  useEffect(() => {
+    if (gameState) {
+      saveLocalMatchState(gameState);
+    }
+  }, [gameState]);
 
   useEffect(() => {
     if (!gameState?.activeTimer) {
@@ -649,9 +788,12 @@ export default function RefereeDesk() {
       };
     };
 
+    const previousConfiguredTeamA = previousSetConfig?.isConfigured ? previousSetConfig.teams.teamA : undefined;
+    const previousConfiguredTeamB = previousSetConfig?.isConfigured ? previousSetConfig.teams.teamB : undefined;
+
     const nextFormState = {
-      A: buildTeamFormState('A', currentSetConfig?.teams.teamA),
-      B: buildTeamFormState('B', currentSetConfig?.teams.teamB),
+      A: buildTeamFormState('A', currentSetConfig?.teams.teamA ?? previousConfiguredTeamA),
+      B: buildTeamFormState('B', currentSetConfig?.teams.teamB ?? previousConfiguredTeamB),
     };
     setTeamSetupForm(nextFormState);
 
@@ -695,6 +837,7 @@ export default function RefereeDesk() {
     game,
     gameState,
     currentSetConfig,
+    previousSetConfig,
     requiresCoinToss,
     previousCoinLoser,
     previousCoinWinner,
@@ -835,6 +978,7 @@ export default function RefereeDesk() {
       },
     ];
 
+    let shouldOpenNextSetConfig = false;
     let shouldUpdateMatchRecord = false;
     if (setWon) {
       const updatedSetsWon = {
@@ -872,6 +1016,7 @@ export default function RefereeDesk() {
         });
         shouldUpdateMatchRecord = true;
       } else {
+        shouldOpenNextSetConfig = true;
         updatedState.currentSet = previousState.currentSet + 1;
         updatedState.currentServerPlayer = 1;
         updatedState.currentServerTeam = 'A';
@@ -899,11 +1044,30 @@ export default function RefereeDesk() {
       }
 
       if (shouldUpdateMatchRecord) {
-        await supabase
-          .from('matches')
-          .update({ status: 'completed' })
-          .eq('id', game.id);
+        try {
+          const { error: matchUpdateError } = await supabase
+            .from('matches')
+            .update({ status: 'completed' })
+            .eq('id', game.id);
+          if (matchUpdateError) {
+            throw matchUpdateError;
+          }
+        } catch (error) {
+          if (isLikelyOfflineError(error)) {
+            enqueueOfflineOperation('updateMatch', {
+              matchId: game.id,
+              values: { status: 'completed' } as TablesUpdate<'matches'>,
+            });
+            showOfflineSyncNotice();
+          } else {
+            console.error('Failed to finalize match record', error);
+          }
+        }
         setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
+      }
+
+      if (shouldOpenNextSetConfig) {
+        setSetConfigDialogOpen(true);
       }
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
@@ -1300,6 +1464,8 @@ export default function RefereeDesk() {
     const timerType: Timer['type'] =
       type === 'team' ? 'TIMEOUT_TEAM' : type === 'technical' ? 'TIMEOUT_TECHNICAL' : 'MEDICAL';
 
+    const startedAt = new Date().toISOString();
+
     let timeoutRecord: { id: string; started_at: string } | null = null;
     try {
       const { data, error } = await supabase
@@ -1310,6 +1476,7 @@ export default function RefereeDesk() {
           team: team ?? null,
           timeout_type: type,
           duration_seconds: duration,
+          started_at: startedAt,
         })
         .select('id, started_at')
         .single();
@@ -1318,13 +1485,32 @@ export default function RefereeDesk() {
       }
       timeoutRecord = data;
     } catch (error) {
-      console.error('Failed to start timeout', error);
-      toast({
-        title: 'Erro ao iniciar tempo',
-        description: error instanceof Error ? error.message : 'Erro desconhecido ao iniciar o tempo.',
-        variant: 'destructive',
-      });
-      return;
+      if (isLikelyOfflineError(error)) {
+        const fallbackId =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `timeout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const queuedPayload = {
+          id: fallbackId,
+          match_id: game.id,
+          set_number: gameState.currentSet,
+          team: team ?? null,
+          timeout_type: type,
+          duration_seconds: duration,
+          started_at: startedAt,
+        } satisfies TablesInsert<'match_timeouts'>;
+        timeoutRecord = { id: fallbackId, started_at: startedAt };
+        enqueueOfflineOperation('createTimeout', queuedPayload);
+        showOfflineSyncNotice();
+      } else {
+        console.error('Failed to start timeout', error);
+        toast({
+          title: 'Erro ao iniciar tempo',
+          description: error instanceof Error ? error.message : 'Erro desconhecido ao iniciar o tempo.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     lastCompletedTimeoutId.current = null;
@@ -1454,6 +1640,8 @@ export default function RefereeDesk() {
     : isFirstSet
       ? 'Início da partida'
       : 'Configurar início do set';
+  const timeoutLabelA = getTimeoutLabel('A');
+  const timeoutLabelB = getTimeoutLabel('B');
   const mobileControlButtons = [
     {
       icon: RotateCcw,
@@ -1463,13 +1651,13 @@ export default function RefereeDesk() {
     },
     {
       icon: Pause,
-      label: 'Timeout A',
+      label: timeoutLabelA,
       onClick: () => void startTimeout('team', 'A'),
       disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: Pause,
-      label: 'Timeout B',
+      label: timeoutLabelB,
       onClick: () => void startTimeout('team', 'B'),
       disabled: !!gameState?.activeTimer || gameIsEnded || !isCurrentSetConfigured,
     },
@@ -1876,7 +2064,7 @@ export default function RefereeDesk() {
                   disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
                   <Pause className="mr-2 h-4 w-4" />
-                  Timeout A
+                  {timeoutLabelA}
                 </Button>
                 <Button
                   variant="outline"
@@ -1885,7 +2073,7 @@ export default function RefereeDesk() {
                   disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
                   <Pause className="mr-2 h-4 w-4" />
-                  Timeout B
+                  {timeoutLabelB}
                 </Button>
               </div>
               <Button
