@@ -109,6 +109,35 @@ export const isLikelyOfflineError = (error: unknown): boolean => {
   return false;
 };
 
+interface PostgrestErrorLike {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+const isMissingMatchTimeoutsTableError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const { code, message, details } = error as PostgrestErrorLike;
+  const normalizedMessage = `${message ?? ""} ${details ?? ""}`.toLowerCase();
+
+  if (code && ["42P01", "PGRST204"].includes(code)) {
+    return true;
+  }
+
+  return /match_timeouts/.test(normalizedMessage) && /does not exist|not found/.test(normalizedMessage);
+};
+
+const reportMissingMatchTimeoutsTable = (error: PostgrestErrorLike) => {
+  console.error(
+    "[OfflineQueue] A tabela 'match_timeouts' não está disponível no Supabase. Execute as migrações SQL em supabase/migrations para criar a tabela antes de utilizar o gerenciamento de tempo técnico.",
+    error,
+  );
+};
+
 const handlers: Record<OfflineOperationType, (payload: unknown) => Promise<void>> = {
   async saveMatchState(payload) {
     const { state } = payload as SaveMatchStatePayload;
@@ -127,6 +156,9 @@ const handlers: Record<OfflineOperationType, (payload: unknown) => Promise<void>
       .from("match_timeouts")
       .upsert(timeoutPayload, { onConflict: "id", ignoreDuplicates: false });
     if (error) {
+      if (isMissingMatchTimeoutsTableError(error)) {
+        reportMissingMatchTimeoutsTable(error);
+      }
       throw error;
     }
   },
@@ -137,6 +169,9 @@ const handlers: Record<OfflineOperationType, (payload: unknown) => Promise<void>
       .update({ ended_at })
       .eq("id", id);
     if (error) {
+      if (isMissingMatchTimeoutsTableError(error)) {
+        reportMissingMatchTimeoutsTable(error);
+      }
       throw error;
     }
   },
