@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Calendar, MapPin, Trophy, ArrowLeft } from 'lucide-react'
 
@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDateMediumPtBr } from '@/utils/date'
 
 const formatDate = (value: string | null) => formatDateMediumPtBr(value)
@@ -15,6 +16,7 @@ const formatDate = (value: string | null) => formatDateMediumPtBr(value)
 const TournamentInfo = () => {
   const [tournaments, setTournaments] = useState<Tables<'tournaments'>[]>([])
   const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState<'active' | 'completed'>('active')
   const { toast } = useToast()
 
   useEffect(() => {
@@ -23,7 +25,7 @@ const TournamentInfo = () => {
       const { data, error } = await supabase
         .from('tournaments')
         .select('*')
-        .eq('status', 'active')
+        .eq('status', statusFilter)
         .order('start_date', { ascending: true })
 
       if (error) {
@@ -39,7 +41,25 @@ const TournamentInfo = () => {
     }
 
     load()
-  }, [toast])
+  }, [statusFilter, toast])
+
+  const heroContent = useMemo(() => {
+    if (statusFilter === 'active') {
+      return {
+        title: 'Torneios Ativos',
+        description: 'Confira as etapas em disputa e acompanhe os confrontos e placares de cada torneio.',
+        highlight: 'Explore os torneios em andamento',
+        emptyState: 'Nenhum torneio ativo encontrado no momento.',
+      }
+    }
+
+    return {
+      title: 'Torneios Finalizados',
+      description: 'Reviva os torneios que já foram concluídos e consulte os placares finais de cada disputa.',
+      highlight: 'Reviva os torneios finalizados',
+      emptyState: 'Nenhum torneio finalizado encontrado no momento.',
+    }
+  }, [statusFilter])
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -57,7 +77,7 @@ const TournamentInfo = () => {
             </Link>
             <div className="hidden md:flex items-center gap-2 text-white/70">
               <Trophy className="text-yellow-300" size={20} />
-              <span>Explore os torneios em andamento</span>
+              <span>{heroContent.highlight}</span>
             </div>
           </div>
 
@@ -66,20 +86,34 @@ const TournamentInfo = () => {
               <Trophy className="text-yellow-300" size={28} />
               <div className="text-left">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">Calendário oficial</p>
-                <h1 className="text-3xl sm:text-4xl font-semibold">Torneios Ativos</h1>
+                <h1 className="text-3xl sm:text-4xl font-semibold">{heroContent.title}</h1>
               </div>
             </div>
-            <p className="text-lg text-white/80 max-w-2xl mx-auto">
-              Confira as etapas em disputa e acompanhe os confrontos e placares de cada torneio.
-            </p>
+            <p className="text-lg text-white/80 max-w-2xl mx-auto">{heroContent.description}</p>
           </div>
+        </div>
+
+        <div className="flex justify-center">
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'active' | 'completed')}>
+            <SelectTrigger className="w-full max-w-xs bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
+              <SelectValue placeholder="Filtrar por status" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900/90 text-white border-white/20">
+              <SelectItem value="active" className="focus:bg-white/10 focus:text-white">
+                Torneios ativos
+              </SelectItem>
+              <SelectItem value="completed" className="focus:bg-white/10 focus:text-white">
+                Torneios finalizados
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {loading ? (
           <div className="flex justify-center py-20 text-white/80">Carregando torneios...</div>
         ) : tournaments.length === 0 ? (
           <div className="flex justify-center py-20 text-white/70">
-            Nenhum torneio ativo encontrado no momento.
+            {heroContent.emptyState}
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
