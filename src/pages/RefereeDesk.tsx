@@ -2181,20 +2181,20 @@ export default function RefereeDesk() {
 
         <Dialog open={setConfigDialogOpen} onOpenChange={setSetConfigDialogOpen}>
           <DialogContent
-            className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-700/80 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 text-slate-100 shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8"
+            className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#0b4f91]/70 bg-gradient-to-br from-[#0a6fd8] via-[#0bb5ff] to-[#0580c9] p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8"
           >
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-slate-100">
+              <DialogTitle className="text-xl font-extrabold text-white">
                 Configurar início do set {currentSetNumber}
               </DialogTitle>
-              <DialogDescription className="text-sm text-slate-300">
+              <DialogDescription className="text-sm font-semibold text-blue-50/90">
                 Defina as numerações e escolhas iniciais para liberar os controles deste set.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
               {isFirstSet && (
                 <section className="space-y-3">
-                  <h3 className="text-base font-semibold text-slate-100">Numeração das duplas</h3>
+                  <h3 className="text-base font-bold text-white">Numeração das duplas</h3>
                   <div className="grid gap-4 md:grid-cols-2">
                     {(['A', 'B'] as const).map(teamKey => {
                       const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
@@ -2202,18 +2202,18 @@ export default function RefereeDesk() {
                       const players = teamKey === 'A' ? playersTeamA : playersTeamB;
                       return (
                         <div key={teamKey} className="space-y-3">
-                          <h4 className="text-sm font-semibold text-slate-100">{teamName}</h4>
+                          <h4 className="text-sm font-semibold text-blue-50">{teamName}</h4>
                           <div className="space-y-3">
                             {jerseyNumbers.map(number => {
                               const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
                               return (
                                 <div key={number} className="space-y-1">
-                                  <Label className="text-xs font-medium text-slate-300">Jogador número {number}</Label>
+                                  <Label className="text-xs font-semibold text-blue-50/90">Jogador número {number}</Label>
                                   <Select
                                     value={typeof value === 'number' ? String(value) : undefined}
                                     onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
                                   >
-                                    <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                                    <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                                       <SelectValue placeholder="Selecione um atleta" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -2236,15 +2236,15 @@ export default function RefereeDesk() {
               )}
 
               <section className="space-y-3">
-                <h3 className="text-base font-semibold text-slate-100">Escolhas iniciais</h3>
+                <h3 className="text-base font-bold text-white">Escolhas iniciais</h3>
                 {requiresCoinToss ? (
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-slate-300">Quem venceu o cara ou coroa?</Label>
+                    <Label className="text-xs font-semibold text-blue-50/90">Quem venceu o cara ou coroa?</Label>
                     <Select
                       value={coinWinnerSelection ?? undefined}
                       onValueChange={val => handleCoinWinnerChange(val as 'A' | 'B')}
                     >
-                      <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                      <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                         <SelectValue placeholder="Selecione a dupla vencedora" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2254,18 +2254,18 @@ export default function RefereeDesk() {
                     </Select>
                   </div>
                 ) : (
-                  <p className="rounded-md bg-slate-800/60 px-3 py-2 text-xs text-slate-200">
+                  <p className="rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-blue-50">
                     A dupla {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
                   </p>
                 )}
 
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium text-slate-300">Escolha da dupla {firstChoiceTeamName}</Label>
+                  <Label className="text-xs font-semibold text-blue-50/90">Escolha da dupla {firstChoiceTeamName}</Label>
                   <Select
                     value={firstChoiceOption}
                     onValueChange={val => handleFirstChoiceOptionChange(val as CoinChoice)}
                   >
-                    <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                    <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2279,12 +2279,12 @@ export default function RefereeDesk() {
                 {firstChoiceOption === 'side' ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-300">Lado escolhido por {firstChoiceTeamName}</Label>
+                      <Label className="text-xs font-semibold text-blue-50/90">Lado escolhido por {firstChoiceTeamName}</Label>
                       <Select
                         value={sideSelections[firstChoiceTeamState] ?? undefined}
                         onValueChange={val => handleSideSelectionChange(firstChoiceTeamState, val as CourtSide)}
                       >
-                        <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                        <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                           <SelectValue placeholder="Selecione o lado" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2294,12 +2294,12 @@ export default function RefereeDesk() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-300">Escolha da dupla {secondChoiceTeamName}</Label>
+                      <Label className="text-xs font-semibold text-blue-50/90">Escolha da dupla {secondChoiceTeamName}</Label>
                       <Select
                         value={secondChoiceServeDecision ?? undefined}
                         onValueChange={val => handleSecondChoiceDecisionChange(val as 'serve' | 'receive')}
                       >
-                        <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                        <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                           <SelectValue placeholder="Selecione a opção" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2311,12 +2311,12 @@ export default function RefereeDesk() {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-slate-300">Lado escolhido por {secondChoiceTeamName}</Label>
+                    <Label className="text-xs font-semibold text-blue-50/90">Lado escolhido por {secondChoiceTeamName}</Label>
                     <Select
                       value={sideSelections[secondTeamForChoices] ?? undefined}
                       onValueChange={val => handleSideSelectionChange(secondTeamForChoices, val as CourtSide)}
                     >
-                      <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                      <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                         <SelectValue placeholder="Selecione o lado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2329,8 +2329,8 @@ export default function RefereeDesk() {
               </section>
 
               <section className="space-y-3">
-                <h3 className="text-base font-semibold text-slate-100">Ordem de saque</h3>
-                <p className="text-xs text-slate-300">
+                <h3 className="text-base font-bold text-white">Ordem de saque</h3>
+                <p className="text-xs font-semibold text-blue-50/90">
                   Defina a sequência de sacadores para cada dupla. A ordem será utilizada sempre que a dupla recuperar o saque.
                 </p>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -2339,17 +2339,17 @@ export default function RefereeDesk() {
                     const positions = teamKey === 'A' ? servicePositionsA : servicePositionsB;
                     return (
                       <div key={teamKey} className="space-y-3">
-                        <h4 className="text-sm font-semibold text-slate-100">{teamName}</h4>
+                        <h4 className="text-sm font-semibold text-blue-50">{teamName}</h4>
                         {positions.map((_, index) => {
                           const currentValue = teamSetupForm[teamKey].serviceOrder[index] ?? positions[index];
                           return (
                             <div key={`${teamKey}-service-${index}`} className="space-y-1">
-                              <Label className="text-xs font-medium text-slate-300">{index + 1}º sacador</Label>
+                              <Label className="text-xs font-semibold text-blue-50/90">{index + 1}º sacador</Label>
                               <Select
                                 value={currentValue ? String(currentValue) : undefined}
                                 onValueChange={val => handleServiceOrderChange(teamKey, index, Number(val))}
                               >
-                                <SelectTrigger className="border border-slate-600/70 bg-slate-800/80 text-slate-100 hover:bg-slate-800">
+                                <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
                                   <SelectValue placeholder="Selecione o atleta" />
                                 </SelectTrigger>
                                 <SelectContent>
