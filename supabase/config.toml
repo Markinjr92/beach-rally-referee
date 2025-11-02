@@ -1,1 +1,13 @@
 project_id = "lssbsmbjalsugejuxswa"
+
+[functions.admin-user-management]
+verify_jwt = true
+
+[functions.admin-create-user]
+verify_jwt = true
+
+[functions.admin-update-user]
+verify_jwt = true
+
+[functions.admin-reset-password]
+verify_jwt = true

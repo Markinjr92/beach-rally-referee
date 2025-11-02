@@ -6,13 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Shield } from "lucide-react";
+import { Loader2, RefreshCw, Shield, UserPlus, Edit, KeyRound } from "lucide-react";
+import { UserFormDialog } from "./UserFormDialog";
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
 
 type AdminListUser = {
   user_id: string;
   email: string | null;
   name: string | null;
   roles: string[];
+  is_active?: boolean;
 };
 
 type AdminUserManagementResponse = {
@@ -25,6 +28,9 @@ export const AdminUserManagement = () => {
   const [users, setUsers] = useState<AdminListUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showUserDialog, setShowUserDialog] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AdminListUser | null>(null);
   const { toast } = useToast();
 
   const handleError = useCallback(
@@ -71,33 +77,60 @@ export const AdminUserManagement = () => {
     setIsLoading(false);
   }, [handleError]);
 
+  const handleCreateUser = () => {
+    setSelectedUser(null);
+    setShowUserDialog(true);
+  };
+
+  const handleEditUser = (user: AdminListUser) => {
+    setSelectedUser(user);
+    setShowUserDialog(true);
+  };
+
+  const handleResetPassword = (user: AdminListUser) => {
+    setSelectedUser(user);
+    setShowPasswordDialog(true);
+  };
+
+  const handleSuccess = () => {
+    toast({
+      title: "Sucesso",
+      description: "Operação realizada com sucesso",
+    });
+    void fetchUsers();
+  };
+
   useEffect(() => {
     void fetchUsers();
   }, [fetchUsers]);
 
   return (
-    <Card className="bg-white">
-      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Administração de Usuários
-          </CardTitle>
-          <CardDescription>
-            Visualize os usuários cadastrados e suas permissões principais.
-          </CardDescription>
-        </div>
-        <Button type="button" variant="outline" onClick={() => void fetchUsers()} disabled={isLoading}>
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <span className="flex items-center">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Atualizar
-            </span>
-          )}
-        </Button>
-      </CardHeader>
+    <>
+      <Card className="bg-white">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Administração de Usuários
+            </CardTitle>
+            <CardDescription>
+              Gerencie usuários, permissões e senhas do sistema.
+            </CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" onClick={handleCreateUser}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Criar Usuário
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void fetchUsers()} disabled={isLoading}>
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </CardHeader>
       <CardContent className="space-y-4">
         {errorMessage && (
           <Alert variant="destructive">
@@ -121,7 +154,9 @@ export const AdminUserManagement = () => {
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Nome</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Perfis</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -129,6 +164,11 @@ export const AdminUserManagement = () => {
                   <TableRow key={user.user_id}>
                     <TableCell className="font-medium">{user.email ?? "-"}</TableCell>
                     <TableCell>{user.name ?? "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={user.is_active ? "default" : "secondary"}>
+                        {user.is_active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       {user.roles.length === 0 ? (
                         <Badge variant="outline" className="uppercase text-xs text-muted-foreground">
@@ -144,6 +184,24 @@ export const AdminUserManagement = () => {
                         </div>
                       )}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditUser(user)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleResetPassword(user)}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -152,5 +210,27 @@ export const AdminUserManagement = () => {
         )}
       </CardContent>
     </Card>
+
+    <UserFormDialog
+      open={showUserDialog}
+      onOpenChange={setShowUserDialog}
+      userId={selectedUser?.user_id}
+      userData={selectedUser ? {
+        name: selectedUser.name || "",
+        email: selectedUser.email || "",
+        roles: selectedUser.roles,
+        isActive: selectedUser.is_active,
+      } : undefined}
+      onSuccess={handleSuccess}
+    />
+
+    <ResetPasswordDialog
+      open={showPasswordDialog}
+      onOpenChange={setShowPasswordDialog}
+      userId={selectedUser?.user_id || ""}
+      userName={selectedUser?.name || selectedUser?.email || ""}
+      onSuccess={handleSuccess}
+    />
+    </>
   );
 };
