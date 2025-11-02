@@ -595,6 +595,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_admin_user_list: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          roles: string[]
+          updated_at: string
+        }[]
+      }
       get_user_permissions: { Args: { user_uuid: string }; Returns: string[] }
       get_user_roles: { Args: { user_uuid: string }; Returns: string[] }
       has_role: { Args: { role_name: string; uid?: string }; Returns: boolean }
