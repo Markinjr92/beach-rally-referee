@@ -49,24 +49,29 @@ alter table public.match_states enable row level security;
 alter table public.match_events enable row level security;
 alter table public.match_timeouts enable row level security;
 
--- Policies: read for authenticated users
-create policy if not exists "authenticated can read match_states" on public.match_states
+drop policy if exists "authenticated can read match_states" on public.match_states;
+create policy "authenticated can read match_states" on public.match_states
   for select using (auth.uid() is not null);
 
-create policy if not exists "authenticated can read match_events" on public.match_events
+drop policy if exists "authenticated can read match_events" on public.match_events;
+create policy "authenticated can read match_events" on public.match_events
   for select using (auth.uid() is not null);
 
-create policy if not exists "authenticated can read match_timeouts" on public.match_timeouts
+drop policy if exists "authenticated can read match_timeouts" on public.match_timeouts;
+create policy "authenticated can read match_timeouts" on public.match_timeouts
   for select using (auth.uid() is not null);
 
 -- Policies: admin manage
-create policy if not exists "admin manage match_states" on public.match_states
+drop policy if exists "admin manage match_states" on public.match_states;
+create policy "admin manage match_states" on public.match_states
   for all using (public.user_has_permission(auth.uid(), 'tournament.manage'));
 
-create policy if not exists "admin manage match_events" on public.match_events
+drop policy if exists "admin manage match_events" on public.match_events;
+create policy "admin manage match_events" on public.match_events
   for all using (public.user_has_permission(auth.uid(), 'tournament.manage'));
 
-create policy if not exists "admin manage match_timeouts" on public.match_timeouts
+drop policy if exists "admin manage match_timeouts" on public.match_timeouts;
+create policy "admin manage match_timeouts" on public.match_timeouts
   for all using (public.user_has_permission(auth.uid(), 'tournament.manage'));
 
 -- Keep updated_at in sync
@@ -77,6 +82,8 @@ begin
   return new;
 end;
 $$ language plpgsql;
+
+drop trigger if exists set_match_states_updated_at on public.match_states;
 
 create trigger set_match_states_updated_at
 before update on public.match_states
