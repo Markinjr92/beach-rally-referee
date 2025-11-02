@@ -29,7 +29,6 @@ A função recebe requisições autenticadas e retorna a lista de usuários e su
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `SUPABASE_ANON_KEY`
-   - `ADMIN_FN_ALLOWED_ORIGINS` com uma lista de origens separados por vírgula (ex.: `http://0.0.0.0:8080,http://localhost:8080`).
 2. Execute o deploy:
 
    ```bash
@@ -44,8 +43,6 @@ A função recebe requisições autenticadas e retorna a lista de usuários e su
   - `Vary: Origin`
   - `Access-Control-Allow-Methods: GET,POST,OPTIONS`
   - `Access-Control-Allow-Headers: authorization, x-client-info, apikey, content-type`
-
-> **Dica:** quando desenvolver localmente, defina `ADMIN_FN_ALLOWED_ORIGINS` com o(s) domínio(s) usado(s) no front-end para evitar erros de CORS ao chamar `supabase.functions.invoke('admin-user-management', ...)`.
 
 ## Migrações SQL
 
