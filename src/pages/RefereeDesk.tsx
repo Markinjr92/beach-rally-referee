@@ -69,6 +69,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { parseGameModality, parseNumberArray } from "@/utils/parsers";
 
 type CoinSide = "heads" | "tails";
+type SetConfigStep =
+  | "jersey"
+  | "coin"
+  | "firstChoice"
+  | "secondChoice"
+  | "serviceOrderA"
+  | "serviceOrderB";
 
 const mainCategories = [
   { value: 'ATTACK', label: 'Ataque' },
@@ -106,6 +113,7 @@ export default function RefereeDesk() {
   const fallbackWarningDisplayed = useRef(false);
   const offlineNoticeDisplayed = useRef(false);
   const [setConfigDialogOpen, setSetConfigDialogOpen] = useState(false);
+  const [setConfigStep, setSetConfigStep] = useState(0);
   const [teamSetupForm, setTeamSetupForm] = useState<Record<'A' | 'B', { jerseyAssignment: Record<string, number | null>; serviceOrder: number[] }>>({
     A: { jerseyAssignment: {}, serviceOrder: [] },
     B: { jerseyAssignment: {}, serviceOrder: [] },
@@ -177,6 +185,7 @@ export default function RefereeDesk() {
   const isCurrentSetConfigured = Boolean(currentSetConfig?.isConfigured);
   const previousCoinWinner = previousSetConfig?.coinToss?.winner;
   const previousCoinLoser = previousSetConfig?.coinToss?.loser ?? (previousCoinWinner ? (previousCoinWinner === 'A' ? 'B' : 'A') : undefined);
+  const isFirstSet = currentSetNumber === 1;
   const requiresCoinToss = currentSetNumber === 1 || currentSetNumber >= 3;
 
   const handleCoinWinnerChange = useCallback((team: 'A' | 'B') => {
@@ -245,45 +254,76 @@ export default function RefereeDesk() {
     []
   );
 
-  const isSetConfigurationValid = useMemo(() => {
-    const validateTeam = (team: 'A' | 'B') => {
+  const handleServiceOrderPreset = useCallback(
+    (team: 'A' | 'B', order: number[]) => {
+      setTeamSetupForm(prev => ({
+        ...prev,
+        [team]: {
+          ...prev[team],
+          serviceOrder: [...order],
+        },
+      }));
+    },
+    []
+  );
+
+  const getTeamPlayerCount = useCallback(
+    (team: 'A' | 'B') => {
       const players = getPlayersByTeam(team);
       const defaultOrder = getDefaultServiceOrder(team);
-      const playerCount = Math.max(players.length, defaultOrder.length);
-      const assignment = teamSetupForm[team];
+      return Math.max(players.length, defaultOrder.length);
+    },
+    [getDefaultServiceOrder, getPlayersByTeam]
+  );
+
+  const isTeamJerseyConfigured = useCallback(
+    (team: 'A' | 'B') => {
+      const playerCount = getTeamPlayerCount(team);
+      const assignment = teamSetupForm[team].jerseyAssignment;
       const assignedPlayers = new Set<number>();
 
       for (let index = 1; index <= playerCount; index += 1) {
-        const value = assignment.jerseyAssignment[String(index)];
+        const value = assignment[String(index)];
         if (typeof value !== 'number' || Number.isNaN(value)) {
           return false;
         }
         assignedPlayers.add(value);
       }
 
-      if (assignedPlayers.size < playerCount) {
-        return false;
-      }
+      return assignedPlayers.size >= playerCount;
+    },
+    [getTeamPlayerCount, teamSetupForm]
+  );
 
-      const orderSource = assignment.serviceOrder.length ? [...assignment.serviceOrder] : [...defaultOrder];
-      defaultOrder.forEach(num => {
-        if (!orderSource.includes(num)) {
-          orderSource.push(num);
+  const isTeamServiceOrderConfigured = useCallback(
+    (team: 'A' | 'B') => {
+      const defaultOrder = getDefaultServiceOrder(team);
+      const playerCount = getTeamPlayerCount(team);
+      const source = teamSetupForm[team].serviceOrder.length
+        ? [...teamSetupForm[team].serviceOrder]
+        : [...defaultOrder];
+
+      defaultOrder.forEach(number => {
+        if (!source.includes(number)) {
+          source.push(number);
         }
       });
 
-      const orderSet = new Set<number>();
+      const uniqueOrder = new Set<number>();
       for (let index = 0; index < playerCount; index += 1) {
-        const value = orderSource[index];
+        const value = source[index];
         if (typeof value !== 'number' || Number.isNaN(value)) {
           return false;
         }
-        orderSet.add(value);
+        uniqueOrder.add(value);
       }
 
-      return orderSet.size >= playerCount;
-    };
+      return uniqueOrder.size >= playerCount;
+    },
+    [getDefaultServiceOrder, getTeamPlayerCount, teamSetupForm]
+  );
 
+  const isSetConfigurationValid = useMemo(() => {
     const firstTeam = firstChoiceTeamState;
     const secondTeam = firstTeam === 'A' ? 'B' : 'A';
     const sideTeam = firstChoiceOption === 'side' ? firstTeam : secondTeam;
@@ -295,19 +335,76 @@ export default function RefereeDesk() {
       coinValid &&
       secondChoiceValid &&
       sideSelected &&
-      validateTeam('A') &&
-      validateTeam('B')
+      isTeamJerseyConfigured('A') &&
+      isTeamJerseyConfigured('B') &&
+      isTeamServiceOrderConfigured('A') &&
+      isTeamServiceOrderConfigured('B')
     );
   }, [
-    teamSetupForm,
     firstChoiceTeamState,
     firstChoiceOption,
     sideSelections,
     secondChoiceServeDecision,
     requiresCoinToss,
     coinWinnerSelection,
-    getPlayersByTeam,
-    getDefaultServiceOrder,
+    isTeamJerseyConfigured,
+    isTeamServiceOrderConfigured,
+  ]);
+
+  const setConfigSteps = useMemo<SetConfigStep[]>(() => {
+    const steps: SetConfigStep[] = [];
+    if (isFirstSet) {
+      steps.push('jersey');
+    }
+    steps.push('coin', 'firstChoice', 'secondChoice', 'serviceOrderA', 'serviceOrderB');
+    return steps;
+  }, [isFirstSet]);
+
+  const currentConfigStep = useMemo<SetConfigStep | null>(() => {
+    if (!setConfigSteps.length) {
+      return null;
+    }
+    const safeIndex = Math.min(setConfigStep, setConfigSteps.length - 1);
+    return setConfigSteps[safeIndex] ?? null;
+  }, [setConfigStep, setConfigSteps]);
+
+  const isCurrentStepValid = useMemo(() => {
+    if (!currentConfigStep) {
+      return true;
+    }
+
+    switch (currentConfigStep) {
+      case 'jersey':
+        return isTeamJerseyConfigured('A') && isTeamJerseyConfigured('B');
+      case 'coin':
+        return requiresCoinToss ? coinWinnerSelection !== null : true;
+      case 'firstChoice':
+        return firstChoiceOption === 'side'
+          ? sideSelections[firstChoiceTeamState] !== null
+          : true;
+      case 'secondChoice': {
+        const secondTeam = firstChoiceTeamState === 'A' ? 'B' : 'A';
+        return firstChoiceOption === 'side'
+          ? secondChoiceServeDecision !== null
+          : sideSelections[secondTeam] !== null;
+      }
+      case 'serviceOrderA':
+        return isTeamServiceOrderConfigured('A');
+      case 'serviceOrderB':
+        return isTeamServiceOrderConfigured('B');
+      default:
+        return true;
+    }
+  }, [
+    coinWinnerSelection,
+    currentConfigStep,
+    firstChoiceOption,
+    firstChoiceTeamState,
+    isTeamJerseyConfigured,
+    isTeamServiceOrderConfigured,
+    requiresCoinToss,
+    secondChoiceServeDecision,
+    sideSelections,
   ]);
 
 
@@ -748,6 +845,8 @@ export default function RefereeDesk() {
     if (!setConfigDialogOpen || !game || !gameState) {
       return;
     }
+
+    setSetConfigStep(0);
 
     const buildTeamFormState = (
       team: 'A' | 'B',
@@ -1631,10 +1730,273 @@ export default function RefereeDesk() {
   const secondChoiceTeamName = secondTeamForChoices === 'A' ? game.teamA.name : game.teamB.name;
   const sideChoiceTeamForDisplay = firstChoiceOption === 'side' ? firstChoiceTeamState : secondTeamForChoices;
   const sideChoiceTeamName = sideChoiceTeamForDisplay === 'A' ? game.teamA.name : game.teamB.name;
+  const totalSteps = setConfigSteps.length;
+  const safeStepIndex = totalSteps ? Math.min(setConfigStep, totalSteps - 1) : 0;
+  const isLastStep = totalSteps ? safeStepIndex === totalSteps - 1 : true;
+  const questionTitle = currentConfigStep
+    ? (() => {
+        switch (currentConfigStep) {
+          case 'jersey':
+            return 'Numeração das duplas';
+          case 'coin':
+            return 'Quem venceu o cara ou coroa?';
+          case 'firstChoice':
+            return 'Escolha da dupla vencedora';
+          case 'secondChoice':
+            return 'Escolha da dupla perdedora';
+          case 'serviceOrderA':
+            return `Ordem de saque - ${game.teamA.name}`;
+          case 'serviceOrderB':
+            return `Ordem de saque - ${game.teamB.name}`;
+          default:
+            return '';
+        }
+      })()
+    : '';
+
+  const renderServiceOrderStep = (teamKey: 'A' | 'B') => {
+    const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
+    const positions = teamKey === 'A' ? servicePositionsA : servicePositionsB;
+    const currentOrder = teamSetupForm[teamKey].serviceOrder.length
+      ? teamSetupForm[teamKey].serviceOrder
+      : positions;
+
+    if (positions.length === 2) {
+      const forwardOrder = [...positions];
+      const reverseOrder = [...positions].reverse();
+      const orderOptions = [forwardOrder, reverseOrder];
+
+      return (
+        <div className="space-y-4">
+          <p className="text-sm font-semibold text-blue-50/90">
+            Escolha a sequência de sacadores para {teamName}. A ordem será utilizada sempre que a dupla recuperar o saque.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {orderOptions.map((order, index) => {
+              const isActive = order.every((value, positionIndex) => currentOrder[positionIndex] === value);
+              const label = order.join(', ');
+              const description = order
+                .map(number => `Jogador nº ${number} (${getPlayerNameByJersey(teamKey, number)})`)
+                .join(' → ');
+
+              return (
+                <Button
+                  key={`${teamKey}-order-option-${index}`}
+                  variant="outline"
+                  className={`h-full rounded-2xl border-white/30 p-4 text-left transition ${
+                    isActive
+                      ? 'bg-white text-slate-900 hover:bg-white/90'
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                  onClick={() => handleServiceOrderPreset(teamKey, order)}
+                >
+                  <span className="text-lg font-extrabold">{label}</span>
+                  <span className="mt-2 block text-xs font-semibold opacity-80">{description}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-blue-50/90">
+          Defina a sequência de sacadores para {teamName}. A ordem será utilizada sempre que a equipe recuperar o saque.
+        </p>
+        {positions.map((_, index) => {
+          const currentValue = teamSetupForm[teamKey].serviceOrder[index] ?? positions[index];
+          return (
+            <div key={`${teamKey}-service-${index}`} className="space-y-1">
+              <Label className="text-xs font-semibold text-blue-50/90">{index + 1}º sacador</Label>
+              <Select
+                value={currentValue ? String(currentValue) : undefined}
+                onValueChange={val => handleServiceOrderChange(teamKey, index, Number(val))}
+              >
+                <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <SelectValue placeholder="Selecione o atleta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {positions.map(number => (
+                    <SelectItem key={`${teamKey}-order-${number}`} value={String(number)}>
+                      Jogador nº {number} ({getPlayerNameByJersey(teamKey, number)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderStepContent = () => {
+    if (!currentConfigStep) {
+      return null;
+    }
+
+    switch (currentConfigStep) {
+      case 'jersey':
+        return (
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-blue-50/90">
+              Defina a numeração dos jogadores de cada dupla para liberar os próximos passos do set.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {(['A', 'B'] as const).map(teamKey => {
+                const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
+                const jerseyNumbers = teamKey === 'A' ? jerseyNumbersA : jerseyNumbersB;
+                const players = teamKey === 'A' ? playersTeamA : playersTeamB;
+                return (
+                  <div key={teamKey} className="space-y-3">
+                    <h4 className="text-sm font-semibold text-blue-50">{teamName}</h4>
+                    <div className="space-y-3">
+                      {jerseyNumbers.map(number => {
+                        const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
+                        return (
+                          <div key={number} className="space-y-1">
+                            <Label className="text-xs font-semibold text-blue-50/90">Jogador número {number}</Label>
+                            <Select
+                              value={typeof value === 'number' ? String(value) : undefined}
+                              onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
+                            >
+                              <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                                <SelectValue placeholder="Selecione um atleta" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {players.map((player, index) => (
+                                  <SelectItem key={player.name} value={String(index)}>
+                                    {player.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      case 'coin':
+        return (
+          <div className="space-y-4">
+            {requiresCoinToss ? (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-blue-50/90">Quem venceu o cara ou coroa?</Label>
+                <Select
+                  value={coinWinnerSelection ?? undefined}
+                  onValueChange={val => handleCoinWinnerChange(val as 'A' | 'B')}
+                >
+                  <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                    <SelectValue placeholder="Selecione a dupla vencedora" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A">{game.teamA.name}</SelectItem>
+                    <SelectItem value="B">{game.teamB.name}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <p className="rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-blue-50">
+                A dupla {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
+              </p>
+            )}
+          </div>
+        );
+      case 'firstChoice':
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-blue-50/90">
+                Escolha da dupla vencedora ({firstChoiceTeamName})
+              </Label>
+              <Select value={firstChoiceOption} onValueChange={val => handleFirstChoiceOptionChange(val as CoinChoice)}>
+                <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <SelectValue placeholder="Selecione a opção" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="serve">Sacar primeiro</SelectItem>
+                  <SelectItem value="receive">Receber primeiro</SelectItem>
+                  <SelectItem value="side">Escolher lado da quadra</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {firstChoiceOption === 'side' && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-blue-50/90">
+                  Qual lado {firstChoiceTeamName} escolhe?
+                </Label>
+                <Select
+                  value={sideSelections[firstChoiceTeamState] ?? undefined}
+                  onValueChange={val => handleSideSelectionChange(firstChoiceTeamState, val as CourtSide)}
+                >
+                  <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                    <SelectValue placeholder="Selecione o lado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left">Lado esquerdo</SelectItem>
+                    <SelectItem value="right">Lado direito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        );
+      case 'secondChoice':
+        return firstChoiceOption === 'side' ? (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-blue-50/90">
+              Escolha da dupla {secondChoiceTeamName}
+            </Label>
+            <Select
+              value={secondChoiceServeDecision ?? undefined}
+              onValueChange={val => handleSecondChoiceDecisionChange(val as 'serve' | 'receive')}
+            >
+              <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                <SelectValue placeholder="Selecione a opção" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="serve">Sacar primeiro</SelectItem>
+                <SelectItem value="receive">Receber primeiro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-blue-50/90">
+              Lado escolhido por {secondChoiceTeamName}
+            </Label>
+            <Select
+              value={sideSelections[secondTeamForChoices] ?? undefined}
+              onValueChange={val => handleSideSelectionChange(secondTeamForChoices, val as CourtSide)}
+            >
+              <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                <SelectValue placeholder="Selecione o lado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="left">Lado esquerdo</SelectItem>
+                <SelectItem value="right">Lado direito</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      case 'serviceOrderA':
+        return renderServiceOrderStep('A');
+      case 'serviceOrderB':
+        return renderServiceOrderStep('B');
+      default:
+        return null;
+    }
+  };
 
   const coinFaceToShow = (coinResult ?? 'heads') as CoinSide;
   const gameIsEnded = gameState.isGameEnded;
-  const isFirstSet = currentSetNumber === 1;
   const setConfigButtonLabel = isCurrentSetConfigured
     ? 'Editar início'
     : isFirstSet
@@ -2179,203 +2541,72 @@ export default function RefereeDesk() {
 
         </div>
 
-        <Dialog open={setConfigDialogOpen} onOpenChange={setSetConfigDialogOpen}>
+        <Dialog
+          open={setConfigDialogOpen}
+          onOpenChange={open => {
+            setSetConfigDialogOpen(open);
+            if (!open) {
+              setSetConfigStep(0);
+            }
+          }}
+        >
           <DialogContent
             className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#0b4f91]/70 bg-gradient-to-br from-[#0a6fd8] via-[#0bb5ff] to-[#0580c9] p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8"
           >
-            <DialogHeader>
+            <DialogHeader className="space-y-4">
               <DialogTitle className="text-xl font-extrabold text-white">
                 Configurar início do set {currentSetNumber}
               </DialogTitle>
               <DialogDescription className="text-sm font-semibold text-blue-50/90">
                 Defina as numerações e escolhas iniciais para liberar os controles deste set.
               </DialogDescription>
+              <div className="flex flex-col gap-1 rounded-2xl bg-white/10 p-3 text-xs font-semibold text-blue-50/90 sm:flex-row sm:items-center sm:justify-between">
+                <span>Pergunta {totalSteps > 0 ? safeStepIndex + 1 : 0} de {totalSteps}</span>
+                {questionTitle ? (
+                  <span className="text-sm font-bold text-white sm:text-base">{questionTitle}</span>
+                ) : null}
+              </div>
             </DialogHeader>
-            <div className="space-y-6">
-              {isFirstSet && (
-                <section className="space-y-3">
-                  <h3 className="text-base font-bold text-white">Numeração das duplas</h3>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {(['A', 'B'] as const).map(teamKey => {
-                      const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
-                      const jerseyNumbers = teamKey === 'A' ? jerseyNumbersA : jerseyNumbersB;
-                      const players = teamKey === 'A' ? playersTeamA : playersTeamB;
-                      return (
-                        <div key={teamKey} className="space-y-3">
-                          <h4 className="text-sm font-semibold text-blue-50">{teamName}</h4>
-                          <div className="space-y-3">
-                            {jerseyNumbers.map(number => {
-                              const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
-                              return (
-                                <div key={number} className="space-y-1">
-                                  <Label className="text-xs font-semibold text-blue-50/90">Jogador número {number}</Label>
-                                  <Select
-                                    value={typeof value === 'number' ? String(value) : undefined}
-                                    onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
-                                  >
-                                    <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                                      <SelectValue placeholder="Selecione um atleta" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {players.map((player, index) => (
-                                        <SelectItem key={player.name} value={String(index)}>
-                                          {player.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-
-              <section className="space-y-3">
-                <h3 className="text-base font-bold text-white">Escolhas iniciais</h3>
-                {requiresCoinToss ? (
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-blue-50/90">Quem venceu o cara ou coroa?</Label>
-                    <Select
-                      value={coinWinnerSelection ?? undefined}
-                      onValueChange={val => handleCoinWinnerChange(val as 'A' | 'B')}
-                    >
-                      <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                        <SelectValue placeholder="Selecione a dupla vencedora" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">{game.teamA.name}</SelectItem>
-                        <SelectItem value="B">{game.teamB.name}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <p className="rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-blue-50">
-                    A dupla {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
-                  </p>
-                )}
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-blue-50/90">Escolha da dupla {firstChoiceTeamName}</Label>
-                  <Select
-                    value={firstChoiceOption}
-                    onValueChange={val => handleFirstChoiceOptionChange(val as CoinChoice)}
-                  >
-                    <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="serve">Sacar primeiro</SelectItem>
-                      <SelectItem value="receive">Receber primeiro</SelectItem>
-                      <SelectItem value="side">Escolher lado da quadra</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {firstChoiceOption === 'side' ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-blue-50/90">Lado escolhido por {firstChoiceTeamName}</Label>
-                      <Select
-                        value={sideSelections[firstChoiceTeamState] ?? undefined}
-                        onValueChange={val => handleSideSelectionChange(firstChoiceTeamState, val as CourtSide)}
-                      >
-                        <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                          <SelectValue placeholder="Selecione o lado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="left">Lado esquerdo</SelectItem>
-                          <SelectItem value="right">Lado direito</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-blue-50/90">Escolha da dupla {secondChoiceTeamName}</Label>
-                      <Select
-                        value={secondChoiceServeDecision ?? undefined}
-                        onValueChange={val => handleSecondChoiceDecisionChange(val as 'serve' | 'receive')}
-                      >
-                        <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                          <SelectValue placeholder="Selecione a opção" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="serve">Sacar primeiro</SelectItem>
-                          <SelectItem value="receive">Receber primeiro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-blue-50/90">Lado escolhido por {secondChoiceTeamName}</Label>
-                    <Select
-                      value={sideSelections[secondTeamForChoices] ?? undefined}
-                      onValueChange={val => handleSideSelectionChange(secondTeamForChoices, val as CourtSide)}
-                    >
-                      <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                        <SelectValue placeholder="Selecione o lado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left">Lado esquerdo</SelectItem>
-                        <SelectItem value="right">Lado direito</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </section>
-
-              <section className="space-y-3">
-                <h3 className="text-base font-bold text-white">Ordem de saque</h3>
-                <p className="text-xs font-semibold text-blue-50/90">
-                  Defina a sequência de sacadores para cada dupla. A ordem será utilizada sempre que a dupla recuperar o saque.
-                </p>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {(['A', 'B'] as const).map(teamKey => {
-                    const teamName = teamKey === 'A' ? game.teamA.name : game.teamB.name;
-                    const positions = teamKey === 'A' ? servicePositionsA : servicePositionsB;
-                    return (
-                      <div key={teamKey} className="space-y-3">
-                        <h4 className="text-sm font-semibold text-blue-50">{teamName}</h4>
-                        {positions.map((_, index) => {
-                          const currentValue = teamSetupForm[teamKey].serviceOrder[index] ?? positions[index];
-                          return (
-                            <div key={`${teamKey}-service-${index}`} className="space-y-1">
-                              <Label className="text-xs font-semibold text-blue-50/90">{index + 1}º sacador</Label>
-                              <Select
-                                value={currentValue ? String(currentValue) : undefined}
-                                onValueChange={val => handleServiceOrderChange(teamKey, index, Number(val))}
-                              >
-                                <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                                  <SelectValue placeholder="Selecione o atleta" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {positions.map(number => (
-                                    <SelectItem key={`${teamKey}-order-${number}`} value={String(number)}>
-                                      Jogador nº {number} ({getPlayerNameByJersey(teamKey, number)})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setSetConfigDialogOpen(false)}>
+            <div className="space-y-6">{renderStepContent()}</div>
+            <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSetConfigDialogOpen(false);
+                  setSetConfigStep(0);
+                }}
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+              >
                 Cancelar
               </Button>
-              <Button onClick={() => void applySetConfiguration()} disabled={!isSetConfigurationValid || isSyncing}>
-                {isSyncing ? 'Salvando...' : 'Aplicar configuração'}
-              </Button>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                {safeStepIndex > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setSetConfigStep(prev => Math.max(prev - 1, 0))}
+                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                  >
+                    Voltar
+                  </Button>
+                )}
+                {isLastStep ? (
+                  <Button
+                    onClick={() => void applySetConfiguration()}
+                    disabled={!isSetConfigurationValid || isSyncing}
+                    className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                  >
+                    {isSyncing ? 'Salvando...' : 'Aplicar configuração'}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setSetConfigStep(prev => Math.min(prev + 1, totalSteps - 1))}
+                    disabled={!isCurrentStepValid}
+                    className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                  >
+                    Próximo
+                  </Button>
+                )}
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
