@@ -21,8 +21,9 @@ const isOriginAllowed = (origin: string | null): boolean => {
   // Verifica se está na lista de origens permitidas
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   
-  // Permite domínios lovable.app
-  if (origin.includes('.lovable.app')) return true;
+  // Permite domínios do preview do Lovable
+  if (origin.includes('lovable.app')) return true;
+  if (origin.includes('lovableproject.com')) return true;
   
   return false;
 };
