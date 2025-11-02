@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
 import { supabase } from "@/integrations/supabase/client"
-import { Tables } from "@/integrations/supabase/types"
+import { Tables, TablesInsert } from "@/integrations/supabase/types"
 import { cn, formatDateToISO, normalizeString } from "@/lib/utils"
 import { formatDateShortPtBr } from "@/utils/date"
 import { useAuth } from "@/hooks/useAuth"
@@ -80,7 +80,7 @@ export default function TournamentsDB() {
     const startDateISO = formatDateToISO(form.start)
     const endDateISO = formatDateToISO(form.end)
 
-    const payload: Tables<'tournaments'>['Insert'] = {
+    const payload: TablesInsert<'tournaments'> = {
       name: trimmedName,
       status: "upcoming",
       has_statistics: !!form.hasStatistics,

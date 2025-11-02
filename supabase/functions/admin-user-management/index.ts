@@ -14,6 +14,19 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://beach-rally-referee.vercel.app",
 ];
 
+// Função para verificar se a origem é permitida
+const isOriginAllowed = (origin: string | null): boolean => {
+  if (!origin) return true; // Permite requisições sem origin
+  
+  // Verifica se está na lista de origens permitidas
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  
+  // Permite domínios lovable.app
+  if (origin.includes('.lovable.app')) return true;
+  
+  return false;
+};
+
 const ALLOWED_ORIGINS = (() => {
   const configuredOrigins = Deno.env.get("ADMIN_FN_ALLOWED_ORIGINS")
     ?.split(",")
@@ -35,7 +48,7 @@ const getCorsHeaders = (
   origin: string | null,
   accessControlRequestHeaders: string | null,
 ) => {
-  const allowOrigin = origin && ALLOWED_ORIGINS.includes(origin)
+  const allowOrigin = origin && isOriginAllowed(origin)
     ? origin
     : null;
 

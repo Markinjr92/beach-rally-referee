@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { Tables } from "@/integrations/supabase/types";
+import { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { cn, formatDateToISO, normalizeString } from "@/lib/utils";
 import { formatDateShortPtBr } from "@/utils/date";
 import { useAuth } from "@/hooks/useAuth";
@@ -250,7 +250,7 @@ export default function TournamentList() {
                       const startDateISO = formatDateToISO(formData.startDate)
                       const endDateISO = formatDateToISO(formData.endDate)
 
-                      const payload: Tables<'tournaments'>['Insert'] = {
+                      const payload: TablesInsert<'tournaments'> = {
                         name: trimmedName,
                         status: 'upcoming',
                         has_statistics: !!formData.hasStatistics,
@@ -282,7 +282,7 @@ export default function TournamentList() {
                           modality: '',
                           hasStatistics: true,
                         })
-                        const { data } = await supabase.from('tournaments').select('*').order('created_at', { descending: true })
+                        const { data } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false })
                         setTournaments((data as TournamentWithGames[]) || [])
                       }
                     }}

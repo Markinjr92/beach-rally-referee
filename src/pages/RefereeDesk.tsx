@@ -23,7 +23,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
-import { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { TablesInsert, TablesUpdate, Database } from "@/integrations/supabase/types";
 import {
   CoinChoice,
   CourtSide,
@@ -67,6 +67,8 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { parseGameModality, parseNumberArray } from "@/utils/parsers";
+
+type Json = Database['public']['Tables']['match_states']['Row']['scores'];
 
 type CoinSide = "heads" | "tails";
 type SetConfigStep =
@@ -558,11 +560,11 @@ export default function RefereeDesk() {
         team: team ?? null,
         point_category: pointCategory ?? null,
         description: description ?? null,
-        metadata: metadata ?? null,
+        metadata: (metadata ? JSON.parse(JSON.stringify(metadata)) : null) as Json,
       } satisfies TablesInsert<'match_events'>;
 
       try {
-        const { error } = await supabase.from('match_events').insert(payload);
+        const { error } = await supabase.from('match_events').insert([payload]);
         if (error) {
           throw error;
         }
@@ -1379,7 +1381,7 @@ export default function RefereeDesk() {
         sideChoiceTeam: sideTeam,
         sideSelection: sideSelection ?? 'left',
         startingServerTeam,
-        startingReceiverTeam: receivingTeam,
+        startingReceiverTeam: receivingTeam as 'A' | 'B',
         startingServerPlayer,
         coinToss: {
           performed: requiresCoinToss,

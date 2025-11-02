@@ -92,7 +92,7 @@ export const loadMatchState = async (matchId: string, game: Game) => {
   const payload = mapGameStateToRow(defaultState);
   const { error: upsertError } = await client
     .from("match_states")
-    .upsert(payload, { onConflict: "match_id", returning: "minimal", ignoreDuplicates: false });
+    .upsert([payload], { onConflict: "match_id", ignoreDuplicates: false });
 
   if (upsertError) {
     if (isTableMissingError(upsertError)) {
@@ -114,7 +114,7 @@ export const saveMatchState = async (state: GameState) => {
   const payload = mapGameStateToRow(state);
   const { error } = await client
     .from("match_states")
-    .upsert(payload, { onConflict: "match_id", returning: "minimal", ignoreDuplicates: false });
+    .upsert([payload], { onConflict: "match_id", ignoreDuplicates: false });
 
   if (!error) {
     markSupport(true);

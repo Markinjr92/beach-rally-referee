@@ -37,6 +37,11 @@ A função recebe requisições autenticadas e retorna a lista de usuários e su
 
 ### Respostas e CORS
 
+A função agora aceita automaticamente requisições de:
+- Origens configuradas localmente (localhost)
+- Domínios `.lovable.app` (ambiente de desenvolvimento/preview)
+- Origens configuradas via variável de ambiente `ADMIN_FN_ALLOWED_ORIGINS` (opcional)
+
 - OPTIONS → 200 OK com cabeçalhos CORS.
 - GET/POST → JSON com `{ ok: boolean, users?: [...] }` e os cabeçalhos:
   - `Access-Control-Allow-Origin: <origin do request>`

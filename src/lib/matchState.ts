@@ -7,7 +7,9 @@ import {
   TeamSetConfiguration,
   Timer,
 } from "@/types/volleyball";
-import { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { Tables, TablesInsert, Database } from "@/integrations/supabase/types";
+
+type Json = Database['public']['Tables']['match_states']['Row']['scores'];
 
 export type MatchStateRow = Tables<"match_states">;
 export type MatchTimeoutRow = Tables<"match_timeouts">;
@@ -455,7 +457,7 @@ export const mapGameStateToRow = (state: GameState): TablesInsert<"match_states"
       teamA: state.nextServerIndex.teamA,
       teamB: state.nextServerIndex.teamB,
     },
-    set_configurations: state.setConfigurations,
+    set_configurations: state.setConfigurations as unknown as Json,
     active_timer: state.activeTimer
       ? {
           id: state.activeTimer.id,

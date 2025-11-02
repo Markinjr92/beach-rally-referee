@@ -438,7 +438,7 @@ export default function TournamentDetailDB() {
                       onClick={async () => {
                         if (!matchForm.teamA || !matchForm.teamB || matchForm.teamA === matchForm.teamB) { toast({ title: 'Selecione equipes diferentes' }); return }
                         const selectedMode = MATCH_MODES.find((mode) => mode.value === matchForm.mode) ?? MATCH_MODES[0]
-                        const { error } = await supabase.from('matches').insert({
+                        const { error } = await supabase.from('matches').insert([{
                           tournament_id: tournament.id,
                           team_a_id: matchForm.teamA,
                           team_b_id: matchForm.teamB,
@@ -446,8 +446,8 @@ export default function TournamentDetailDB() {
                           court: matchForm.court || null,
                           status: 'scheduled',
                           best_of: selectedMode.bestOf,
-                          points_per_set: selectedMode.pointsPerSet,
-                        })
+                          points_per_set: [...selectedMode.pointsPerSet],
+                        }])
                         if (error) { toast({ title: 'Erro ao criar jogo', description: error.message }); return }
                         const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournament.id).order('scheduled_at', { ascending: true })
                         setMatches(m || [])

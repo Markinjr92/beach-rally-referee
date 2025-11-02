@@ -17,7 +17,7 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.rpc<string[]>("get_user_roles", {
+    const { data, error } = await supabase.rpc("get_user_roles", {
       user_uuid: user.id,
     });
 
@@ -33,7 +33,7 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
       setRoles([]);
       setError(error.message);
     } else {
-      setRoles(data ?? []);
+      setRoles(Array.isArray(data) ? data : []);
       setError(null);
     }
 
