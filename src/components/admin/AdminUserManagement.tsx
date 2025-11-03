@@ -73,7 +73,17 @@ export const AdminUserManagement = () => {
       return;
     }
 
-    setUsers(data.users);
+    // Normalize API response: ensure we always have user_id for keys/edit/reset
+    const apiUsers = (data.users as any[]) ?? [];
+    const normalizedUsers: AdminListUser[] = apiUsers.map((u) => ({
+      user_id: u.user_id ?? u.id,
+      email: u.email ?? null,
+      name: u.name ?? null,
+      roles: Array.isArray(u.roles) ? u.roles : [],
+      is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+    }));
+
+    setUsers(normalizedUsers);
     setIsLoading(false);
   }, [handleError]);
 
