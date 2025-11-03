@@ -6,71 +6,12 @@ type ListUsersResponse = {
   message?: string;
 };
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  "http://localhost:8080",
-  "http://localhost:3000",
-  "http://localhost:8081",
-  "http://127.0.0.1:8080",
-  "http://127.0.0.1:3000",
-  "http://173.212.199.150",
-  "https://beach-rally-referee.vercel.app",
-];
-
-// Função para verificar se a origem é permitida
-const isOriginAllowed = (origin: string | null): boolean => {
-  if (!origin) return true; // Permite requisições sem origin
-  
-  // Verifica se está na lista de origens permitidas
-  if (ALLOWED_ORIGINS.includes(origin)) return true;
-  
-  // Permite domínios do preview do Lovable
-  if (origin.includes('lovable.app')) return true;
-  if (origin.includes('lovableproject.com')) return true;
-  
-  return false;
-};
-
-const ALLOWED_ORIGINS = (() => {
-  const configuredOrigins = Deno.env.get("ADMIN_FN_ALLOWED_ORIGINS")
-    ?.split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-
-  return configuredOrigins && configuredOrigins.length > 0
-    ? configuredOrigins
-    : DEFAULT_ALLOWED_ORIGINS;
-})();
-
-const corsHeadersBase = {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, content-type, x-client-info, apikey",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Max-Age": "86400",
 } as const;
-
-const getCorsHeaders = (
-  origin: string | null,
-  accessControlRequestHeaders: string | null,
-) => {
-  const allowOrigin = origin && isOriginAllowed(origin)
-    ? origin
-    : null;
-
-  const allowHeaders = accessControlRequestHeaders?.trim()
-    ? accessControlRequestHeaders
-    : corsHeadersBase["Access-Control-Allow-Headers"];
-
-  const headers = {
-    ...corsHeadersBase,
-    "Access-Control-Allow-Headers": allowHeaders,
-    Vary: "Origin",
-    ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
-  } satisfies HeadersInit;
-
-  return {
-    headers,
-    isAllowed: allowOrigin !== null || origin === null,
-  };
-};
 
 const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersInit) =>
   new Response(JSON.stringify(body), {
@@ -79,14 +20,6 @@ const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersI
   });
 
 Deno.serve(async (req) => {
-  const origin = req.headers.get("origin");
-  const accessControlRequestHeaders = req.headers.get("access-control-request-headers");
-  const { headers: corsHeaders, isAllowed } = getCorsHeaders(origin, accessControlRequestHeaders);
-
-  if (!isAllowed) {
-    return jsonResponse(403, { ok: false, message: "Origin not allowed" }, corsHeaders);
-  }
-
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
@@ -119,7 +52,9 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: userData, error: userError } = await userClient.auth.getUser();
+    const { data: userData, error: userError } = await userClient.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    );
     if (userError || !userData?.user) {
       console.error("Failed to validate user JWT", userError);
       return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);

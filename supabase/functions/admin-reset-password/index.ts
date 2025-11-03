@@ -69,12 +69,13 @@ Deno.serve(async (req) => {
     // Resetar senha
     const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
-      { password: newPassword }
+      { password: newPassword, email_confirm: true }
     );
 
     if (resetError) {
+      console.error('Erro ao resetar senha (auth):', resetError);
       return new Response(
-        JSON.stringify({ ok: false, message: 'Erro ao resetar senha' }),
+        JSON.stringify({ ok: false, message: 'Erro ao resetar senha', details: resetError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

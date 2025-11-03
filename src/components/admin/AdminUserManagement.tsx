@@ -170,8 +170,8 @@ export const AdminUserManagement = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.user_id}>
+                {users.map((user, index) => (
+                  <TableRow key={user.user_id || user.email || String(index)}>
                     <TableCell className="font-medium">{user.email ?? "-"}</TableCell>
                     <TableCell>{user.name ?? "-"}</TableCell>
                     <TableCell>
