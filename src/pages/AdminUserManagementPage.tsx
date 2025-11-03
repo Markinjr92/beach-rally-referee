@@ -73,7 +73,7 @@ const AdminUserManagementPage = () => {
       <div className="container mx-auto px-4 py-12 space-y-10">
         <div className="flex flex-col gap-6 text-white">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <Link to="/tournaments" className="w-fit">
+            <Link to="/" className="w-fit">
               <Button
                 variant="ghost"
                 className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
