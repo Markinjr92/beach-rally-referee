@@ -1,9 +1,17 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { z } from 'npm:zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const createUserSchema = z.object({
+  email: z.string().email('Email inválido').max(255, 'Email muito longo'),
+  password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres').max(72, 'Senha muito longa'),
+  name: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo'),
+  roleIds: z.array(z.string().uuid('ID de role inválido')).optional(),
+});
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -43,7 +51,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { email, password, name, roleIds } = await req.json();
+    // Validate input
+    const body = await req.json();
+    const validation = createUserSchema.safeParse(body);
+    
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ 
+          ok: false, 
+          message: 'Dados inválidos', 
+          errors: validation.error.errors.map(e => e.message) 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { email, password, name, roleIds } = validation.data;
 
     // Criar usuário no auth
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({

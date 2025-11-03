@@ -1,9 +1,18 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { z } from 'npm:zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const updateUserSchema = z.object({
+  userId: z.string().uuid('ID de usuário inválido'),
+  name: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo').optional(),
+  email: z.string().email('Email inválido').max(255, 'Email muito longo').optional(),
+  roleIds: z.array(z.string().uuid('ID de role inválido')).optional(),
+  isActive: z.boolean().optional(),
+});
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -43,7 +52,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { userId, name, email, roleIds, isActive } = await req.json();
+    // Validate input
+    const body = await req.json();
+    const validation = updateUserSchema.safeParse(body);
+    
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ 
+          ok: false, 
+          message: 'Dados inválidos', 
+          errors: validation.error.errors.map(e => e.message) 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { userId, name, email, roleIds, isActive } = validation.data;
 
     // Atualizar informações do usuário
     if (name !== undefined) {

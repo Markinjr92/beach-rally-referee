@@ -1,9 +1,15 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { z } from 'npm:zod@3.23.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const resetPasswordSchema = z.object({
+  userId: z.string().uuid('ID de usuário inválido'),
+  newPassword: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres').max(72, 'Senha muito longa'),
+});
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -43,7 +49,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { userId, newPassword } = await req.json();
+    // Validate input
+    const body = await req.json();
+    const validation = resetPasswordSchema.safeParse(body);
+    
+    if (!validation.success) {
+      return new Response(
+        JSON.stringify({ 
+          ok: false, 
+          message: 'Dados inválidos', 
+          errors: validation.error.errors.map(e => e.message) 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { userId, newPassword } = validation.data;
 
     // Resetar senha
     const { error: resetError } = await supabaseAdmin.auth.admin.updateUserById(
