@@ -176,8 +176,8 @@ export const AdminUserManagement = () => {
                         </Badge>
                       ) : (
                         <div className="flex flex-wrap gap-1">
-                          {user.roles.map((role) => (
-                            <Badge key={role} variant="secondary" className="uppercase text-xs">
+                          {user.roles.map((role, index) => (
+                            <Badge key={`${role}-${index}`} variant="secondary" className="uppercase text-xs">
                               {role}
                             </Badge>
                           ))}

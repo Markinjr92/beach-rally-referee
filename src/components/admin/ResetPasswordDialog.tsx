@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 
 const passwordSchema = z.object({
-  newPassword: z.string().min(6, "Mínimo 6 caracteres"),
+  newPassword: z.string().min(8, "Mínimo 8 caracteres"),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Senhas não conferem",
