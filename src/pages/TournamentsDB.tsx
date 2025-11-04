@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -34,11 +35,31 @@ import { Tournament, TournamentFormatId, TournamentTeam, TieBreakerCriterion } f
 
 type Tournament = Tables<'tournaments'>
 
+type MatchFormatOption = 'melhorDe1' | 'melhorDe3'
+
+interface CreateTournamentFormState {
+  name: string
+  location: string
+  start: string
+  end: string
+  category: string
+  modality: string
+  hasStatistics: boolean
+  formatId: TournamentFormatId
+  includeThirdPlace: boolean
+  matchFormats: {
+    group: MatchFormatOption
+    knockout: MatchFormatOption
+    thirdPlace: MatchFormatOption
+  }
+  tieBreakerOrder: TieBreakerCriterion[]
+}
+
 export default function TournamentsDB() {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [statusFilter, setStatusFilter] = useState<'active' | 'completed' | 'all'>('active')
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CreateTournamentFormState>({
     name: "",
     location: "",
     start: "",
@@ -46,11 +67,16 @@ export default function TournamentsDB() {
     category: "",
     modality: "",
     hasStatistics: true,
-    formatId: "groups_and_knockout" as TournamentFormatId,
+    formatId: "groups_and_knockout",
     includeThirdPlace: true,
-    matchFormat: "melhorDe3" as "melhorDe1" | "melhorDe3",
-    tieBreakerOrder: [...defaultTieBreakerOrder] as TieBreakerCriterion[],
+    matchFormats: {
+      group: "melhorDe3",
+      knockout: "melhorDe3",
+      thirdPlace: "melhorDe3",
+    },
+    tieBreakerOrder: [...defaultTieBreakerOrder],
   })
+  const [currentStep, setCurrentStep] = useState(0)
   const { toast } = useToast()
   const { user, loading: authLoading } = useAuth()
   const { roles, loading: rolesLoading } = useUserRoles(user, authLoading)
@@ -167,7 +193,9 @@ export default function TournamentsDB() {
       }))
 
       const formatId = form.formatId
-      const matchPreset = matchFormatPresets[form.matchFormat]
+      const groupPreset = matchFormatPresets[form.matchFormats.group]
+      const knockoutPreset = matchFormatPresets[form.matchFormats.knockout]
+      const thirdPlacePreset = matchFormatPresets[form.matchFormats.thirdPlace]
 
       const structure = generateTournamentStructure({
         tournamentId: tournament.id,
@@ -175,10 +203,33 @@ export default function TournamentsDB() {
         teams: registeredTeams,
         includeThirdPlaceMatch: form.includeThirdPlace,
         baseGameConfig: {
-          format: form.matchFormat,
-          pointsPerSet: matchPreset.pointsPerSet,
-          sideSwitchSum: matchPreset.sideSwitchSum,
-          teamTimeoutsPerSet: matchPreset.teamTimeoutsPerSet,
+          category: form.category || 'Misto',
+          modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
+          hasStatistics: form.hasStatistics,
+          format: form.matchFormats.knockout,
+          pointsPerSet: knockoutPreset.pointsPerSet,
+          sideSwitchSum: knockoutPreset.sideSwitchSum,
+          teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
+        },
+        phaseConfigs: {
+          group: {
+            format: form.matchFormats.group,
+            pointsPerSet: groupPreset.pointsPerSet,
+            sideSwitchSum: groupPreset.sideSwitchSum,
+            teamTimeoutsPerSet: groupPreset.teamTimeoutsPerSet,
+          },
+          knockout: {
+            format: form.matchFormats.knockout,
+            pointsPerSet: knockoutPreset.pointsPerSet,
+            sideSwitchSum: knockoutPreset.sideSwitchSum,
+            teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
+          },
+          thirdPlace: {
+            format: form.matchFormats.thirdPlace,
+            pointsPerSet: thirdPlacePreset.pointsPerSet,
+            sideSwitchSum: thirdPlacePreset.sideSwitchSum,
+            teamTimeoutsPerSet: thirdPlacePreset.teamTimeoutsPerSet,
+          },
         },
       })
 
@@ -255,7 +306,7 @@ export default function TournamentsDB() {
             formatId,
             tieBreakerOrder: form.tieBreakerOrder,
             includeThirdPlace: form.includeThirdPlace,
-            matchFormat: form.matchFormat,
+            matchFormats: form.matchFormats,
             regulationHtml,
           }),
         )
@@ -343,6 +394,7 @@ export default function TournamentsDB() {
       .order("created_at", { ascending: false })
     setTournaments(data || [])
     setOpen(false)
+    setCurrentStep(0)
     setForm({
       name: "",
       location: "",
@@ -353,7 +405,11 @@ export default function TournamentsDB() {
       hasStatistics: true,
       formatId: "groups_and_knockout",
       includeThirdPlace: true,
-      matchFormat: "melhorDe3",
+      matchFormats: {
+        group: "melhorDe3",
+        knockout: "melhorDe3",
+        thirdPlace: "melhorDe3",
+      },
       tieBreakerOrder: [...defaultTieBreakerOrder],
     })
     toast({ title: "Torneio criado" })
@@ -366,6 +422,335 @@ export default function TournamentsDB() {
       return tournament.status !== 'completed'
     })
   }, [statusFilter, tournaments])
+
+  const matchFormatOptions: { value: MatchFormatOption; title: string; description: string }[] = [
+    {
+      value: 'melhorDe3',
+      title: 'Melhor de 3 sets',
+      description: 'Decisão tradicional em até 3 sets (21/21/15).',
+    },
+    {
+      value: 'melhorDe1',
+      title: 'Set único de 21 pontos',
+      description: 'Partida rápida em apenas um set até 21 pontos.',
+    },
+  ]
+
+  const steps = [
+    {
+      id: 'basic',
+      title: 'Informações básicas',
+      description: 'Defina o nome, o local e o período previsto para o torneio.',
+      content: (
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <Label className="text-white">Nome do torneio</Label>
+            <Input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="bg-white/15 border-white/30 text-white placeholder:text-blue-50/70 focus-visible:ring-white/70"
+              placeholder="Ex: Campeonato Brasileiro 2024"
+            />
+            <p className="text-xs text-blue-50/80">
+              Esse título aparece nos relatórios oficiais e na mesa do árbitro.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-white">Local</Label>
+            <Input
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              className="bg-white/15 border-white/30 text-white placeholder:text-blue-50/70 focus-visible:ring-white/70"
+              placeholder="Ex: Copacabana, Rio de Janeiro"
+            />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-white">Início</Label>
+              <Input
+                type="date"
+                value={form.start}
+                onChange={(e) => setForm({ ...form, start: e.target.value })}
+                className="bg-white/15 border-white/30 text-white placeholder:text-blue-50/70 focus-visible:ring-white/70"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Fim</Label>
+              <Input
+                type="date"
+                value={form.end}
+                onChange={(e) => setForm({ ...form, end: e.target.value })}
+                className="bg-white/15 border-white/30 text-white placeholder:text-blue-50/70 focus-visible:ring-white/70"
+              />
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'structure',
+      title: 'Estrutura e categoria',
+      description: 'Escolha quem participa, como será a modalidade e se haverá disputa extra.',
+      content: (
+        <div className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-white">Categoria</Label>
+              <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
+                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                  <SelectValue placeholder="Selecione a categoria" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                  <SelectItem value="M" className="focus:bg-white/10 focus:text-white">
+                    Masculino
+                  </SelectItem>
+                  <SelectItem value="F" className="focus:bg-white/10 focus:text-white">
+                    Feminino
+                  </SelectItem>
+                  <SelectItem value="Misto" className="focus:bg-white/10 focus:text-white">
+                    Misto
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Modalidade</Label>
+              <Select value={form.modality} onValueChange={(value) => setForm({ ...form, modality: value })}>
+                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                  <SelectValue placeholder="Selecione a modalidade" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                  <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">
+                    Dupla
+                  </SelectItem>
+                  <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">
+                    Quarteto
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label className="text-white">Registrar estatísticas</Label>
+              <p className="text-xs text-blue-50/80">
+                Exige que a mesa categorize os pontos de cada equipe durante as partidas.
+              </p>
+            </div>
+            <Switch
+              checked={form.hasStatistics}
+              onCheckedChange={(checked) => setForm({ ...form, hasStatistics: checked })}
+              className="data-[state=checked]:bg-white"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-white">Formato de disputa</Label>
+            <Select
+              value={form.formatId}
+              onValueChange={(value) => setForm({ ...form, formatId: value as TournamentFormatId })}
+            >
+              <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                <SelectValue placeholder="Selecione o formato" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72 bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                {availableFormats.map((format) => (
+                  <SelectItem key={format.id} value={format.id} className="focus:bg-white/10 focus:text-white">
+                    <div className="flex flex-col text-left">
+                      <span className="font-semibold">{format.name}</span>
+                      <span className="text-xs text-blue-50/80">{format.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label className="text-white">Incluir disputa de 3º lugar</Label>
+              <p className="text-xs text-blue-50/80">Disponível para formatos eliminatórios compatíveis.</p>
+            </div>
+            <Switch
+              checked={form.includeThirdPlace}
+              onCheckedChange={(checked) => setForm({ ...form, includeThirdPlace: checked })}
+              className="data-[state=checked]:bg-white"
+            />
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'games',
+      title: 'Configurações das partidas',
+      description: 'Personalize o formato de sets em cada fase e ajuste os critérios de desempate.',
+      content: (
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+              <div>
+                <Label className="text-white">Fase de grupos</Label>
+                <p className="text-xs text-blue-50/80">Selecione o formato das partidas da fase classificatória.</p>
+              </div>
+              <Select
+                value={form.matchFormats.group}
+                onValueChange={(value) =>
+                  setForm({
+                    ...form,
+                    matchFormats: { ...form.matchFormats, group: value as MatchFormatOption },
+                  })
+                }
+              >
+                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                  <SelectValue placeholder="Formato da fase de grupos" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                  {matchFormatOptions.map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      className="focus:bg-white/10 focus:text-white"
+                    >
+                      <div className="flex flex-col text-left">
+                        <span className="font-semibold">{option.title}</span>
+                        <span className="text-xs text-blue-50/80">{option.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+              <div>
+                <Label className="text-white">Fase eliminatória</Label>
+                <p className="text-xs text-blue-50/80">Defina o formato para as partidas decisivas.</p>
+              </div>
+              <Select
+                value={form.matchFormats.knockout}
+                onValueChange={(value) =>
+                  setForm({
+                    ...form,
+                    matchFormats: { ...form.matchFormats, knockout: value as MatchFormatOption },
+                  })
+                }
+              >
+                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                  <SelectValue placeholder="Formato da fase eliminatória" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                  {matchFormatOptions.map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      className="focus:bg-white/10 focus:text-white"
+                    >
+                      <div className="flex flex-col text-left">
+                        <span className="font-semibold">{option.title}</span>
+                        <span className="text-xs text-blue-50/80">{option.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div
+            className={cn(
+              'space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4',
+              !form.includeThirdPlace && 'opacity-70',
+            )}
+          >
+            <div>
+              <Label className="text-white">Disputa de 3º lugar</Label>
+              <p className="text-xs text-blue-50/80">
+                Escolha um formato independente para a partida extra entre os semifinalistas.
+              </p>
+            </div>
+            <Select
+              value={form.matchFormats.thirdPlace}
+              onValueChange={(value) =>
+                setForm({
+                  ...form,
+                  matchFormats: { ...form.matchFormats, thirdPlace: value as MatchFormatOption },
+                })
+              }
+              disabled={!form.includeThirdPlace}
+            >
+              <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-70">
+                <SelectValue placeholder="Formato da disputa de 3º lugar" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                {matchFormatOptions.map((option) => (
+                  <SelectItem
+                    key={option.value}
+                    value={option.value}
+                    className="focus:bg-white/10 focus:text-white"
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-semibold">{option.title}</span>
+                      <span className="text-xs text-blue-50/80">{option.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!form.includeThirdPlace && (
+              <p className="text-xs text-blue-50/70">
+                Ative a disputa de 3º lugar na etapa anterior para habilitar essa configuração.
+              </p>
+            )}
+          </div>
+          <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+            <div>
+              <Label className="text-white">Ordem dos critérios de desempate</Label>
+              <p className="text-xs text-blue-50/80">
+                Ajuste a prioridade aplicada aos resultados da fase classificatória.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {form.tieBreakerOrder.map((criterion, index) => (
+                <div
+                  key={`${criterion}-${index}`}
+                  className="flex items-center gap-3 rounded-xl border border-white/25 bg-white/5 px-3 py-2"
+                >
+                  <span className="w-12 text-xs font-semibold text-blue-50/80">{index + 1}º</span>
+                  <Select
+                    value={criterion}
+                    onValueChange={(value) => handleTieBreakerChange(index, value as TieBreakerCriterion)}
+                  >
+                    <SelectTrigger className="bg-transparent border-white/25 text-white focus:ring-white/70 focus:ring-offset-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                      {tieBreakerOptions.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          className="focus:bg-white/10 focus:text-white"
+                          disabled={form.tieBreakerOrder.includes(option.value) && option.value !== criterion}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+  ]
+
+  const totalSteps = steps.length
+  const safeStepIndex = Math.min(Math.max(currentStep, 0), totalSteps - 1)
+  const activeStep = steps[safeStepIndex]
+  const stepValidations = [
+    Boolean(normalizeString(form.name)),
+    Boolean(normalizeString(form.category) && normalizeString(form.modality) && form.formatId),
+    true,
+  ]
+  const isCurrentStepValid = stepValidations[safeStepIndex]
+  const isLastStep = safeStepIndex === totalSteps - 1
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -403,7 +788,15 @@ export default function TournamentsDB() {
 
         <div className="mb-12 flex flex-wrap gap-4 justify-center">
           {canManageTournaments ? (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+              open={open}
+              onOpenChange={(value) => {
+                setOpen(value)
+                if (!value) {
+                  setCurrentStep(0)
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button
                   className="flex items-center gap-2 bg-white/15 border border-white/20 text-white hover:bg-white/25"
@@ -413,209 +806,63 @@ export default function TournamentsDB() {
                   Criar Novo Torneio
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md bg-slate-900/80 text-white border-white/20 backdrop-blur-xl">
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-semibold">Criar Novo Torneio</DialogTitle>
-                <DialogDescription className="text-white/70">
-                  Preencha as informações do torneio
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-white">Nome</Label>
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
-                    placeholder="Ex: Campeonato Brasileiro 2024"
-                  />
+              <DialogContent className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#0b4f91]/70 bg-gradient-to-br from-[#0a6fd8] via-[#4cc9ff] to-[#0580c9] p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8">
+                <DialogHeader className="space-y-4">
+                  <DialogTitle className="text-2xl font-extrabold text-white sm:text-3xl">
+                    Criar novo torneio
+                  </DialogTitle>
+                  <DialogDescription className="text-sm font-semibold text-blue-50/90">
+                    Monte o torneio em etapas rápidas para liberar a geração automática de chaves.
+                  </DialogDescription>
+                  <div className="flex flex-col gap-1 rounded-2xl bg-white/15 p-3 text-xs font-semibold text-blue-50/90 sm:flex-row sm:items-center sm:justify-between">
+                    <span>Etapa {safeStepIndex + 1} de {totalSteps}</span>
+                    <span className="text-sm font-bold text-white sm:text-base">{activeStep.title}</span>
+                  </div>
+                </DialogHeader>
+                <div className="space-y-6">
+                  <p className="text-sm text-blue-50/90">{activeStep.description}</p>
+                  {activeStep.content}
                 </div>
-                <div>
-                  <Label className="text-white">Local</Label>
-                  <Input
-                    value={form.location}
-                    onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
-                    placeholder="Ex: Copacabana, Rio de Janeiro"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-white">Início</Label>
-                    <Input
-                      type="date"
-                      value={form.start}
-                      onChange={(e) => setForm({ ...form, start: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-white">Fim</Label>
-                    <Input
-                      type="date"
-                      value={form.end}
-                      onChange={(e) => setForm({ ...form, end: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/60"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-white">Categoria</Label>
-                    <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
-                        <SelectValue placeholder="Selecione a categoria" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
-                        <SelectItem value="M" className="focus:bg-white/10 focus:text-white">
-                          Masculino
-                        </SelectItem>
-                        <SelectItem value="F" className="focus:bg-white/10 focus:text-white">
-                          Feminino
-                        </SelectItem>
-                        <SelectItem value="Misto" className="focus:bg-white/10 focus:text-white">Misto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-white">Modalidade</Label>
-                    <Select value={form.modality} onValueChange={(value) => setForm({ ...form, modality: value })}>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
-                        <SelectValue placeholder="Selecione a modalidade" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
-                        <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">Dupla</SelectItem>
-                        <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">Quarteto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-white">Formato de disputa</Label>
-                  <Select
-                    value={form.formatId}
-                    onValueChange={(value) => setForm({ ...form, formatId: value as TournamentFormatId })}
-                  >
-                    <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
-                      <SelectValue placeholder="Selecione o formato" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-900/90 text-white border-white/20 max-h-72">
-                      {availableFormats.map((format) => (
-                        <SelectItem
-                          key={format.id}
-                          value={format.id}
-                          className="focus:bg-white/10 focus:text-white"
-                        >
-                          <div className="flex flex-col text-left">
-                            <span className="font-semibold">{format.name}</span>
-                            <span className="text-xs text-white/60">{format.description}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-white">Formato dos jogos</Label>
-                    <Select
-                      value={form.matchFormat}
-                      onValueChange={(value) =>
-                        setForm({ ...form, matchFormat: value as 'melhorDe1' | 'melhorDe3' })
-                      }
-                    >
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
-                        <SelectValue placeholder="Selecione o formato" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
-                        <SelectItem value="melhorDe3" className="focus:bg-white/10 focus:text-white">
-                          Melhor de 3 sets (21/21/15)
-                        </SelectItem>
-                        <SelectItem value="melhorDe1" className="focus:bg-white/10 focus:text-white">
-                          1 set único (21 pontos)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3">
-                    <div className="space-y-1">
-                      <Label className="text-white">Incluir disputa de 3º lugar</Label>
-                      <p className="text-xs text-white/60">Aplica-se aos formatos eliminatórios que suportam a partida extra.</p>
-                    </div>
-                    <Switch
-                      checked={form.includeThirdPlace}
-                      onCheckedChange={(checked) => setForm({ ...form, includeThirdPlace: checked })}
-                      className="data-[state=checked]:bg-yellow-400"
-                    />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/15 bg-white/5 p-4 space-y-3">
-                  <div>
-                    <Label className="text-white">Ordem dos critérios de desempate</Label>
-                    <p className="text-xs text-white/60">
-                      Ajuste a ordem conforme o regulamento específico do torneio.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    {form.tieBreakerOrder.map((criterion, index) => (
-                      <div
-                        key={`${criterion}-${index}`}
-                        className="flex items-center gap-3 rounded-md border border-white/20 bg-white/10 px-3 py-2"
-                      >
-                        <span className="text-xs font-semibold text-white/70 w-12">{index + 1}º</span>
-                        <Select
-                          value={criterion}
-                          onValueChange={(value) => handleTieBreakerChange(index, value as TieBreakerCriterion)}
-                        >
-                          <SelectTrigger className="bg-transparent border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-900/90 text-white border-white/20">
-                            {tieBreakerOptions.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                                className="focus:bg-white/10 focus:text-white"
-                                disabled={
-                                  form.tieBreakerOrder.includes(option.value) && option.value !== criterion
-                                }
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3">
-                  <div className="space-y-1">
-                    <Label className="text-white">Registrar estatísticas</Label>
-                    <p className="text-xs text-white/60">
-                      Controle detalhado de pontos por categoria durante as partidas.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={form.hasStatistics}
-                    onCheckedChange={(checked) => setForm({ ...form, hasStatistics: checked })}
-                    className="data-[state=checked]:bg-yellow-400"
-                  />
-                </div>
-                <div className="flex gap-2 justify-end pt-4">
+                <DialogFooter className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <Button
-                    variant="ghost"
-                    onClick={() => setOpen(false)}
-                    className="bg-white/5 border border-white/20 text-white hover:bg-white/15"
+                    variant="outline"
+                    onClick={() => {
+                      setOpen(false)
+                      setCurrentStep(0)
+                    }}
+                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
                   >
                     Cancelar
                   </Button>
-                  <Button onClick={createTournament} className="bg-yellow-400/90 text-slate-900 hover:bg-yellow-300">
-                    Criar
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    {safeStepIndex > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setCurrentStep((prev) => Math.max(prev - 1, 0))}
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                      >
+                        Voltar
+                      </Button>
+                    )}
+                    {isLastStep ? (
+                      <Button
+                        onClick={createTournament}
+                        className="bg-white text-slate-900 hover:bg-white/90"
+                      >
+                        Criar torneio
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1))}
+                        disabled={!isCurrentStepValid}
+                        className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                      >
+                        Próximo
+                      </Button>
+                    )}
+                  </div>
+                </DialogFooter>
+              </DialogContent>
             </Dialog>
           ) : (
             <Button

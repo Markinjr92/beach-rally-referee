@@ -9,6 +9,10 @@ import {
   TieBreakerCriterion,
 } from '@/types/volleyball';
 
+export type TournamentPhaseConfigType = 'group' | 'knockout' | 'thirdPlace';
+
+export type TournamentPhaseConfigs = Partial<Record<TournamentPhaseConfigType, Partial<GameConfiguration>>>;
+
 export interface GenerateTournamentStructureOptions {
   tournamentId: string;
   formatId: TournamentFormatId;
@@ -16,6 +20,7 @@ export interface GenerateTournamentStructureOptions {
   baseGameConfig?: Partial<GameConfiguration>;
   includeThirdPlaceMatch?: boolean;
   generatedAt?: string;
+  phaseConfigs?: TournamentPhaseConfigs;
 }
 
 export interface GeneratedTournamentStructure {
@@ -95,9 +100,19 @@ const createMatch = (
     tableId?: string;
     scheduledAt?: string;
     customId?: string;
+    configType?: TournamentPhaseConfigType;
+    configOverride?: Partial<GameConfiguration>;
   },
 ): TournamentMatch => {
-  const baseConfig = mergeGameConfig(options.baseGameConfig);
+  const inferredConfigType: TournamentPhaseConfigType =
+    params.configType ?? (phase.type === 'group' ? 'group' : 'knockout');
+
+  const overrideConfig = params.configOverride ?? options.phaseConfigs?.[inferredConfigType];
+
+  const baseConfig = mergeGameConfig({
+    ...options.baseGameConfig,
+    ...(overrideConfig ?? {}),
+  });
   const createdAt = options.generatedAt ?? new Date().toISOString();
   const id = params.customId ?? nextMatchId(options.tournamentId, phase.id);
 
@@ -293,6 +308,7 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
             title: 'Decisão 3º lugar',
             teamA: placeholder('Perdedor Semifinal 1'),
             teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
           }),
         );
       }
@@ -623,6 +639,7 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
           title: 'Disputa Bronze Ouro',
           teamA: placeholderTeam('Perdedor Semifinal Ouro 1'),
           teamB: placeholderTeam('Perdedor Semifinal Ouro 2'),
+          configType: 'thirdPlace',
         }),
       ];
 
@@ -650,6 +667,7 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
           title: 'Disputa Bronze Prata',
           teamA: placeholderTeam('Perdedor Semifinal Prata 1'),
           teamB: placeholderTeam('Perdedor Semifinal Prata 2'),
+          configType: 'thirdPlace',
         }),
       ];
 
@@ -768,6 +786,7 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
           title: 'Disputa 3º lugar',
           teamA: placeholderTeam('Perdedor Semifinal 1'),
           teamB: placeholderTeam('Perdedor Semifinal 2'),
+          configType: 'thirdPlace',
         }),
       ];
 
