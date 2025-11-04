@@ -24,6 +24,13 @@ import { cn, formatDateToISO, normalizeString } from "@/lib/utils"
 import { formatDateShortPtBr } from "@/utils/date"
 import { useAuth } from "@/hooks/useAuth"
 import { useUserRoles } from "@/hooks/useUserRoles"
+import {
+  availableTournamentFormats,
+  buildTournamentRegulationHtml,
+  defaultTieBreakerOrder,
+  generateTournamentStructure,
+} from "@/lib/tournament"
+import { Tournament, TournamentFormatId, TournamentTeam, TieBreakerCriterion } from "@/types/volleyball"
 
 type Tournament = Tables<'tournaments'>
 
@@ -39,6 +46,10 @@ export default function TournamentsDB() {
     category: "",
     modality: "",
     hasStatistics: true,
+    formatId: "groups_and_knockout" as TournamentFormatId,
+    includeThirdPlace: true,
+    matchFormat: "melhorDe3" as "melhorDe1" | "melhorDe3",
+    tieBreakerOrder: [...defaultTieBreakerOrder] as TieBreakerCriterion[],
   })
   const { toast } = useToast()
   const { user, loading: authLoading } = useAuth()
@@ -47,6 +58,218 @@ export default function TournamentsDB() {
     () => roles.includes("admin_sistema") || roles.includes("organizador"),
     [roles],
   )
+
+  const availableFormats = useMemo(
+    () => Object.values(availableTournamentFormats),
+    [],
+  )
+
+  const tieBreakerOptions = useMemo(
+    () => [
+      {
+        value: "head_to_head" as TieBreakerCriterion,
+        label: "Confronto direto (apenas 2 equipes)",
+      },
+      {
+        value: "sets_average_inner" as TieBreakerCriterion,
+        label: "Average de sets entre empatadas",
+      },
+      {
+        value: "points_average_inner" as TieBreakerCriterion,
+        label: "Average de pontos entre empatadas",
+      },
+      {
+        value: "sets_average_global" as TieBreakerCriterion,
+        label: "Average de sets na fase",
+      },
+      {
+        value: "points_average_global" as TieBreakerCriterion,
+        label: "Average de pontos na fase",
+      },
+      { value: "random_draw" as TieBreakerCriterion, label: "Sorteio" },
+    ],
+    [],
+  )
+
+  const handleTieBreakerChange = (index: number, value: TieBreakerCriterion) => {
+    setForm((prev) => {
+      const next = [...prev.tieBreakerOrder]
+      const existingIndex = next.findIndex((criterion) => criterion === value)
+      if (existingIndex !== -1 && existingIndex !== index) {
+        next[existingIndex] = next[index]
+      }
+      next[index] = value
+      return { ...prev, tieBreakerOrder: next }
+    })
+  }
+
+  const matchFormatPresets = useMemo(
+    () =>
+      ({
+        melhorDe3: {
+          pointsPerSet: [21, 21, 15],
+          sideSwitchSum: [7, 7, 5],
+          teamTimeoutsPerSet: 2,
+        },
+        melhorDe1: {
+          pointsPerSet: [21],
+          sideSwitchSum: [7],
+          teamTimeoutsPerSet: 1,
+        },
+      }) as const,
+    [],
+  )
+
+  const initializeTournamentStructure = async (tournament: Tables<'tournaments'>) => {
+    try {
+      const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: 12 }, (_, index) => ({
+        name: `Dupla Seed ${index + 1}`,
+        player_a: `Atleta ${index + 1}A`,
+        player_b: `Atleta ${index + 1}B`,
+      }))
+
+      const { data: createdTeams, error: insertTeamsError } = await supabase
+        .from('teams')
+        .insert(placeholderTeams)
+        .select()
+
+      if (insertTeamsError) throw insertTeamsError
+      if (!createdTeams || createdTeams.length !== placeholderTeams.length) {
+        throw new Error('Falha ao registrar as duplas placeholder do torneio.')
+      }
+
+      const tournamentTeamsPayload: TablesInsert<'tournament_teams'>[] = createdTeams.map((team, index) => ({
+        tournament_id: tournament.id,
+        team_id: team.id,
+        seed: index + 1,
+      }))
+
+      const { data: createdTournamentTeams, error: insertTournamentTeamsError } = await supabase
+        .from('tournament_teams')
+        .insert(tournamentTeamsPayload)
+        .select()
+
+      if (insertTournamentTeamsError) throw insertTournamentTeamsError
+      if (!createdTournamentTeams) {
+        throw new Error('Falha ao atrelar as duplas ao torneio recém criado.')
+      }
+
+      const registeredTeams: TournamentTeam[] = createdTournamentTeams.map((entry, index) => ({
+        id: entry.id,
+        seed: entry.seed ?? index + 1,
+        team: {
+          name: createdTeams[index]?.name ?? `Seed ${index + 1}`,
+          players: [
+            { name: createdTeams[index]?.player_a ?? 'A definir', number: 1 },
+            { name: createdTeams[index]?.player_b ?? 'A definir', number: 2 },
+          ],
+        },
+      }))
+
+      const formatId = form.formatId
+      const matchPreset = matchFormatPresets[form.matchFormat]
+
+      const structure = generateTournamentStructure({
+        tournamentId: tournament.id,
+        formatId,
+        teams: registeredTeams,
+        includeThirdPlaceMatch: form.includeThirdPlace,
+        baseGameConfig: {
+          format: form.matchFormat,
+          pointsPerSet: matchPreset.pointsPerSet,
+          sideSwitchSum: matchPreset.sideSwitchSum,
+          teamTimeoutsPerSet: matchPreset.teamTimeoutsPerSet,
+        },
+      })
+
+      const teamMap = new Map(
+        createdTournamentTeams.map((entry, index) => [entry.id, createdTeams[index]?.id]),
+      )
+
+      const groupAssignments = structure.groups.flatMap((group) =>
+        group.teamIds.map((teamId) => ({ teamId, label: group.name })),
+      )
+
+      if (groupAssignments.length) {
+        await Promise.all(
+          groupAssignments.map(({ teamId, label }) =>
+            supabase.from('tournament_teams').update({ group_label: label }).eq('id', teamId),
+          ),
+        )
+      }
+
+      const matchesToPersist = structure.matches.filter(
+        (match) => match.teamAId && match.teamBId,
+      )
+
+      if (matchesToPersist.length) {
+        const matchPayload: TablesInsert<'matches'>[] = matchesToPersist
+          .map((match) => {
+            const teamAId = match.teamAId ? teamMap.get(match.teamAId) : undefined
+            const teamBId = match.teamBId ? teamMap.get(match.teamBId) : undefined
+            if (!teamAId || !teamBId) return null
+            return {
+              tournament_id: tournament.id,
+              team_a_id: teamAId,
+              team_b_id: teamBId,
+              phase: match.phaseName,
+              scheduled_at: match.scheduledAt ?? null,
+              status: match.status,
+              modality: match.modality,
+              points_per_set: match.pointsPerSet,
+              side_switch_sum: match.sideSwitchSum,
+              best_of: match.format === 'melhorDe3' ? 3 : 1,
+            }
+          })
+          .filter((entry): entry is TablesInsert<'matches'> => Boolean(entry))
+
+        if (matchPayload.length) {
+          const { error: insertMatchesError } = await supabase.from('matches').insert(matchPayload)
+          if (insertMatchesError) throw insertMatchesError
+        }
+      }
+
+      const tournamentForRegulation: Tournament = {
+        id: tournament.id,
+        name: tournament.name,
+        status: (tournament.status as Tournament['status']) ?? 'upcoming',
+        location: tournament.location ?? 'Local a definir',
+        startDate: tournament.start_date ?? '',
+        endDate: tournament.end_date ?? '',
+        games: [],
+        formatId,
+        tieBreakerOrder: [...form.tieBreakerOrder],
+        teams: registeredTeams,
+        phases: structure.phases,
+        groups: structure.groups,
+        matches: structure.matches,
+        includeThirdPlaceMatch: form.includeThirdPlace,
+      }
+
+      const regulationHtml = buildTournamentRegulationHtml(tournamentForRegulation)
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(
+          `tournament:${tournament.id}:config`,
+          JSON.stringify({
+            formatId,
+            tieBreakerOrder: form.tieBreakerOrder,
+            includeThirdPlace: form.includeThirdPlace,
+            matchFormat: form.matchFormat,
+            regulationHtml,
+          }),
+        )
+      }
+    } catch (error) {
+      console.error('Falha ao inicializar estrutura do torneio', error)
+      toast({
+        title: 'Torneio criado, mas com pendências',
+        description:
+          'Não foi possível gerar automaticamente as chaves e tabelas. Ajuste manualmente na tela de detalhes.',
+        variant: 'destructive',
+      })
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -74,6 +297,10 @@ export default function TournamentsDB() {
       })
       return
     }
+    if (!form.formatId) {
+      toast({ title: "Selecione o formato do torneio" })
+      return
+    }
     const location = normalizeString(form.location)
     const category = normalizeString(form.category)
     const modality = normalizeString(form.modality)
@@ -91,24 +318,44 @@ export default function TournamentsDB() {
       end_date: endDateISO ?? null,
     }
 
-    const { error } = await supabase.from("tournaments").insert(payload)
-    if (error) {
+    const { data: createdTournament, error } = await supabase
+      .from("tournaments")
+      .insert(payload)
+      .select("*")
+      .single()
+
+    if (error || !createdTournament) {
       console.error("Erro ao criar torneio", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
       })
-      toast({ title: "Erro ao criar", description: error.message })
+      toast({ title: "Erro ao criar", description: error?.message ?? "Erro desconhecido" })
       return
     }
+
+    await initializeTournamentStructure(createdTournament)
+
     const { data } = await supabase
       .from("tournaments")
       .select("*")
       .order("created_at", { ascending: false })
     setTournaments(data || [])
     setOpen(false)
-    setForm({ name: "", location: "", start: "", end: "", category: "", modality: "", hasStatistics: true })
+    setForm({
+      name: "",
+      location: "",
+      start: "",
+      end: "",
+      category: "",
+      modality: "",
+      hasStatistics: true,
+      formatId: "groups_and_knockout",
+      includeThirdPlace: true,
+      matchFormat: "melhorDe3",
+      tieBreakerOrder: [...defaultTieBreakerOrder],
+    })
     toast({ title: "Torneio criado" })
   }
 
@@ -241,6 +488,105 @@ export default function TournamentsDB() {
                         <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">Quarteto</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-white">Formato de disputa</Label>
+                  <Select
+                    value={form.formatId}
+                    onValueChange={(value) => setForm({ ...form, formatId: value as TournamentFormatId })}
+                  >
+                    <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
+                      <SelectValue placeholder="Selecione o formato" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-900/90 text-white border-white/20 max-h-72">
+                      {availableFormats.map((format) => (
+                        <SelectItem
+                          key={format.id}
+                          value={format.id}
+                          className="focus:bg-white/10 focus:text-white"
+                        >
+                          <div className="flex flex-col text-left">
+                            <span className="font-semibold">{format.name}</span>
+                            <span className="text-xs text-white/60">{format.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-white">Formato dos jogos</Label>
+                    <Select
+                      value={form.matchFormat}
+                      onValueChange={(value) =>
+                        setForm({ ...form, matchFormat: value as 'melhorDe1' | 'melhorDe3' })
+                      }
+                    >
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
+                        <SelectValue placeholder="Selecione o formato" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900/90 text-white border-white/20">
+                        <SelectItem value="melhorDe3" className="focus:bg-white/10 focus:text-white">
+                          Melhor de 3 sets (21/21/15)
+                        </SelectItem>
+                        <SelectItem value="melhorDe1" className="focus:bg-white/10 focus:text-white">
+                          1 set único (21 pontos)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3">
+                    <div className="space-y-1">
+                      <Label className="text-white">Incluir disputa de 3º lugar</Label>
+                      <p className="text-xs text-white/60">Aplica-se aos formatos eliminatórios que suportam a partida extra.</p>
+                    </div>
+                    <Switch
+                      checked={form.includeThirdPlace}
+                      onCheckedChange={(checked) => setForm({ ...form, includeThirdPlace: checked })}
+                      className="data-[state=checked]:bg-yellow-400"
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-white/15 bg-white/5 p-4 space-y-3">
+                  <div>
+                    <Label className="text-white">Ordem dos critérios de desempate</Label>
+                    <p className="text-xs text-white/60">
+                      Ajuste a ordem conforme o regulamento específico do torneio.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {form.tieBreakerOrder.map((criterion, index) => (
+                      <div
+                        key={`${criterion}-${index}`}
+                        className="flex items-center gap-3 rounded-md border border-white/20 bg-white/10 px-3 py-2"
+                      >
+                        <span className="text-xs font-semibold text-white/70 w-12">{index + 1}º</span>
+                        <Select
+                          value={criterion}
+                          onValueChange={(value) => handleTieBreakerChange(index, value as TieBreakerCriterion)}
+                        >
+                          <SelectTrigger className="bg-transparent border-white/20 text-white focus:ring-white/60 focus:ring-offset-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-900/90 text-white border-white/20">
+                            {tieBreakerOptions.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                                className="focus:bg-white/10 focus:text-white"
+                                disabled={
+                                  form.tieBreakerOrder.includes(option.value) && option.value !== criterion
+                                }
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3">
