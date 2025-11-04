@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown, Upload, Image as ImageIcon, Edit2, Save, X } from 'lucide-react'
 
@@ -21,10 +21,13 @@ import {
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
 import { formatDateShortPtBr, formatDateTimePtBr, toDatetimeLocalInputValue } from '@/utils/date'
+import { availableTournamentFormats, defaultTieBreakerOrder } from '@/lib/tournament'
+import type { TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
 type Match = Tables<'matches'>
+type MatchScore = Tables<'match_scores'>
 
 type TeamOption = { value: string; label: string }
 
@@ -131,6 +134,55 @@ type EditingTeam = {
   player_b: string
 } | null
 
+type MatchFormatOption = 'melhorDe1' | 'melhorDe3'
+
+type StoredTournamentConfig = {
+  formatId?: TournamentFormatId
+  tieBreakerOrder?: TieBreakerCriterion[]
+  includeThirdPlace?: boolean
+  matchFormats?: Partial<Record<'group' | 'knockout' | 'thirdPlace', MatchFormatOption>>
+}
+
+type TournamentTeamRecord = {
+  team_id: string
+  group_label: string | null
+  teams: Team | null
+}
+
+type StandingsEntry = {
+  teamId: string
+  teamName: string
+  matchesPlayed: number
+  wins: number
+  losses: number
+  setsWon: number
+  setsLost: number
+  pointsFor: number
+  pointsAgainst: number
+  matchPoints: number
+}
+
+type GroupStandings = {
+  key: string
+  label: string
+  standings: StandingsEntry[]
+  hasResults: boolean
+}
+
+const MATCH_FORMAT_LABELS: Record<MatchFormatOption, string> = {
+  melhorDe3: 'Melhor de 3 sets (21/21/15)',
+  melhorDe1: 'Set único de 21 pontos',
+}
+
+const TIE_BREAKER_LABELS: Record<TieBreakerCriterion, string> = {
+  head_to_head: 'Confronto direto (2 equipes)',
+  sets_average_inner: 'Average de sets entre empatadas',
+  points_average_inner: 'Average de pontos entre empatadas',
+  sets_average_global: 'Average de sets na fase',
+  points_average_global: 'Average de pontos na fase',
+  random_draw: 'Sorteio',
+}
+
 export default function TournamentDetailDB() {
   const { tournamentId } = useParams()
   const { toast } = useToast()
@@ -149,6 +201,41 @@ export default function TournamentDetailDB() {
   const [logoUrl, setLogoUrl] = useState('')
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
   const [newSponsorUrl, setNewSponsorUrl] = useState('')
+  const [teamGroups, setTeamGroups] = useState<Record<string, string | null>>({})
+  const [matchScores, setMatchScores] = useState<MatchScore[]>([])
+  const [tournamentConfig, setTournamentConfig] = useState<StoredTournamentConfig | null>(null)
+
+  const loadTournamentTeams = useCallback(async () => {
+    if (!tournamentId) return
+
+    const { data: reg, error: re } = await supabase
+      .from('tournament_teams')
+      .select('team_id, group_label, teams(*)')
+      .eq('tournament_id', tournamentId)
+
+    if (re) {
+      toast({ title: 'Erro ao carregar equipes', description: re.message })
+      setTeams([])
+      setTeamGroups({})
+      return
+    }
+
+    const registeredTeams = (reg ?? []) as TournamentTeamRecord[]
+    const normalizedTeams = registeredTeams
+      .map((record) => record.teams)
+      .filter((team): team is Team => Boolean(team))
+
+    setTeams(normalizedTeams)
+
+    const groupsMap: Record<string, string | null> = {}
+    registeredTeams.forEach((record) => {
+      const team = record.teams
+      if (team) {
+        groupsMap[team.id] = record.group_label
+      }
+    })
+    setTeamGroups(groupsMap)
+  }, [tournamentId, toast])
 
   useEffect(() => {
     const load = async () => {
@@ -157,15 +244,12 @@ export default function TournamentDetailDB() {
       if (te) { toast({ title: 'Erro ao carregar torneio', description: te.message }); return }
       setTournament(t)
 
-      const { data: reg, error: re } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournamentId)
-      if (re) { toast({ title: 'Erro ao carregar equipes', description: re.message }) }
-      const registeredTeams = (reg ?? []) as Array<{ teams: Team | null }>
-      setTeams(registeredTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
+      await loadTournamentTeams()
 
       const { data: m, error: me } = await supabase.from('matches').select('*').eq('tournament_id', tournamentId).order('scheduled_at', { ascending: true })
       if (me) { toast({ title: 'Erro ao carregar jogos', description: me.message }) }
       setMatches(m || [])
-      
+
       // Load logos
       if (t.logo_url) setLogoUrl(t.logo_url)
       if (t.sponsor_logos && Array.isArray(t.sponsor_logos)) {
@@ -173,7 +257,7 @@ export default function TournamentDetailDB() {
       }
     }
     load()
-  }, [tournamentId, toast])
+  }, [tournamentId, toast, loadTournamentTeams])
 
   useEffect(() => {
     if (matchForm.scheduled_at) return
@@ -187,32 +271,215 @@ export default function TournamentDetailDB() {
     }
   }, [matches, matchForm.scheduled_at])
 
+  useEffect(() => {
+    if (!tournamentId) return
+    if (typeof window === 'undefined') return
+
+    try {
+      const stored = window.localStorage.getItem(`tournament:${tournamentId}:config`)
+      if (!stored) {
+        setTournamentConfig(null)
+        return
+      }
+      const parsed = JSON.parse(stored) as StoredTournamentConfig
+      setTournamentConfig(parsed)
+    } catch (error) {
+      console.error('Falha ao carregar configuração local do torneio', error)
+      setTournamentConfig(null)
+    }
+  }, [tournamentId])
+
+  useEffect(() => {
+    const loadScores = async () => {
+      if (!matches.length) {
+        setMatchScores([])
+        return
+      }
+
+      const matchIds = matches.map(match => match.id)
+      const { data, error } = await supabase
+        .from('match_scores')
+        .select('*')
+        .in('match_id', matchIds)
+
+      if (error) {
+        toast({ title: 'Erro ao carregar parciais', description: error.message })
+        return
+      }
+
+      setMatchScores(data || [])
+    }
+
+    loadScores()
+  }, [matches, toast])
+
   const teamOptions = useMemo(() => teams.map(t => ({ value: t.id, label: t.name })), [teams])
 
-  const standings = useMemo(() => {
-    const teamStats = new Map<string, { wins: number; losses: number; points: number; name: string }>()
+  const scoresByMatch = useMemo(() => {
+    const grouped = new Map<string, MatchScore[]>()
 
-    teams.forEach(team => {
-      teamStats.set(team.id, { wins: 0, losses: 0, points: 0, name: team.name })
+    matchScores.forEach((score) => {
+      if (!grouped.has(score.match_id)) {
+        grouped.set(score.match_id, [])
+      }
+      grouped.get(score.match_id)!.push(score)
     })
 
-    matches.filter(m => m.status === 'completed').forEach(match => {
-      // This is simplified - would need actual set scores from match_states
-      const teamA = teamStats.get(match.team_a_id)
-      const teamB = teamStats.get(match.team_b_id)
+    grouped.forEach((scores) => {
+      scores.sort((a, b) => a.set_number - b.set_number)
+    })
 
-      if (teamA && teamB) {
-        // Placeholder logic - would need real scores
-        teamA.wins += 1
-        teamA.points += 3
-        teamB.losses += 1
+    return grouped
+  }, [matchScores])
+
+  const teamNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    teams.forEach((team) => {
+      map.set(team.id, team.name)
+    })
+    return map
+  }, [teams])
+
+  const groupAssignments = useMemo(() => {
+    if (!teams.length) return [] as Array<{ key: string; label: string; teamIds: string[] }>
+
+    const rawGroups = new Map<string, { rawLabel: string | null; teamIds: string[] }>()
+
+    teams.forEach((team) => {
+      const rawLabel = teamGroups[team.id] ?? null
+      const key = rawLabel ?? '__default__'
+      if (!rawGroups.has(key)) {
+        rawGroups.set(key, { rawLabel, teamIds: [] })
+      }
+      rawGroups.get(key)!.teamIds.push(team.id)
+    })
+
+    const multipleGroups = rawGroups.size > 1
+
+    return Array.from(rawGroups.entries()).map(([key, entry]) => ({
+      key,
+      label: entry.rawLabel ?? (multipleGroups ? 'Grupo Único' : 'Classificação Geral'),
+      teamIds: entry.teamIds,
+    }))
+  }, [teams, teamGroups])
+
+  const standingsByGroup: GroupStandings[] = useMemo(() => {
+    if (!groupAssignments.length) return []
+
+    const completedMatches = matches.filter((match) => match.status === 'completed')
+
+    return groupAssignments.map((group) => {
+      const teamSet = new Set(group.teamIds)
+      const statsMap = new Map<string, StandingsEntry>()
+
+      group.teamIds.forEach((teamId) => {
+        const teamName = teamNameMap.get(teamId) ?? 'Equipe'
+        statsMap.set(teamId, {
+          teamId,
+          teamName,
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          setsWon: 0,
+          setsLost: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+          matchPoints: 0,
+        })
+      })
+
+      let updated = false
+
+      completedMatches.forEach((match) => {
+        const teamAId = match.team_a_id
+        const teamBId = match.team_b_id
+        if (!teamAId || !teamBId) return
+        if (!teamSet.has(teamAId) || !teamSet.has(teamBId)) return
+
+        const entryA = statsMap.get(teamAId)
+        const entryB = statsMap.get(teamBId)
+        if (!entryA || !entryB) return
+
+        const scores = scoresByMatch.get(match.id) ?? []
+        if (!scores.length) return
+
+        let setsWonA = 0
+        let setsWonB = 0
+        let pointsA = 0
+        let pointsB = 0
+
+        scores.forEach((score) => {
+          pointsA += score.team_a_points
+          pointsB += score.team_b_points
+
+          if (score.team_a_points > score.team_b_points) {
+            setsWonA += 1
+          } else if (score.team_b_points > score.team_a_points) {
+            setsWonB += 1
+          }
+        })
+
+        if (setsWonA === 0 && setsWonB === 0 && pointsA === 0 && pointsB === 0) {
+          return
+        }
+
+        entryA.matchesPlayed += 1
+        entryB.matchesPlayed += 1
+        entryA.setsWon += setsWonA
+        entryA.setsLost += setsWonB
+        entryB.setsWon += setsWonB
+        entryB.setsLost += setsWonA
+        entryA.pointsFor += pointsA
+        entryA.pointsAgainst += pointsB
+        entryB.pointsFor += pointsB
+        entryB.pointsAgainst += pointsA
+
+        if (setsWonA > setsWonB) {
+          entryA.wins += 1
+          entryB.losses += 1
+          entryA.matchPoints += 2
+        } else if (setsWonB > setsWonA) {
+          entryB.wins += 1
+          entryA.losses += 1
+          entryB.matchPoints += 2
+        } else {
+          entryA.matchPoints += 1
+          entryB.matchPoints += 1
+        }
+
+        updated = true
+      })
+
+      const standings = Array.from(statsMap.values()).sort((a, b) => {
+        if (b.matchPoints !== a.matchPoints) {
+          return b.matchPoints - a.matchPoints
+        }
+
+        const setDiffA = a.setsWon - a.setsLost
+        const setDiffB = b.setsWon - b.setsLost
+
+        if (setDiffB !== setDiffA) {
+          return setDiffB - setDiffA
+        }
+
+        const pointDiffA = a.pointsFor - a.pointsAgainst
+        const pointDiffB = b.pointsFor - b.pointsAgainst
+
+        if (pointDiffB !== pointDiffA) {
+          return pointDiffB - pointDiffA
+        }
+
+        return a.teamName.localeCompare(b.teamName)
+      })
+
+      return {
+        key: group.key,
+        label: group.label,
+        standings,
+        hasResults: updated,
       }
     })
-
-    return Array.from(teamStats.entries())
-      .map(([id, stats]) => ({ id, ...stats }))
-      .sort((a, b) => b.points - a.points || b.wins - a.wins)
-  }, [teams, matches])
+  }, [groupAssignments, matches, scoresByMatch, teamNameMap])
 
   if (!tournament) return (
     <div className="min-h-screen bg-gradient-ocean flex items-center justify-center">
@@ -222,6 +489,16 @@ export default function TournamentDetailDB() {
 
   const formattedStartDate = formatDateShortPtBr(tournament.start_date)
   const formattedEndDate = formatDateShortPtBr(tournament.end_date)
+  const formattedStartDateDetailed = formatDateShortPtBr(tournament.start_date, { fallback: 'Não definido' })
+  const formattedEndDateDetailed = formatDateShortPtBr(tournament.end_date, { fallback: 'Não definido' })
+
+  const selectedFormatName = tournamentConfig?.formatId
+    ? availableTournamentFormats[tournamentConfig.formatId]?.name ?? 'Formato personalizado'
+    : null
+
+  const tieBreakerOrder = tournamentConfig?.tieBreakerOrder?.length
+    ? tournamentConfig.tieBreakerOrder
+    : defaultTieBreakerOrder
 
   const handleSaveTeamEdit = async () => {
     if (!editingTeam) return
@@ -334,20 +611,34 @@ export default function TournamentDetailDB() {
         </div>
 
         <Tabs defaultValue="teams" className="space-y-6">
-          <TabsList className="flex flex-col gap-2 rounded-xl bg-white/5 p-1 text-white sm:flex-row sm:items-center sm:justify-start">
-            <TabsTrigger value="teams" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
-              Duplas
-            </TabsTrigger>
-            <TabsTrigger value="matches" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
-              Jogos
-            </TabsTrigger>
-            <TabsTrigger value="standings" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
-              Tabela/Classificação
-            </TabsTrigger>
-            <TabsTrigger value="config" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
-              Configurações
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex justify-center">
+            <TabsList className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 text-white backdrop-blur-md">
+              <TabsTrigger
+                value="teams"
+                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+              >
+                Duplas
+              </TabsTrigger>
+              <TabsTrigger
+                value="matches"
+                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+              >
+                Jogos
+              </TabsTrigger>
+              <TabsTrigger
+                value="standings"
+                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+              >
+                Tabela/Classificação
+              </TabsTrigger>
+              <TabsTrigger
+                value="config"
+                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+              >
+                Configurações
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="teams" className="mt-0">
             <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
@@ -413,9 +704,7 @@ export default function TournamentDetailDB() {
                                   await supabase.from('matches').delete().eq('tournament_id', tournament.id).or(`team_a_id.eq.${team.id},team_b_id.eq.${team.id}`)
                                   await supabase.from('tournament_teams').delete().eq('tournament_id', tournament.id).eq('team_id', team.id)
                                   await supabase.from('teams').delete().eq('id', team.id)
-                                  const { data: reg } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournament.id)
-                                  const updatedTeams = (reg ?? []) as Array<{ teams: Team | null }>
-                                  setTeams(updatedTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
+                                  await loadTournamentTeams()
                                   toast({ title: 'Dupla removida' })
                                 }}
                               >
@@ -455,9 +744,7 @@ export default function TournamentDetailDB() {
                         if (terr) { toast({ title: 'Erro ao criar', description: terr.message }); return }
                         const { error: rerr } = await supabase.from('tournament_teams').insert({ tournament_id: tournament.id, team_id: team.id })
                         if (rerr) { toast({ title: 'Erro ao vincular', description: rerr.message }); return }
-                        const { data: reg } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournament.id)
-                        const refreshedTeams = (reg ?? []) as Array<{ teams: Team | null }>
-                        setTeams(refreshedTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
+                        await loadTournamentTeams()
                         setTeamForm({ name: '', player_a: '', player_b: '' })
                         toast({ title: 'Dupla adicionada' })
                       }}
@@ -623,40 +910,64 @@ export default function TournamentDetailDB() {
           <TabsContent value="standings" className="mt-0">
             <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
               <CardHeader>
-                <CardTitle className="text-xl">Classificação</CardTitle>
+                <CardTitle className="text-xl">Tabela de Classificação</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-white/20">
-                        <th className="px-4 py-3 text-left">Pos</th>
-                        <th className="px-4 py-3 text-left">Dupla</th>
-                        <th className="px-4 py-3 text-center">V</th>
-                        <th className="px-4 py-3 text-center">D</th>
-                        <th className="px-4 py-3 text-center">Pts</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {standings.map((team, index) => (
-                        <tr key={team.id} className="border-b border-white/10 hover:bg-white/5">
-                          <td className="px-4 py-3 font-bold">{index + 1}</td>
-                          <td className="px-4 py-3">{team.name}</td>
-                          <td className="px-4 py-3 text-center">{team.wins}</td>
-                          <td className="px-4 py-3 text-center">{team.losses}</td>
-                          <td className="px-4 py-3 text-center font-bold">{team.points}</td>
-                        </tr>
-                      ))}
-                      {standings.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-white/70">
-                            Nenhum jogo finalizado ainda
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+              <CardContent className="space-y-8">
+                {standingsByGroup.length === 0 ? (
+                  <p className="text-sm text-white/70">Nenhuma equipe ou partida registrada até o momento.</p>
+                ) : (
+                  standingsByGroup.map((group) => {
+                    const groupHasMatches = group.hasResults
+
+                    return (
+                      <div key={group.key} className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-lg font-semibold text-white">{group.label}</h3>
+                          <Badge variant="outline" className="border-white/30 text-white/80">
+                            {group.standings.length} {group.standings.length === 1 ? 'dupla' : 'duplas'}
+                          </Badge>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-white/10 text-sm">
+                            <thead>
+                              <tr className="text-left text-white/70">
+                                <th className="px-4 py-3 font-medium">Posição</th>
+                                <th className="px-4 py-3 font-medium">Dupla</th>
+                                <th className="px-4 py-3 font-medium text-center">PJ</th>
+                                <th className="px-4 py-3 font-medium text-center">V</th>
+                                <th className="px-4 py-3 font-medium text-center">D</th>
+                                <th className="px-4 py-3 font-medium text-center">Sets</th>
+                                <th className="px-4 py-3 font-medium text-center">Pts</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.standings.map((entry, index) => (
+                                <tr key={entry.teamId} className="border-b border-white/10 hover:bg-white/5">
+                                  <td className="px-4 py-3 font-bold text-white">{index + 1}</td>
+                                  <td className="px-4 py-3">{entry.teamName}</td>
+                                  <td className="px-4 py-3 text-center text-white/80">{entry.matchesPlayed}</td>
+                                  <td className="px-4 py-3 text-center text-emerald-300">{entry.wins}</td>
+                                  <td className="px-4 py-3 text-center text-rose-300">{entry.losses}</td>
+                                  <td className="px-4 py-3 text-center text-white/80">
+                                    {entry.setsWon}
+                                    <span className="text-white/50"> / </span>
+                                    {entry.setsLost}
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-bold text-white">{entry.matchPoints}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {!groupHasMatches && (
+                          <p className="text-xs text-white/60">
+                            Nenhum jogo finalizado para este grupo ainda. Assim que os resultados forem registrados, a classificação será atualizada automaticamente.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -734,6 +1045,22 @@ export default function TournamentDetailDB() {
                   <h3 className="text-lg font-semibold">Informações do Torneio</h3>
                   <div className="grid gap-2 text-sm">
                     <div className="flex justify-between">
+                      <span className="text-white/70">Local:</span>
+                      <span className="font-semibold text-right">{tournament.location || 'Não definido'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Início:</span>
+                      <span className="font-semibold">{formattedStartDateDetailed}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Fim:</span>
+                      <span className="font-semibold">{formattedEndDateDetailed}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Status:</span>
+                      <span className="font-semibold text-right capitalize">{tournament.status || 'Em definição'}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-white/70">Modalidade:</span>
                       <span className="font-semibold">{tournament.modality || 'Não definida'}</span>
                     </div>
@@ -748,6 +1075,60 @@ export default function TournamentDetailDB() {
                       </Badge>
                     </div>
                   </div>
+                  {tournamentConfig && (
+                    <div className="space-y-3 pt-4">
+                      <h4 className="text-base font-semibold">Formato configurado</h4>
+                      <div className="grid gap-2 text-sm">
+                        {selectedFormatName && (
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Formato:</span>
+                            <span className="font-semibold text-right">{selectedFormatName}</span>
+                          </div>
+                        )}
+                        {typeof tournamentConfig.includeThirdPlace === 'boolean' && (
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Disputa de 3º lugar:</span>
+                            <Badge variant={tournamentConfig.includeThirdPlace ? 'default' : 'outline'} className="border-white/40">
+                              {tournamentConfig.includeThirdPlace ? 'Sim' : 'Não'}
+                            </Badge>
+                          </div>
+                        )}
+                        {tournamentConfig.matchFormats && (
+                          <div className="space-y-2">
+                            <span className="text-white/70">Formato das partidas:</span>
+                            <div className="grid gap-1 text-xs sm:grid-cols-2">
+                              {(['group', 'knockout', 'thirdPlace'] as const).map((phase) => {
+                                const value = tournamentConfig.matchFormats?.[phase]
+                                if (!value) return null
+                                const label =
+                                  phase === 'group'
+                                    ? 'Fase de grupos'
+                                    : phase === 'knockout'
+                                    ? 'Eliminatória'
+                                    : 'Disputa de 3º'
+                                return (
+                                  <div key={phase} className="flex items-center justify-between gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2">
+                                    <span className="text-white/70">{label}</span>
+                                    <span className="font-semibold text-right text-white">{MATCH_FORMAT_LABELS[value]}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <span className="text-white/70">Critérios de desempate:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {tieBreakerOrder.map((criterion) => (
+                              <Badge key={criterion} variant="outline" className="border-white/30 text-white">
+                                {TIE_BREAKER_LABELS[criterion] ?? criterion}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
