@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Zap, Trophy, TrendingUp, Target, Clock, ArrowLeftRight } from "lucide-react";
@@ -49,6 +49,68 @@ const mockStatistics = {
   }
 };
 
+type ScoreHistoryEntry = {
+  teamA: number;
+  teamB: number;
+  server: 'A' | 'B';
+  setNumber: number;
+};
+
+const parseScoreHistoryFromEvents = (events: unknown): ScoreHistoryEntry[] => {
+  if (!Array.isArray(events)) return [];
+
+  const history: ScoreHistoryEntry[] = [];
+
+  for (const rawEvent of events) {
+    if (!rawEvent) continue;
+    const eventType = typeof rawEvent.event_type === 'string' ? rawEvent.event_type : rawEvent.type;
+    if (eventType !== 'POINT_ADDED') continue;
+
+    const metadataValue = rawEvent.metadata ?? rawEvent.data ?? null;
+    const metadata =
+      metadataValue && typeof metadataValue === 'object' && !Array.isArray(metadataValue)
+        ? (metadataValue as Record<string, unknown>)
+        : null;
+    const parseScore = (value: unknown): number => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === 'string') {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+      return 0;
+    };
+
+    const scoreA = parseScore(metadata ? (metadata['scoreA'] as unknown) : undefined);
+    const scoreB = parseScore(metadata ? (metadata['scoreB'] as unknown) : undefined);
+
+    const setNumberFromMetadata = metadata ? (metadata['setNumber'] as unknown) : undefined;
+    const setNumberFromEvent = (rawEvent.set_number ?? rawEvent.setNumber) as unknown;
+    const setNumber = (() => {
+      if (typeof setNumberFromMetadata === 'number' && Number.isFinite(setNumberFromMetadata)) {
+        return setNumberFromMetadata;
+      }
+      if (typeof setNumberFromEvent === 'number' && Number.isFinite(setNumberFromEvent)) {
+        return setNumberFromEvent;
+      }
+      return 1;
+    })();
+
+    const teamRaw = rawEvent.team;
+    const server: 'A' | 'B' = teamRaw === 'B' ? 'B' : 'A';
+
+    history.push({
+      teamA: scoreA,
+      teamB: scoreB,
+      server,
+      setNumber,
+    });
+  }
+
+  return history;
+};
+
 export default function SpectatorView() {
   const { gameId } = useParams();
   const [game, setGame] = useState<Game | null>(null);
@@ -60,6 +122,27 @@ export default function SpectatorView() {
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false);
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([]);
   const [tournamentLogo, setTournamentLogo] = useState<string | null>(null);
+  const [scoreHistory, setScoreHistory] = useState<ScoreHistoryEntry[]>([]);
+
+  const fetchScoreTimeline = useCallback(async () => {
+    if (!gameId) return;
+    if (mockGames.some(game => game.id === gameId)) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('match_events')
+      .select('id, event_type, team, metadata, set_number, created_at')
+      .eq('match_id', gameId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Failed to load match events', error);
+      return;
+    }
+
+    setScoreHistory(parseScoreHistoryFromEvents(data));
+  }, [gameId]);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -67,6 +150,7 @@ export default function SpectatorView() {
       setGame(foundGame);
       setGameState(foundGame.gameState || createDefaultGameState(foundGame));
       setUsingMatchStateFallback(false);
+      setScoreHistory(parseScoreHistoryFromEvents(foundGame.gameState?.events ?? []));
       setLoading(false);
       return;
     }
@@ -113,11 +197,12 @@ export default function SpectatorView() {
         updatedAt: new Date().toISOString(),
       };
       setGame(newGame);
+      void fetchScoreTimeline();
 
       const { state, usedFallback } = await loadMatchState(match.id, newGame);
       setGameState(state);
       setUsingMatchStateFallback(usedFallback);
-      
+
       // Load tournament logos
       const { data: tournament } = await supabase
         .from('tournaments')
@@ -136,7 +221,7 @@ export default function SpectatorView() {
     };
 
     void loadFromDB();
-  }, [gameId]);
+  }, [fetchScoreTimeline, gameId]);
 
   useEffect(() => {
     if (!gameId || !game) return;
@@ -151,25 +236,37 @@ export default function SpectatorView() {
   // Auto-refresh data every 3 seconds
   useEffect(() => {
     if (!gameId || !game) return;
-    
+
     const refreshInterval = setInterval(async () => {
       const { state } = await loadMatchState(gameId, game);
       setGameState(state);
+      void fetchScoreTimeline();
     }, 3000);
-    
+
     return () => clearInterval(refreshInterval);
-  }, [gameId, game]);
+  }, [fetchScoreTimeline, gameId, game]);
 
   // Rotate stats and sponsors every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      setShowStats(prev => !prev);
+      if (game?.hasStatistics) {
+        setShowStats(prev => !prev);
+      } else {
+        setShowStats(true);
+      }
+
       if (sponsorLogos.length > 0) {
         setCurrentSponsor(prev => (prev + 1) % sponsorLogos.length);
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [sponsorLogos.length]);
+  }, [game?.hasStatistics, sponsorLogos.length]);
+
+  useEffect(() => {
+    if (game && !game.hasStatistics) {
+      setShowStats(true);
+    }
+  }, [game]);
 
   useEffect(() => {
     if (!gameState?.activeTimer) {
@@ -220,6 +317,11 @@ export default function SpectatorView() {
   const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
 
   const timerDescriptor = buildTimerDescriptor(game, gameState.activeTimer ?? null);
+
+  const currentSetHistory = useMemo(() => {
+    if (!gameState) return [];
+    return scoreHistory.filter(entry => entry.setNumber === gameState.currentSet);
+  }, [gameState, scoreHistory]);
 
   const getCategoryLabel = (category: PointCategory) => {
     const labels: Record<PointCategory, string> = {
@@ -317,18 +419,15 @@ export default function SpectatorView() {
               </CardContent>
             </Card>
 
-            {/* Statistics or Chart - Shows when has stats or during timeout */}
-            {!game.hasStatistics && showStats && (
-              <div className="mt-6">
-                <MatchLineChart
-                  teamAName={game.teamA.name}
-                  teamBName={game.teamB.name}
-                  pointsPerSet={game.pointsPerSet}
-                  currentSet={gameState.currentSet}
-                  scoresHistory={[]}
-                />
-              </div>
-            )}
+            <div className="mt-6">
+              <MatchLineChart
+                teamAName={game.teamA.name}
+                teamBName={game.teamB.name}
+                pointsPerSet={game.pointsPerSet}
+                currentSet={gameState.currentSet}
+                scoresHistory={currentSetHistory}
+              />
+            </div>
 
             {/* Statistics Panel - Shows intermittently */}
             {showStats && game.hasStatistics && (
