@@ -189,6 +189,31 @@ export default function TournamentDetailDB() {
 
   const teamOptions = useMemo(() => teams.map(t => ({ value: t.id, label: t.name })), [teams])
 
+  const standings = useMemo(() => {
+    const teamStats = new Map<string, { wins: number; losses: number; points: number; name: string }>()
+
+    teams.forEach(team => {
+      teamStats.set(team.id, { wins: 0, losses: 0, points: 0, name: team.name })
+    })
+
+    matches.filter(m => m.status === 'completed').forEach(match => {
+      // This is simplified - would need actual set scores from match_states
+      const teamA = teamStats.get(match.team_a_id)
+      const teamB = teamStats.get(match.team_b_id)
+
+      if (teamA && teamB) {
+        // Placeholder logic - would need real scores
+        teamA.wins += 1
+        teamA.points += 3
+        teamB.losses += 1
+      }
+    })
+
+    return Array.from(teamStats.entries())
+      .map(([id, stats]) => ({ id, ...stats }))
+      .sort((a, b) => b.points - a.points || b.wins - a.wins)
+  }, [teams, matches])
+
   if (!tournament) return (
     <div className="min-h-screen bg-gradient-ocean flex items-center justify-center">
       <p className="text-sm text-white/80">Torneio não encontrado</p>
@@ -266,31 +291,6 @@ export default function TournamentDetailDB() {
   }
 
   // Calculate standings
-  const standings = useMemo(() => {
-    const teamStats = new Map<string, { wins: number; losses: number; points: number; name: string }>()
-    
-    teams.forEach(team => {
-      teamStats.set(team.id, { wins: 0, losses: 0, points: 0, name: team.name })
-    })
-    
-    matches.filter(m => m.status === 'completed').forEach(match => {
-      // This is simplified - would need actual set scores from match_states
-      const teamA = teamStats.get(match.team_a_id)
-      const teamB = teamStats.get(match.team_b_id)
-      
-      if (teamA && teamB) {
-        // Placeholder logic - would need real scores
-        teamA.wins += 1
-        teamA.points += 3
-        teamB.losses += 1
-      }
-    })
-    
-    return Array.from(teamStats.entries())
-      .map(([id, stats]) => ({ id, ...stats }))
-      .sort((a, b) => b.points - a.points || b.wins - a.wins)
-  }, [teams, matches])
-
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
       <div className="container mx-auto px-4 py-10 space-y-8">
