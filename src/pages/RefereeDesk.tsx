@@ -814,7 +814,6 @@ export default function RefereeDesk() {
       const remaining = calculateRemainingSeconds(gameState.activeTimer);
       setTimer(remaining);
       if (remaining === 0 && lastCompletedTimeoutId.current !== gameState.activeTimer?.id) {
-        lastCompletedTimeoutId.current = gameState.activeTimer?.id ?? null;
         playAlert('timeout');
         void finalizeTimeout(gameState.activeTimer);
       }
