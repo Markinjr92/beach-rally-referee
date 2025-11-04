@@ -1,3 +1,80 @@
+export type TournamentFormatId =
+  | 'groups_and_knockout'
+  | 'double_elimination'
+  | 'global_semis'
+  | 'series_gold_silver'
+  | 'single_elimination';
+
+export type TieBreakerCriterion =
+  | 'head_to_head'
+  | 'sets_average_inner'
+  | 'points_average_inner'
+  | 'sets_average_global'
+  | 'points_average_global'
+  | 'random_draw';
+
+export interface TournamentTeam {
+  id: string;
+  seed: number;
+  team: Team;
+}
+
+export interface TournamentPhase {
+  id: string;
+  name: string;
+  order: number;
+  type: 'group' | 'knockout' | 'double_elimination' | 'series';
+  description?: string;
+}
+
+export interface TournamentGroup {
+  id: string;
+  name: string;
+  phaseId: string;
+  teamIds: string[];
+}
+
+export interface MatchSetResult {
+  setNumber: number;
+  teamAScore: number;
+  teamBScore: number;
+}
+
+export interface TournamentMatchResult {
+  winner: 'A' | 'B';
+  sets: MatchSetResult[];
+  forfeitedBy?: 'A' | 'B';
+  finishedAt?: string;
+}
+
+export interface TournamentMatch extends Game {
+  phaseId: string;
+  phaseName: string;
+  round: number;
+  groupId?: string;
+  groupName?: string;
+  tableId?: string;
+  scheduledAt?: string;
+  teamAId?: string;
+  teamBId?: string;
+  result?: TournamentMatchResult;
+}
+
+export interface TournamentStanding {
+  teamId: string;
+  teamName: string;
+  seed: number;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  setsWon: number;
+  setsLost: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  matchPoints: number;
+  tieBreakValues: Partial<Record<TieBreakerCriterion, number>>;
+}
+
 export interface Tournament {
   id: string;
   name: string;
@@ -6,6 +83,14 @@ export interface Tournament {
   startDate: string;
   endDate: string;
   games: Game[];
+  formatId?: TournamentFormatId;
+  tieBreakerOrder?: TieBreakerCriterion[];
+  teams?: TournamentTeam[];
+  phases?: TournamentPhase[];
+  groups?: TournamentGroup[];
+  matches?: TournamentMatch[];
+  includeThirdPlaceMatch?: boolean;
+  regulationHtml?: string;
 }
 
 export interface Team {
