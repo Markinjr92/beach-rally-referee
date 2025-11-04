@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { ArrowLeft, Users, Trophy, Calendar, Settings, Plus, FileText } from "lu
 import { Link, useParams } from "react-router-dom";
 import { mockTournaments, mockGames } from "@/data/mockData";
 import { formatDateShortPtBr } from "@/utils/date";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const tournamentFormats = [
   {
@@ -90,9 +90,164 @@ export default function TournamentDetail() {
   const [selectedFormat, setSelectedFormat] = useState('');
   const [regularPhaseFormat, setRegularPhaseFormat] = useState('');
   const [finalPhaseFormat, setFinalPhaseFormat] = useState('');
-  
+  const [thirdPlaceFormat, setThirdPlaceFormat] = useState('');
+  const [configStep, setConfigStep] = useState(0);
+
   const tournament = mockTournaments.find(t => t.id === tournamentId);
-  
+
+  const selectedTournamentFormat = useMemo(
+    () => tournamentFormats.find(format => format.id === selectedFormat),
+    [selectedFormat]
+  );
+
+  const hasThirdPlace = selectedTournamentFormat?.hasThirdPlace ?? false;
+
+  useEffect(() => {
+    if (!hasThirdPlace) {
+      setThirdPlaceFormat('');
+    }
+  }, [hasThirdPlace]);
+
+  const configSteps = useMemo(
+    () => [
+      { title: "Escolha o formato do torneio" },
+      { title: "Configure os formatos de jogo das fases" },
+      hasThirdPlace
+        ? { title: "Defina o formato da disputa de 3º lugar" }
+        : { title: "Revisão final" }
+    ],
+    [hasThirdPlace]
+  );
+
+  const totalSteps = configSteps.length;
+  const safeStepIndex = Math.min(configStep, totalSteps - 1);
+  const questionTitle = configSteps[safeStepIndex]?.title ?? "";
+  const isCurrentStepValid = useMemo(() => {
+    if (safeStepIndex === 0) {
+      return selectedFormat.length > 0;
+    }
+    if (safeStepIndex === 1) {
+      return regularPhaseFormat.length > 0 && finalPhaseFormat.length > 0;
+    }
+    if (safeStepIndex === 2) {
+      return hasThirdPlace ? thirdPlaceFormat.length > 0 : true;
+    }
+    return true;
+  }, [safeStepIndex, selectedFormat, regularPhaseFormat, finalPhaseFormat, hasThirdPlace, thirdPlaceFormat]);
+
+  const isLastStep = safeStepIndex === totalSteps - 1;
+
+  const resetConfiguration = () => {
+    setSelectedFormat('');
+    setRegularPhaseFormat('');
+    setFinalPhaseFormat('');
+    setThirdPlaceFormat('');
+    setConfigStep(0);
+  };
+
+  const handleCloseConfigDialog = () => {
+    setShowCreateDialog(false);
+    resetConfiguration();
+  };
+
+  const renderConfigStepContent = () => {
+    switch (safeStepIndex) {
+      case 0:
+        return (
+          <div className="space-y-3">
+            <Label className="text-xs font-semibold text-blue-50/90">
+              Formato do Torneio
+            </Label>
+            <Select value={selectedFormat} onValueChange={setSelectedFormat}>
+              <SelectTrigger className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                <SelectValue placeholder="Selecione o formato" />
+              </SelectTrigger>
+              <SelectContent>
+                {tournamentFormats.map(format => (
+                  <SelectItem key={format.id} value={format.id}>
+                    {format.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedFormat && (
+              <p className="text-sm font-semibold text-blue-50/80">
+                {selectedTournamentFormat?.description}
+              </p>
+            )}
+          </div>
+        );
+      case 1:
+        return (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
+              <Label className="text-xs font-semibold text-blue-50/90">
+                Jogos da fase regular
+              </Label>
+              <Select value={regularPhaseFormat} onValueChange={setRegularPhaseFormat}>
+                <SelectTrigger className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <SelectValue placeholder="Formato dos jogos" />
+                </SelectTrigger>
+                <SelectContent>
+                  {gameFormats.map(format => (
+                    <SelectItem key={format.value} value={format.value}>
+                      {format.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-xs font-semibold text-blue-50/90">
+                Jogos da fase final
+              </Label>
+              <Select value={finalPhaseFormat} onValueChange={setFinalPhaseFormat}>
+                <SelectTrigger className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <SelectValue placeholder="Formato dos jogos" />
+                </SelectTrigger>
+                <SelectContent>
+                  {gameFormats.map(format => (
+                    <SelectItem key={format.value} value={format.value}>
+                      {format.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+      case 2:
+        return hasThirdPlace ? (
+          <div className="space-y-3">
+            <Label className="text-xs font-semibold text-blue-50/90">
+              Formato da disputa de 3º lugar
+            </Label>
+            <Select value={thirdPlaceFormat} onValueChange={setThirdPlaceFormat}>
+              <SelectTrigger className="border-white/30 bg-white/10 text-white hover:bg-white/20">
+                <SelectValue placeholder="Escolha o formato" />
+              </SelectTrigger>
+              <SelectContent>
+                {gameFormats.map(format => (
+                  <SelectItem key={format.value} value={format.value}>
+                    {format.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm font-semibold text-blue-50/80">
+              Utilize esta etapa para definir um formato exclusivo, como 1 set único de 21 pontos.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm font-semibold text-blue-50/80">
+            Este formato de torneio não possui disputa de 3º lugar. Revise as escolhas anteriores e conclua a configuração.
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (!tournament) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -145,85 +300,76 @@ export default function TournamentDetail() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-4">
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <Dialog
+              open={showCreateDialog}
+              onOpenChange={open => {
+                setShowCreateDialog(open);
+                if (!open) {
+                  resetConfiguration();
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="flex items-center gap-2">
                   <Plus size={20} />
                   Configurar Torneio
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Configurar Formato do Torneio</DialogTitle>
-                  <DialogDescription>
-                    Defina o formato de disputa e configurações dos jogos
+              <DialogContent className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#0b4f91]/70 bg-gradient-to-br from-[#0a6fd8] via-[#0bb5ff] to-[#0580c9] p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8">
+                <DialogHeader className="space-y-4">
+                  <DialogTitle className="text-xl font-extrabold text-white">
+                    Configurar Formato do Torneio
+                  </DialogTitle>
+                  <DialogDescription className="text-sm font-semibold text-blue-50/90">
+                    Defina o formato de disputa e as configurações de cada etapa para liberar o planejamento do torneio.
                   </DialogDescription>
+                  <div className="flex flex-col gap-1 rounded-2xl bg-white/10 p-3 text-xs font-semibold text-blue-50/90 sm:flex-row sm:items-center sm:justify-between">
+                    <span>Pergunta {totalSteps > 0 ? safeStepIndex + 1 : 0} de {totalSteps}</span>
+                    {questionTitle ? (
+                      <span className="text-sm font-bold text-white sm:text-base">{questionTitle}</span>
+                    ) : null}
+                  </div>
                 </DialogHeader>
                 <div className="space-y-6">
-                  <div>
-                    <Label>Formato do Torneio</Label>
-                    <Select value={selectedFormat} onValueChange={setSelectedFormat}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o formato" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tournamentFormats.map(format => (
-                          <SelectItem key={format.id} value={format.id}>
-                            {format.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedFormat && (
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {tournamentFormats.find(f => f.id === selectedFormat)?.description}
-                      </p>
+                  {renderConfigStepContent()}
+                </div>
+                <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <Button
+                    variant="outline"
+                    onClick={handleCloseConfigDialog}
+                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                  >
+                    Cancelar
+                  </Button>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    {safeStepIndex > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setConfigStep(prev => Math.max(prev - 1, 0))}
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                      >
+                        Voltar
+                      </Button>
+                    )}
+                    {isLastStep ? (
+                      <Button
+                        onClick={handleCloseConfigDialog}
+                        disabled={!isCurrentStepValid}
+                        className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                      >
+                        Salvar Configuração
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setConfigStep(prev => Math.min(prev + 1, totalSteps - 1))}
+                        disabled={!isCurrentStepValid}
+                        className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                      >
+                        Próximo
+                      </Button>
                     )}
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Jogos da Fase Regular</Label>
-                      <Select value={regularPhaseFormat} onValueChange={setRegularPhaseFormat}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Formato dos jogos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {gameFormats.map(format => (
-                            <SelectItem key={format.value} value={format.value}>
-                              {format.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label>Jogos da Fase Final</Label>
-                      <Select value={finalPhaseFormat} onValueChange={setFinalPhaseFormat}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Formato dos jogos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {gameFormats.map(format => (
-                            <SelectItem key={format.value} value={format.value}>
-                              {format.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={() => setShowCreateDialog(false)}>
-                      Salvar Configuração
-                    </Button>
-                  </div>
-                </div>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
 
