@@ -5,7 +5,7 @@ import { ArrowLeft, Calendar, Clock, MapPin, Trophy, Activity, UserCheck } from 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
 import { useToast } from '@/components/ui/use-toast'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,7 @@ const TournamentInfoDetail = () => {
   const [showLiveOnly, setShowLiveOnly] = useState(false)
   const [timerTick, setTimerTick] = useState(() => Date.now())
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false)
+  const [activeSection, setActiveSection] = useState<'matches' | 'standings'>('matches')
 
   useEffect(() => {
     const interval = setInterval(() => setTimerTick(Date.now()), 1000)
@@ -329,6 +330,149 @@ const TournamentInfoDetail = () => {
     return sorted
   }, [matches, searchTerm, showLiveOnly, sortOption])
 
+  const completedMatchesCount = useMemo(
+    () => matches.filter((match) => match.status === 'completed').length,
+    [matches],
+  )
+
+  const standings = useMemo(() => {
+    type StandingsEntry = {
+      teamId: string
+      teamName: string
+      matchesPlayed: number
+      wins: number
+      losses: number
+      setsWon: number
+      setsLost: number
+      pointsFor: number
+      pointsAgainst: number
+      matchPoints: number
+    }
+
+    const table: Record<string, StandingsEntry> = {}
+
+    const ensureEntry = (teamId: string, teamName: string) => {
+      const normalizedName = teamName || 'Equipe'
+
+      if (!table[teamId]) {
+        table[teamId] = {
+          teamId,
+          teamName: normalizedName,
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          setsWon: 0,
+          setsLost: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+          matchPoints: 0,
+        }
+      } else if (normalizedName && table[teamId].teamName !== normalizedName) {
+        table[teamId].teamName = normalizedName
+      }
+
+      return table[teamId]
+    }
+
+    matches.forEach((match) => {
+      const teamAId = match.teamA?.id ?? match.team_a_id
+      const teamBId = match.teamB?.id ?? match.team_b_id
+
+      if (!teamAId || !teamBId) {
+        return
+      }
+
+      const teamAName = match.teamA?.name ?? 'Equipe A'
+      const teamBName = match.teamB?.name ?? 'Equipe B'
+
+      const teamAEntry = ensureEntry(teamAId, teamAName)
+      const teamBEntry = ensureEntry(teamBId, teamBName)
+
+      if (match.status !== 'completed') {
+        return
+      }
+
+      let setsWonA = 0
+      let setsWonB = 0
+      let pointsA = 0
+      let pointsB = 0
+
+      const recordedScores = scoresByMatch[match.id] || []
+      const state = matchStates[match.id]
+
+      if (recordedScores.length > 0) {
+        for (const score of recordedScores) {
+          pointsA += score.team_a_points
+          pointsB += score.team_b_points
+
+          if (score.team_a_points > score.team_b_points) {
+            setsWonA += 1
+          } else if (score.team_b_points > score.team_a_points) {
+            setsWonB += 1
+          }
+        }
+      } else if (state) {
+        setsWonA = state.setsWon.teamA
+        setsWonB = state.setsWon.teamB
+
+        state.scores.teamA.forEach((value, index) => {
+          pointsA += value
+          pointsB += state.scores.teamB[index] ?? 0
+        })
+      }
+
+      if (setsWonA === 0 && setsWonB === 0 && pointsA === 0 && pointsB === 0) {
+        return
+      }
+
+      teamAEntry.matchesPlayed += 1
+      teamBEntry.matchesPlayed += 1
+      teamAEntry.setsWon += setsWonA
+      teamAEntry.setsLost += setsWonB
+      teamBEntry.setsWon += setsWonB
+      teamBEntry.setsLost += setsWonA
+      teamAEntry.pointsFor += pointsA
+      teamAEntry.pointsAgainst += pointsB
+      teamBEntry.pointsFor += pointsB
+      teamBEntry.pointsAgainst += pointsA
+
+      if (setsWonA > setsWonB) {
+        teamAEntry.wins += 1
+        teamBEntry.losses += 1
+        teamAEntry.matchPoints += 2
+      } else if (setsWonB > setsWonA) {
+        teamBEntry.wins += 1
+        teamAEntry.losses += 1
+        teamBEntry.matchPoints += 2
+      } else if (setsWonA === setsWonB) {
+        teamAEntry.matchPoints += 1
+        teamBEntry.matchPoints += 1
+      }
+    })
+
+    return Object.values(table).sort((a, b) => {
+      if (b.matchPoints !== a.matchPoints) {
+        return b.matchPoints - a.matchPoints
+      }
+
+      const setDiffA = a.setsWon - a.setsLost
+      const setDiffB = b.setsWon - b.setsLost
+
+      if (setDiffB !== setDiffA) {
+        return setDiffB - setDiffA
+      }
+
+      const pointDiffA = a.pointsFor - a.pointsAgainst
+      const pointDiffB = b.pointsFor - b.pointsAgainst
+
+      if (pointDiffB !== pointDiffA) {
+        return pointDiffB - pointDiffA
+      }
+
+      return a.teamName.localeCompare(b.teamName)
+    })
+  }, [matches, matchStates, scoresByMatch])
+
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -400,59 +544,88 @@ const TournamentInfoDetail = () => {
           </div>
         </div>
 
-        <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
-          <CardHeader className="space-y-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <Input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar por equipe, fase, quadra ou status"
-                  className="h-9 bg-white/5 border-white/20 text-white placeholder:text-white/60"
-                />
-                <Select value={sortOption} onValueChange={(value) => setSortOption(value as typeof sortOption)}>
-                  <SelectTrigger className="h-9 bg-white/5 border-white/20 text-white">
-                    <SelectValue placeholder="Ordenar jogos" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-900/95 text-white">
-                    <SelectItem value="date-asc">Data crescente</SelectItem>
-                    <SelectItem value="date-desc">Data decrescente</SelectItem>
-                    <SelectItem value="status">Status</SelectItem>
-                    <SelectItem value="phase">Fase</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowLiveOnly((prev) => !prev)}
-                  className={`h-9 border-white/20 px-4 font-semibold text-white transition ${
-                    showLiveOnly
-                      ? 'border-emerald-300/50 bg-emerald-500/80 text-emerald-950 hover:bg-emerald-500'
-                      : 'bg-white/5 hover:bg-white/10'
-                  }`}
-                >
-                  <Activity className="mr-2 h-4 w-4" />
-                  Ao vivo
-                </Button>
-              </div>
+        <div className="space-y-6">
+          <nav className="flex justify-center">
+            <div className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
+              <button
+                type="button"
+                onClick={() => setActiveSection('matches')}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  activeSection === 'matches'
+                    ? 'bg-white text-slate-900 shadow-lg shadow-white/20'
+                    : 'text-white/70 hover:text-white'
+                }`}
+              >
+                Jogos do torneio
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection('standings')}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  activeSection === 'standings'
+                    ? 'bg-white text-slate-900 shadow-lg shadow-white/20'
+                    : 'text-white/70 hover:text-white'
+                }`}
+              >
+                Classificação atual
+              </button>
             </div>
-            <p className="text-sm text-white/70">
-              Explore todos os confrontos programados e finalizados do torneio em um único painel.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {usingMatchStateFallback && (
-              <div className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                Alguns recursos em tempo real estão limitados. Apenas os placares básicos estão sendo sincronizados com o
-                servidor no momento.
-              </div>
-            )}
-            {filteredAndSortedMatches.length === 0 ? (
-              <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {filteredAndSortedMatches.map((match) => {
+          </nav>
+
+          {activeSection === 'matches' && (
+            <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+              <CardHeader className="space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                    <Input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Buscar por equipe, fase, quadra ou status"
+                      className="h-9 bg-white/5 border-white/20 text-white placeholder:text-white/60"
+                    />
+                    <Select value={sortOption} onValueChange={(value) => setSortOption(value as typeof sortOption)}>
+                      <SelectTrigger className="h-9 bg-white/5 border-white/20 text-white">
+                        <SelectValue placeholder="Ordenar jogos" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900/95 text-white">
+                        <SelectItem value="date-asc">Data crescente</SelectItem>
+                        <SelectItem value="date-desc">Data decrescente</SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
+                        <SelectItem value="phase">Fase</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowLiveOnly((prev) => !prev)}
+                      className={`h-9 border-white/20 px-4 font-semibold text-white transition ${
+                        showLiveOnly
+                          ? 'border-emerald-300/50 bg-emerald-500/80 text-emerald-950 hover:bg-emerald-500'
+                          : 'bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      <Activity className="mr-2 h-4 w-4" />
+                      Ao vivo
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-white/70">
+                  Explore todos os confrontos programados e finalizados do torneio em um único painel.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {usingMatchStateFallback && (
+                  <div className="rounded-md border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    Alguns recursos em tempo real estão limitados. Apenas os placares básicos estão sendo sincronizados com o
+                    servidor no momento.
+                  </div>
+                )}
+                {filteredAndSortedMatches.length === 0 ? (
+                  <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {filteredAndSortedMatches.map((match) => {
                   const scores = scoresByMatch[match.id] || []
                   const liveState = matchStates[match.id]
                   const displayScores = liveState
@@ -658,6 +831,84 @@ const TournamentInfoDetail = () => {
             )}
           </CardContent>
         </Card>
+          )}
+
+          {activeSection === 'standings' && (
+            <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+              <CardHeader className="space-y-3">
+                <CardTitle className="text-lg font-semibold">Classificação parcial</CardTitle>
+                <CardDescription className="text-white/70">
+                  {completedMatchesCount > 0
+                    ? `Classificação com base em ${completedMatchesCount} jogo${
+                        completedMatchesCount === 1 ? '' : 's'
+                      } finalizado${completedMatchesCount === 1 ? '' : 's'}.`
+                    : 'Aguardando jogos finalizados para montar a classificação.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {standings.length === 0 ? (
+                  <p className="text-sm text-white/70">Nenhuma equipe possui resultados computados até o momento.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-white/10 text-sm">
+                      <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-white/60">
+                        <tr>
+                          <th className="px-3 py-2 text-left">#</th>
+                          <th className="px-3 py-2 text-left">Equipe</th>
+                          <th className="px-3 py-2 text-center">J</th>
+                          <th className="px-3 py-2 text-center">V</th>
+                          <th className="px-3 py-2 text-center">D</th>
+                          <th className="px-3 py-2 text-center">S+</th>
+                          <th className="px-3 py-2 text-center">S-</th>
+                          <th className="px-3 py-2 text-center">SΔ</th>
+                          <th className="px-3 py-2 text-center">P+</th>
+                          <th className="px-3 py-2 text-center">P-</th>
+                          <th className="px-3 py-2 text-center">PΔ</th>
+                          <th className="px-3 py-2 text-center">Pts</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 text-white/80">
+                        {standings.map((entry, index) => {
+                          const setBalance = entry.setsWon - entry.setsLost
+                          const pointBalance = entry.pointsFor - entry.pointsAgainst
+
+                          return (
+                            <tr key={entry.teamId} className="transition hover:bg-white/5">
+                              <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
+                              <td className="px-3 py-2 font-medium text-white">{entry.teamName}</td>
+                              <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
+                              <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
+                              <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
+                              <td className="px-3 py-2 text-center">{entry.setsWon}</td>
+                              <td className="px-3 py-2 text-center">{entry.setsLost}</td>
+                              <td
+                                className={`px-3 py-2 text-center ${
+                                  setBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                }`}
+                              >
+                                {setBalance}
+                              </td>
+                              <td className="px-3 py-2 text-center">{entry.pointsFor}</td>
+                              <td className="px-3 py-2 text-center">{entry.pointsAgainst}</td>
+                              <td
+                                className={`px-3 py-2 text-center ${
+                                  pointBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                }`}
+                              >
+                                {pointBalance}
+                              </td>
+                              <td className="px-3 py-2 text-center font-semibold text-yellow-200">{entry.matchPoints}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   )
