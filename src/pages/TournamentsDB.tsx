@@ -31,7 +31,7 @@ import {
   defaultTieBreakerOrder,
   generateTournamentStructure,
 } from "@/lib/tournament"
-import { Tournament, TournamentFormatId, TournamentTeam, TieBreakerCriterion } from "@/types/volleyball"
+import { Tournament as TournamentType, TournamentFormatId, TournamentTeam, TieBreakerCriterion } from "@/types/volleyball"
 
 type Tournament = Tables<'tournaments'>
 
@@ -207,27 +207,27 @@ export default function TournamentsDB() {
           modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
           hasStatistics: form.hasStatistics,
           format: form.matchFormats.knockout,
-          pointsPerSet: knockoutPreset.pointsPerSet,
-          sideSwitchSum: knockoutPreset.sideSwitchSum,
+          pointsPerSet: [...knockoutPreset.pointsPerSet],
+          sideSwitchSum: [...knockoutPreset.sideSwitchSum],
           teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
         },
         phaseConfigs: {
           group: {
             format: form.matchFormats.group,
-            pointsPerSet: groupPreset.pointsPerSet,
-            sideSwitchSum: groupPreset.sideSwitchSum,
+            pointsPerSet: [...groupPreset.pointsPerSet],
+            sideSwitchSum: [...groupPreset.sideSwitchSum],
             teamTimeoutsPerSet: groupPreset.teamTimeoutsPerSet,
           },
           knockout: {
             format: form.matchFormats.knockout,
-            pointsPerSet: knockoutPreset.pointsPerSet,
-            sideSwitchSum: knockoutPreset.sideSwitchSum,
+            pointsPerSet: [...knockoutPreset.pointsPerSet],
+            sideSwitchSum: [...knockoutPreset.sideSwitchSum],
             teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
           },
           thirdPlace: {
             format: form.matchFormats.thirdPlace,
-            pointsPerSet: thirdPlacePreset.pointsPerSet,
-            sideSwitchSum: thirdPlacePreset.sideSwitchSum,
+            pointsPerSet: [...thirdPlacePreset.pointsPerSet],
+            sideSwitchSum: [...thirdPlacePreset.sideSwitchSum],
             teamTimeoutsPerSet: thirdPlacePreset.teamTimeoutsPerSet,
           },
         },
@@ -258,7 +258,7 @@ export default function TournamentsDB() {
           .map((match) => {
             const teamAId = match.teamAId ? teamMap.get(match.teamAId) : undefined
             const teamBId = match.teamBId ? teamMap.get(match.teamBId) : undefined
-            if (!teamAId || !teamBId) return null
+            if (!teamAId || !teamBId || !match.phaseName) return null
             return {
               tournament_id: tournament.id,
               team_a_id: teamAId,
@@ -270,9 +270,9 @@ export default function TournamentsDB() {
               points_per_set: match.pointsPerSet,
               side_switch_sum: match.sideSwitchSum,
               best_of: match.format === 'melhorDe3' ? 3 : 1,
-            }
+            } as TablesInsert<'matches'>
           })
-          .filter((entry): entry is TablesInsert<'matches'> => Boolean(entry))
+          .filter((entry): entry is TablesInsert<'matches'> => entry !== null)
 
         if (matchPayload.length) {
           const { error: insertMatchesError } = await supabase.from('matches').insert(matchPayload)
@@ -280,10 +280,10 @@ export default function TournamentsDB() {
         }
       }
 
-      const tournamentForRegulation: Tournament = {
+      const tournamentForRegulation: TournamentType = {
         id: tournament.id,
         name: tournament.name,
-        status: (tournament.status as Tournament['status']) ?? 'upcoming',
+        status: (tournament.status as TournamentType['status']) ?? 'upcoming',
         location: tournament.location ?? 'Local a definir',
         startDate: tournament.start_date ?? '',
         endDate: tournament.end_date ?? '',

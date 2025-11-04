@@ -358,24 +358,23 @@ export default function TournamentDetailDB() {
                             </SelectContent>
                           </Select>
                           <Link to={`/referee/${m.id}`}>
-                            <Button size="sm" className="bg-yellow-400/90 text-slate-900 hover:bg-yellow-300">
+                            <Button size="sm" className="bg-[hsl(var(--button-scoreboard))] text-white hover:bg-[hsl(var(--button-scoreboard))]/90">
                               Mesa
                             </Button>
                           </Link>
                           <Link to={`/scoreboard/${m.id}`}>
-                            <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/15">
+                            <Button size="sm" className="bg-[hsl(var(--button-scoreboard))] text-white hover:bg-[hsl(var(--button-scoreboard))]/90">
                               Placar
                             </Button>
                           </Link>
                           <Link to={`/spectator/${m.id}`}>
-                            <Button size="sm" variant="outline" className="border-white/30 text-white hover:bg-white/15">
+                            <Button size="sm" className="bg-[hsl(var(--button-spectator))] text-white hover:bg-[hsl(var(--button-spectator))]/90">
                               Torcida
                             </Button>
                           </Link>
                           <Button
                             size="sm"
-                            variant="destructive"
-                            className="bg-red-500/90 text-white hover:bg-red-500"
+                            className="bg-[hsl(var(--button-delete))] text-white hover:bg-[hsl(var(--button-delete))]/90"
                             onClick={async () => {
                               if (!confirm('Remover este jogo?')) return
                               const { error } = await supabase.from('matches').delete().eq('id', m.id)

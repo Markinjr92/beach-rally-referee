@@ -48,6 +48,15 @@ All colors MUST be HSL.
     --team-b: 25 95% 53%;
     --timeout: 0 84% 60%;
     --serving: 85 95% 45%;
+    
+    /* Switch/Toggle colors */
+    --switch-checked: 142 76% 36%;
+    --switch-unchecked: 214 15% 45%;
+    
+    /* Action buttons */
+    --button-scoreboard: 205 87% 35%;
+    --button-spectator: 142 76% 36%;
+    --button-delete: 0 72% 51%;
 
     /* Gradients */
     --gradient-ocean: linear-gradient(135deg, hsl(205 87% 30%), hsl(190 100% 45%));

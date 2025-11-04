@@ -488,7 +488,7 @@ export default function TournamentDetail() {
                     </Button>
                   </Link>
                   <Badge variant="secondary" className="bg-white/10 text-white">
-                    #{tournament.code ?? 'TORNEIO'}
+                    TORNEIO
                   </Badge>
                 </div>
                 <div className="space-y-2">

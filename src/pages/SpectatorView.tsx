@@ -10,6 +10,7 @@ import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchSt
 import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
 import { cn } from "@/lib/utils";
 import { parseGameModality, parseNumberArray } from "@/utils/parsers";
+import { MatchLineChart } from "@/components/MatchLineChart";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
   if (!activeTimer) {
@@ -286,8 +287,21 @@ export default function SpectatorView() {
               </CardContent>
             </Card>
 
+            {/* Statistics or Chart - Shows when has stats or during timeout */}
+            {!game.hasStatistics && showStats && (
+              <div className="mt-6">
+                <MatchLineChart
+                  teamAName={game.teamA.name}
+                  teamBName={game.teamB.name}
+                  pointsPerSet={game.pointsPerSet}
+                  currentSet={gameState.currentSet}
+                  scoresHistory={[]}
+                />
+              </div>
+            )}
+
             {/* Statistics Panel - Shows intermittently */}
-            {showStats && (
+            {showStats && game.hasStatistics && (
               <Card className="mt-6 bg-white/10 border-white/20 text-white animate-bounce-in">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-center justify-center">
