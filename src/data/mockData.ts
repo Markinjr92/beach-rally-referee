@@ -1,4 +1,140 @@
-import { Tournament, Game } from '@/types/volleyball';
+import { Tournament, Game, TournamentTeam } from '@/types/volleyball';
+import { generateTournamentStructure, defaultTieBreakerOrder } from '@/lib/tournament';
+
+const createMockTournamentTeams = (): TournamentTeam[] => [
+  {
+    id: 'team-1',
+    seed: 1,
+    team: {
+      name: 'Equipe Solar',
+      players: [
+        { name: 'André Loyola', number: 1 },
+        { name: 'George Souto', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-2',
+    seed: 2,
+    team: {
+      name: 'Praia Norte',
+      players: [
+        { name: 'Álvaro Filho', number: 1 },
+        { name: 'Luciano Ferreira', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-3',
+    seed: 3,
+    team: {
+      name: 'Tormenta Litorânea',
+      players: [
+        { name: 'Rafael Costa', number: 1 },
+        { name: 'Miguel Nobre', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-4',
+    seed: 4,
+    team: {
+      name: 'Mar Azul',
+      players: [
+        { name: 'João Silva', number: 1 },
+        { name: 'Pedro Santos', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-5',
+    seed: 5,
+    team: {
+      name: 'Ilha Dourada',
+      players: [
+        { name: 'Carlos Lima', number: 1 },
+        { name: 'Eduardo Braga', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-6',
+    seed: 6,
+    team: {
+      name: 'Areia Vermelha',
+      players: [
+        { name: 'Henrique Prado', number: 1 },
+        { name: 'Lucas Neves', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-7',
+    seed: 7,
+    team: {
+      name: 'Brisa Forte',
+      players: [
+        { name: 'Samuel Barros', number: 1 },
+        { name: 'Thiago Leme', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-8',
+    seed: 8,
+    team: {
+      name: 'Onda Veloz',
+      players: [
+        { name: 'Vitor Queiroz', number: 1 },
+        { name: 'Igor Dourado', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-9',
+    seed: 9,
+    team: {
+      name: 'Costa Serena',
+      players: [
+        { name: 'Bruno Neiva', number: 1 },
+        { name: 'Diego Fonseca', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-10',
+    seed: 10,
+    team: {
+      name: 'Atlântico Norte',
+      players: [
+        { name: 'Gabriel Lima', number: 1 },
+        { name: 'Rodrigo Azevedo', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-11',
+    seed: 11,
+    team: {
+      name: 'Sereias do Sol',
+      players: [
+        { name: 'Duda Lisboa', number: 1 },
+        { name: 'Ana Patrícia', number: 2 },
+      ],
+    },
+  },
+  {
+    id: 'team-12',
+    seed: 12,
+    team: {
+      name: 'Marujo Real',
+      players: [
+        { name: 'Bárbara Seixas', number: 1 },
+        { name: 'Carol Solberg', number: 2 },
+      ],
+    },
+  },
+];
 
 export const mockTournaments: Tournament[] = [
   {
@@ -8,16 +144,16 @@ export const mockTournaments: Tournament[] = [
     location: 'Copacabana, Rio de Janeiro',
     startDate: '2024-08-15',
     endDate: '2024-08-25',
-    games: []
+    games: [],
   },
   {
-    id: '2', 
+    id: '2',
     name: 'Circuito Nacional - Etapa Salvador',
     status: 'active',
     location: 'Praia de Ipanema, Salvador',
     startDate: '2024-08-20',
     endDate: '2024-08-22',
-    games: []
+    games: [],
   },
   {
     id: '3',
@@ -26,7 +162,7 @@ export const mockTournaments: Tournament[] = [
     location: 'Fortaleza, CE',
     startDate: '2024-09-01',
     endDate: '2024-09-05',
-    games: []
+    games: [],
   }
 ];
 
@@ -178,3 +314,25 @@ export const mockGames: Game[] = [
 // Update tournaments with games
 mockTournaments[0].games = [mockGames[0], mockGames[1]];
 mockTournaments[1].games = [mockGames[2]];
+
+const tournamentTeams = createMockTournamentTeams();
+const structure = generateTournamentStructure({
+  tournamentId: mockTournaments[0].id,
+  formatId: 'groups_and_knockout',
+  teams: tournamentTeams,
+  includeThirdPlaceMatch: true,
+});
+
+const tournamentOneLegacyGames = [mockGames[0], mockGames[1]];
+
+mockTournaments[0] = {
+  ...mockTournaments[0],
+  formatId: 'groups_and_knockout',
+  tieBreakerOrder: defaultTieBreakerOrder,
+  teams: tournamentTeams,
+  phases: structure.phases,
+  groups: structure.groups,
+  matches: structure.matches,
+  includeThirdPlaceMatch: true,
+  games: [...structure.matches, ...tournamentOneLegacyGames],
+};
