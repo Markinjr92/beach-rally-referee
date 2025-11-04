@@ -49,12 +49,6 @@ const mockStatistics = {
   }
 };
 
-const sponsorImages = [
-  "https://via.placeholder.com/200x100/0066CC/FFFFFF?text=Sponsor+1",
-  "https://via.placeholder.com/200x100/FF6600/FFFFFF?text=Sponsor+2",
-  "https://via.placeholder.com/200x100/00AA00/FFFFFF?text=Sponsor+3"
-];
-
 export default function SpectatorView() {
   const { gameId } = useParams();
   const [game, setGame] = useState<Game | null>(null);
@@ -64,6 +58,8 @@ export default function SpectatorView() {
   const [loading, setLoading] = useState(true);
   const [timer, setTimer] = useState<number | null>(null);
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false);
+  const [sponsorLogos, setSponsorLogos] = useState<string[]>([]);
+  const [tournamentLogo, setTournamentLogo] = useState<string | null>(null);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -121,6 +117,21 @@ export default function SpectatorView() {
       const { state, usedFallback } = await loadMatchState(match.id, newGame);
       setGameState(state);
       setUsingMatchStateFallback(usedFallback);
+      
+      // Load tournament logos
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('logo_url, sponsor_logos')
+        .eq('id', match.tournament_id)
+        .single();
+      
+      if (tournament) {
+        if (tournament.logo_url) setTournamentLogo(tournament.logo_url);
+        if (tournament.sponsor_logos && Array.isArray(tournament.sponsor_logos)) {
+          setSponsorLogos(tournament.sponsor_logos as string[]);
+        }
+      }
+      
       setLoading(false);
     };
 
@@ -137,14 +148,28 @@ export default function SpectatorView() {
     };
   }, [gameId, game, usingMatchStateFallback]);
 
+  // Auto-refresh data every 3 seconds
+  useEffect(() => {
+    if (!gameId || !game) return;
+    
+    const refreshInterval = setInterval(async () => {
+      const { state } = await loadMatchState(gameId, game);
+      setGameState(state);
+    }, 3000);
+    
+    return () => clearInterval(refreshInterval);
+  }, [gameId, game]);
+
   // Rotate stats and sponsors every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setShowStats(prev => !prev);
-      setCurrentSponsor(prev => (prev + 1) % sponsorImages.length);
+      if (sponsorLogos.length > 0) {
+        setCurrentSponsor(prev => (prev + 1) % sponsorLogos.length);
+      }
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [sponsorLogos.length]);
 
   useEffect(() => {
     if (!gameState?.activeTimer) {
@@ -210,6 +235,11 @@ export default function SpectatorView() {
     <div className="min-h-screen bg-gradient-ocean text-white">
       {/* Header */}
       <div className="text-center py-6 border-b border-white/20">
+        {tournamentLogo && (
+          <div className="flex justify-center mb-4">
+            <img src={tournamentLogo} alt="Logo do torneio" className="h-16 object-contain" />
+          </div>
+        )}
         <h1 className="text-3xl font-bold mb-2">{game.title}</h1>
         <p className="text-xl opacity-90">{game.category} • Set {gameState.currentSet}</p>
       </div>
@@ -348,21 +378,25 @@ export default function SpectatorView() {
 
           {/* Sidebar - Sponsors / Momentum */}
           <div className="space-y-6">
-            <Card className="bg-white/10 border-white/20 text-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Target size={20} />
-                  Patrocinadores
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <img
-                  src={sponsorImages[currentSponsor]}
-                  alt={`Patrocinador ${currentSponsor + 1}`}
-                  className="w-full rounded-lg"
-                />
-              </CardContent>
-            </Card>
+            {sponsorLogos.length > 0 && (
+              <Card className="bg-white/10 border-white/20 text-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Target size={20} />
+                    Patrocinadores
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="w-full h-32 flex items-center justify-center rounded-lg bg-white/5 p-4">
+                    <img
+                      src={sponsorLogos[currentSponsor]}
+                      alt={`Patrocinador ${currentSponsor + 1}`}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="bg-white/10 border-white/20 text-white">
               <CardHeader>
@@ -385,12 +419,6 @@ export default function SpectatorView() {
                         />
                       ))}
                     </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold uppercase tracking-wide text-white/70">
-                      Jogador Destaque
-                    </h4>
-                    <p className="mt-2 text-white/90">{game.teamA.players[0].name} • 7 pontos no set</p>
                   </div>
                 </div>
               </CardContent>

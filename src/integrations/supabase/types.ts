@@ -458,8 +458,10 @@ export type Database = {
           has_statistics: boolean
           id: string
           location: string | null
+          logo_url: string | null
           modality: string | null
           name: string
+          sponsor_logos: Json | null
           start_date: string | null
           status: string | null
         }
@@ -471,8 +473,10 @@ export type Database = {
           has_statistics?: boolean
           id?: string
           location?: string | null
+          logo_url?: string | null
           modality?: string | null
           name: string
+          sponsor_logos?: Json | null
           start_date?: string | null
           status?: string | null
         }
@@ -484,8 +488,10 @@ export type Database = {
           has_statistics?: boolean
           id?: string
           location?: string | null
+          logo_url?: string | null
           modality?: string | null
           name?: string
+          sponsor_logos?: Json | null
           start_date?: string | null
           status?: string | null
         }

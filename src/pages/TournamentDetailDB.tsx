@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown, Upload, Image as ImageIcon, Edit2, Save, X } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -124,6 +124,13 @@ type MatchFormState = {
   mode: MatchModeValue
 }
 
+type EditingTeam = {
+  id: string
+  name: string
+  player_a: string
+  player_b: string
+} | null
+
 export default function TournamentDetailDB() {
   const { tournamentId } = useParams()
   const { toast } = useToast()
@@ -138,6 +145,10 @@ export default function TournamentDetailDB() {
     court: '',
     mode: MATCH_MODES[0].value,
   })
+  const [editingTeam, setEditingTeam] = useState<EditingTeam>(null)
+  const [logoUrl, setLogoUrl] = useState('')
+  const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
+  const [newSponsorUrl, setNewSponsorUrl] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -154,6 +165,12 @@ export default function TournamentDetailDB() {
       const { data: m, error: me } = await supabase.from('matches').select('*').eq('tournament_id', tournamentId).order('scheduled_at', { ascending: true })
       if (me) { toast({ title: 'Erro ao carregar jogos', description: me.message }) }
       setMatches(m || [])
+      
+      // Load logos
+      if (t.logo_url) setLogoUrl(t.logo_url)
+      if (t.sponsor_logos && Array.isArray(t.sponsor_logos)) {
+        setSponsorLogos(t.sponsor_logos as string[])
+      }
     }
     load()
   }, [tournamentId, toast])
@@ -180,6 +197,99 @@ export default function TournamentDetailDB() {
 
   const formattedStartDate = formatDateShortPtBr(tournament.start_date)
   const formattedEndDate = formatDateShortPtBr(tournament.end_date)
+
+  const handleSaveTeamEdit = async () => {
+    if (!editingTeam) return
+    const { error } = await supabase
+      .from('teams')
+      .update({
+        name: editingTeam.name,
+        player_a: editingTeam.player_a,
+        player_b: editingTeam.player_b,
+      })
+      .eq('id', editingTeam.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao atualizar dupla', description: error.message })
+      return
+    }
+    
+    setTeams(prev => prev.map(t => t.id === editingTeam.id ? { ...t, ...editingTeam } : t))
+    setEditingTeam(null)
+    toast({ title: 'Dupla atualizada com sucesso' })
+  }
+
+  const handleSaveLogo = async () => {
+    if (!logoUrl) return
+    const { error } = await supabase
+      .from('tournaments')
+      .update({ logo_url: logoUrl })
+      .eq('id', tournament.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao salvar logo', description: error.message })
+    } else {
+      toast({ title: 'Logo salva com sucesso' })
+    }
+  }
+
+  const handleAddSponsor = async () => {
+    if (!newSponsorUrl) return
+    const updated = [...sponsorLogos, newSponsorUrl]
+    const { error } = await supabase
+      .from('tournaments')
+      .update({ sponsor_logos: updated })
+      .eq('id', tournament.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao adicionar patrocinador', description: error.message })
+    } else {
+      setSponsorLogos(updated)
+      setNewSponsorUrl('')
+      toast({ title: 'Patrocinador adicionado' })
+    }
+  }
+
+  const handleRemoveSponsor = async (index: number) => {
+    const updated = sponsorLogos.filter((_, i) => i !== index)
+    const { error } = await supabase
+      .from('tournaments')
+      .update({ sponsor_logos: updated })
+      .eq('id', tournament.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao remover patrocinador', description: error.message })
+    } else {
+      setSponsorLogos(updated)
+      toast({ title: 'Patrocinador removido' })
+    }
+  }
+
+  // Calculate standings
+  const standings = useMemo(() => {
+    const teamStats = new Map<string, { wins: number; losses: number; points: number; name: string }>()
+    
+    teams.forEach(team => {
+      teamStats.set(team.id, { wins: 0, losses: 0, points: 0, name: team.name })
+    })
+    
+    matches.filter(m => m.status === 'completed').forEach(match => {
+      // This is simplified - would need actual set scores from match_states
+      const teamA = teamStats.get(match.team_a_id)
+      const teamB = teamStats.get(match.team_b_id)
+      
+      if (teamA && teamB) {
+        // Placeholder logic - would need real scores
+        teamA.wins += 1
+        teamA.points += 3
+        teamB.losses += 1
+      }
+    })
+    
+    return Array.from(teamStats.entries())
+      .map(([id, stats]) => ({ id, ...stats }))
+      .sort((a, b) => b.points - a.points || b.wins - a.wins)
+  }, [teams, matches])
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -226,10 +336,16 @@ export default function TournamentDetailDB() {
         <Tabs defaultValue="teams" className="space-y-6">
           <TabsList className="flex flex-col gap-2 rounded-xl bg-white/5 p-1 text-white sm:flex-row sm:items-center sm:justify-start">
             <TabsTrigger value="teams" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
-              Duplas cadastradas
+              Duplas
             </TabsTrigger>
             <TabsTrigger value="matches" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
-              Jogos cadastrados
+              Jogos
+            </TabsTrigger>
+            <TabsTrigger value="standings" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
+              Tabela/Classificação
+            </TabsTrigger>
+            <TabsTrigger value="config" className="w-full data-[state=active]:bg-white/20 sm:w-auto">
+              Configurações
             </TabsTrigger>
           </TabsList>
 
@@ -243,29 +359,71 @@ export default function TournamentDetailDB() {
                   <div className="grid gap-3 md:grid-cols-2">
                     {teams.map(team => (
                       <div key={team.id} className="flex flex-col gap-4 rounded-lg border border-white/15 bg-white/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="font-semibold">{team.name}</div>
-                          <div className="text-xs text-white/70">{team.player_a} / {team.player_b}</div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-white/30 text-white hover:bg-white/15"
-                            onClick={async () => {
-                              // Delete matches involving this team in this tournament, then unlink and delete team
-                              await supabase.from('matches').delete().eq('tournament_id', tournament.id).or(`team_a_id.eq.${team.id},team_b_id.eq.${team.id}`)
-                              await supabase.from('tournament_teams').delete().eq('tournament_id', tournament.id).eq('team_id', team.id)
-                              await supabase.from('teams').delete().eq('id', team.id)
-                              const { data: reg } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournament.id)
-                              const updatedTeams = (reg ?? []) as Array<{ teams: Team | null }>
-                              setTeams(updatedTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
-                              toast({ title: 'Dupla removida' })
-                            }}
-                          >
-                            Excluir
-                          </Button>
-                        </div>
+                        {editingTeam?.id === team.id ? (
+                          <div className="flex-1 space-y-2">
+                            <Input
+                              value={editingTeam.name}
+                              onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
+                              className="bg-white/10 border-white/20 text-white"
+                              placeholder="Nome da dupla"
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                value={editingTeam.player_a}
+                                onChange={(e) => setEditingTeam({ ...editingTeam, player_a: e.target.value })}
+                                className="bg-white/10 border-white/20 text-white"
+                                placeholder="Jogador A"
+                              />
+                              <Input
+                                value={editingTeam.player_b}
+                                onChange={(e) => setEditingTeam({ ...editingTeam, player_b: e.target.value })}
+                                className="bg-white/10 border-white/20 text-white"
+                                placeholder="Jogador B"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveTeamEdit} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
+                                <Save size={16} className="mr-1" /> Salvar
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingTeam(null)} className="border-white/30 text-white hover:bg-white/15">
+                                <X size={16} className="mr-1" /> Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div>
+                              <div className="font-semibold">{team.name}</div>
+                              <div className="text-xs text-white/70">{team.player_a} / {team.player_b}</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-white/30 text-white hover:bg-white/15"
+                                onClick={() => setEditingTeam({ id: team.id, name: team.name, player_a: team.player_a, player_b: team.player_b })}
+                              >
+                                <Edit2 size={16} />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-white/30 text-white hover:bg-white/15"
+                                onClick={async () => {
+                                  await supabase.from('matches').delete().eq('tournament_id', tournament.id).or(`team_a_id.eq.${team.id},team_b_id.eq.${team.id}`)
+                                  await supabase.from('tournament_teams').delete().eq('tournament_id', tournament.id).eq('team_id', team.id)
+                                  await supabase.from('teams').delete().eq('id', team.id)
+                                  const { data: reg } = await supabase.from('tournament_teams').select('teams(*)').eq('tournament_id', tournament.id)
+                                  const updatedTeams = (reg ?? []) as Array<{ teams: Team | null }>
+                                  setTeams(updatedTeams.map((record) => record.teams).filter((team): team is Team => Boolean(team)))
+                                  toast({ title: 'Dupla removida' })
+                                }}
+                              >
+                                Excluir
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                     {teams.length === 0 && <p className="text-sm text-white/70">Nenhuma equipe.</p>}
@@ -358,23 +516,23 @@ export default function TournamentDetailDB() {
                             </SelectContent>
                           </Select>
                           <Link to={`/referee/${m.id}`}>
-                            <Button size="sm" className="bg-[hsl(var(--button-scoreboard))] text-white hover:bg-[hsl(var(--button-scoreboard))]/90">
+                            <Button size="sm" className="bg-blue-500/90 text-white hover:bg-blue-600">
                               Mesa
                             </Button>
                           </Link>
                           <Link to={`/scoreboard/${m.id}`}>
-                            <Button size="sm" className="bg-[hsl(var(--button-scoreboard))] text-white hover:bg-[hsl(var(--button-scoreboard))]/90">
+                            <Button size="sm" className="bg-emerald-500/90 text-white hover:bg-emerald-600">
                               Placar
                             </Button>
                           </Link>
                           <Link to={`/spectator/${m.id}`}>
-                            <Button size="sm" className="bg-[hsl(var(--button-spectator))] text-white hover:bg-[hsl(var(--button-spectator))]/90">
+                            <Button size="sm" className="bg-purple-500/90 text-white hover:bg-purple-600">
                               Torcida
                             </Button>
                           </Link>
                           <Button
                             size="sm"
-                            className="bg-[hsl(var(--button-delete))] text-white hover:bg-[hsl(var(--button-delete))]/90"
+                            className="bg-red-500/90 text-white hover:bg-red-600"
                             onClick={async () => {
                               if (!confirm('Remover este jogo?')) return
                               const { error } = await supabase.from('matches').delete().eq('id', m.id)
@@ -456,6 +614,139 @@ export default function TournamentDetailDB() {
                     >
                       Criar jogo
                     </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="standings" className="mt-0">
+            <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="text-xl">Classificação</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/20">
+                        <th className="px-4 py-3 text-left">Pos</th>
+                        <th className="px-4 py-3 text-left">Dupla</th>
+                        <th className="px-4 py-3 text-center">V</th>
+                        <th className="px-4 py-3 text-center">D</th>
+                        <th className="px-4 py-3 text-center">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((team, index) => (
+                        <tr key={team.id} className="border-b border-white/10 hover:bg-white/5">
+                          <td className="px-4 py-3 font-bold">{index + 1}</td>
+                          <td className="px-4 py-3">{team.name}</td>
+                          <td className="px-4 py-3 text-center">{team.wins}</td>
+                          <td className="px-4 py-3 text-center">{team.losses}</td>
+                          <td className="px-4 py-3 text-center font-bold">{team.points}</td>
+                        </tr>
+                      ))}
+                      {standings.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-white/70">
+                            Nenhum jogo finalizado ainda
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="config" className="mt-0">
+            <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="text-xl">Configurações do Torneio</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Tournament Logo */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <ImageIcon size={20} />
+                    Logo do Torneio
+                  </h3>
+                  {logoUrl && (
+                    <div className="relative w-48 h-48 rounded-lg overflow-hidden border border-white/20">
+                      <img src={logoUrl} alt="Logo do torneio" className="w-full h-full object-contain bg-white/5" />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      value={logoUrl}
+                      onChange={(e) => setLogoUrl(e.target.value)}
+                      placeholder="URL da logo do torneio"
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                    />
+                    <Button onClick={handleSaveLogo} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
+                      <Upload size={16} className="mr-2" />
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Sponsor Logos */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <ImageIcon size={20} />
+                    Patrocinadores
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {sponsorLogos.map((url, index) => (
+                      <div key={index} className="relative group">
+                        <div className="w-full h-24 rounded-lg overflow-hidden border border-white/20">
+                          <img src={url} alt={`Patrocinador ${index + 1}`} className="w-full h-full object-contain bg-white/5" />
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500/90 border-red-400 text-white hover:bg-red-600"
+                          onClick={() => handleRemoveSponsor(index)}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newSponsorUrl}
+                      onChange={(e) => setNewSponsorUrl(e.target.value)}
+                      placeholder="URL da logo do patrocinador"
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                    />
+                    <Button onClick={handleAddSponsor} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
+                      <Upload size={16} className="mr-2" />
+                      Adicionar
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tournament Info */}
+                <div className="space-y-3 pt-6 border-t border-white/20">
+                  <h3 className="text-lg font-semibold">Informações do Torneio</h3>
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Modalidade:</span>
+                      <span className="font-semibold">{tournament.modality || 'Não definida'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Categoria:</span>
+                      <span className="font-semibold">{tournament.category || 'Não definida'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/70">Estatísticas:</span>
+                      <Badge variant={tournament.has_statistics ? 'default' : 'outline'} className="border-white/40">
+                        {tournament.has_statistics ? 'Ativadas' : 'Desativadas'}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               </CardContent>
