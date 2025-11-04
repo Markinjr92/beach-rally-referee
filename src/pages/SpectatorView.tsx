@@ -290,6 +290,11 @@ export default function SpectatorView() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
+  const currentSetHistory = useMemo(() => {
+    if (!gameState) return [];
+    return scoreHistory.filter(entry => entry.setNumber === gameState.currentSet);
+  }, [gameState, scoreHistory]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-ocean text-white flex items-center justify-center">
@@ -317,11 +322,6 @@ export default function SpectatorView() {
   const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
 
   const timerDescriptor = buildTimerDescriptor(game, gameState.activeTimer ?? null);
-
-  const currentSetHistory = useMemo(() => {
-    if (!gameState) return [];
-    return scoreHistory.filter(entry => entry.setNumber === gameState.currentSet);
-  }, [gameState, scoreHistory]);
 
   const getCategoryLabel = (category: PointCategory) => {
     const labels: Record<PointCategory, string> = {
