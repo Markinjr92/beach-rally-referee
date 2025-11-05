@@ -21,6 +21,12 @@ import {
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
 import { formatDateShortPtBr, formatDateTimePtBr, toDatetimeLocalInputValue } from '@/utils/date'
+import {
+  GroupAssignment,
+  GroupStanding,
+  buildGroupAssignments,
+  computeStandingsByGroup,
+} from '@/utils/tournamentStandings'
 import { availableTournamentFormats, defaultTieBreakerOrder } from '@/lib/tournament'
 import type { TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
 
@@ -147,26 +153,6 @@ type TournamentTeamRecord = {
   team_id: string
   group_label: string | null
   teams: Team | null
-}
-
-type StandingsEntry = {
-  teamId: string
-  teamName: string
-  matchesPlayed: number
-  wins: number
-  losses: number
-  setsWon: number
-  setsLost: number
-  pointsFor: number
-  pointsAgainst: number
-  matchPoints: number
-}
-
-type GroupStandings = {
-  key: string
-  label: string
-  standings: StandingsEntry[]
-  hasResults: boolean
 }
 
 const MATCH_FORMAT_LABELS: Record<MatchFormatOption, string> = {
@@ -340,146 +326,21 @@ export default function TournamentDetailDB() {
     return map
   }, [teams])
 
-  const groupAssignments = useMemo(() => {
-    if (!teams.length) return [] as Array<{ key: string; label: string; teamIds: string[] }>
+  const groupAssignments = useMemo<GroupAssignment[]>(
+    () => buildGroupAssignments(teams, teamGroups),
+    [teams, teamGroups],
+  )
 
-    const rawGroups = new Map<string, { rawLabel: string | null; teamIds: string[] }>()
-
-    teams.forEach((team) => {
-      const rawLabel = teamGroups[team.id] ?? null
-      const key = rawLabel ?? '__default__'
-      if (!rawGroups.has(key)) {
-        rawGroups.set(key, { rawLabel, teamIds: [] })
-      }
-      rawGroups.get(key)!.teamIds.push(team.id)
-    })
-
-    const multipleGroups = rawGroups.size > 1
-
-    return Array.from(rawGroups.entries()).map(([key, entry]) => ({
-      key,
-      label: entry.rawLabel ?? (multipleGroups ? 'Grupo Único' : 'Classificação Geral'),
-      teamIds: entry.teamIds,
-    }))
-  }, [teams, teamGroups])
-
-  const standingsByGroup: GroupStandings[] = useMemo(() => {
-    if (!groupAssignments.length) return []
-
-    const completedMatches = matches.filter((match) => match.status === 'completed')
-
-    return groupAssignments.map((group) => {
-      const teamSet = new Set(group.teamIds)
-      const statsMap = new Map<string, StandingsEntry>()
-
-      group.teamIds.forEach((teamId) => {
-        const teamName = teamNameMap.get(teamId) ?? 'Equipe'
-        statsMap.set(teamId, {
-          teamId,
-          teamName,
-          matchesPlayed: 0,
-          wins: 0,
-          losses: 0,
-          setsWon: 0,
-          setsLost: 0,
-          pointsFor: 0,
-          pointsAgainst: 0,
-          matchPoints: 0,
-        })
-      })
-
-      let updated = false
-
-      completedMatches.forEach((match) => {
-        const teamAId = match.team_a_id
-        const teamBId = match.team_b_id
-        if (!teamAId || !teamBId) return
-        if (!teamSet.has(teamAId) || !teamSet.has(teamBId)) return
-
-        const entryA = statsMap.get(teamAId)
-        const entryB = statsMap.get(teamBId)
-        if (!entryA || !entryB) return
-
-        const scores = scoresByMatch.get(match.id) ?? []
-        if (!scores.length) return
-
-        let setsWonA = 0
-        let setsWonB = 0
-        let pointsA = 0
-        let pointsB = 0
-
-        scores.forEach((score) => {
-          pointsA += score.team_a_points
-          pointsB += score.team_b_points
-
-          if (score.team_a_points > score.team_b_points) {
-            setsWonA += 1
-          } else if (score.team_b_points > score.team_a_points) {
-            setsWonB += 1
-          }
-        })
-
-        if (setsWonA === 0 && setsWonB === 0 && pointsA === 0 && pointsB === 0) {
-          return
-        }
-
-        entryA.matchesPlayed += 1
-        entryB.matchesPlayed += 1
-        entryA.setsWon += setsWonA
-        entryA.setsLost += setsWonB
-        entryB.setsWon += setsWonB
-        entryB.setsLost += setsWonA
-        entryA.pointsFor += pointsA
-        entryA.pointsAgainst += pointsB
-        entryB.pointsFor += pointsB
-        entryB.pointsAgainst += pointsA
-
-        if (setsWonA > setsWonB) {
-          entryA.wins += 1
-          entryB.losses += 1
-          entryA.matchPoints += 2
-        } else if (setsWonB > setsWonA) {
-          entryB.wins += 1
-          entryA.losses += 1
-          entryB.matchPoints += 2
-        } else {
-          entryA.matchPoints += 1
-          entryB.matchPoints += 1
-        }
-
-        updated = true
-      })
-
-      const standings = Array.from(statsMap.values()).sort((a, b) => {
-        if (b.matchPoints !== a.matchPoints) {
-          return b.matchPoints - a.matchPoints
-        }
-
-        const setDiffA = a.setsWon - a.setsLost
-        const setDiffB = b.setsWon - b.setsLost
-
-        if (setDiffB !== setDiffA) {
-          return setDiffB - setDiffA
-        }
-
-        const pointDiffA = a.pointsFor - a.pointsAgainst
-        const pointDiffB = b.pointsFor - b.pointsAgainst
-
-        if (pointDiffB !== pointDiffA) {
-          return pointDiffB - pointDiffA
-        }
-
-        return a.teamName.localeCompare(b.teamName)
-      })
-
-      return {
-        key: group.key,
-        label: group.label,
-        standings,
-        hasResults: updated,
-      }
-    })
-  }, [groupAssignments, matches, scoresByMatch, teamNameMap])
+  const standingsByGroup: GroupStanding[] = useMemo(
+    () =>
+      computeStandingsByGroup({
+        matches,
+        scoresByMatch,
+        groupAssignments,
+        teamNameMap,
+      }),
+    [groupAssignments, matches, scoresByMatch, teamNameMap],
+  )
 
   if (!tournament) return (
     <div className="min-h-screen bg-gradient-ocean flex items-center justify-center">

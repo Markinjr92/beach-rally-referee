@@ -15,12 +15,24 @@ import { parseGameModality, parseNumberArray } from '@/utils/parsers'
 import { Game, GameState } from '@/types/volleyball'
 import { createDefaultGameState } from '@/lib/matchState'
 import { loadMatchStates, subscribeToMatchState } from '@/lib/matchStateService'
+import {
+  GroupAssignment,
+  GroupStanding,
+  buildGroupAssignments,
+  computeStandingsByGroup,
+} from '@/utils/tournamentStandings'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
 type Team = Tables<'teams'>
 type MatchScore = Tables<'match_scores'>
 type User = Tables<'users'>
+
+type TournamentTeamRecord = {
+  team_id: string
+  group_label: string | null
+  teams: Team | null
+}
 
 type MatchWithTeams = Match & {
   teamA?: Team | null
@@ -32,10 +44,12 @@ const TournamentInfoDetail = () => {
   const { toast } = useToast()
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
-  const [scoresByMatch, setScoresByMatch] = useState<Record<string, MatchScore[]>>({})
+  const [scoresByMatch, setScoresByMatch] = useState<Map<string, MatchScore[]>>(new Map())
   const [matchStates, setMatchStates] = useState<Record<string, GameState>>({})
   const [gameConfigs, setGameConfigs] = useState<Record<string, Game>>({})
   const [referees, setReferees] = useState<Record<string, User>>({})
+  const [teams, setTeams] = useState<Team[]>([])
+  const [teamGroups, setTeamGroups] = useState<Record<string, string | null>>({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortOption, setSortOption] = useState<'date-asc' | 'date-desc' | 'status' | 'phase'>('date-asc')
@@ -71,7 +85,7 @@ const TournamentInfoDetail = () => {
           })
           setTournament(null)
           setMatches([])
-          setScoresByMatch({})
+          setScoresByMatch(new Map())
           setMatchStates({})
           setGameConfigs({})
           setReferees({})
@@ -94,7 +108,7 @@ const TournamentInfoDetail = () => {
             variant: 'destructive',
           })
           setMatches([])
-          setScoresByMatch({})
+          setScoresByMatch(new Map())
           setMatchStates({})
           setGameConfigs({})
           setReferees({})
@@ -133,6 +147,45 @@ const TournamentInfoDetail = () => {
         }))
 
         setMatches(enrichedMatches)
+
+        try {
+          const { data: registeredTeams, error: registeredTeamsError } = await supabase
+            .from('tournament_teams')
+            .select('team_id, group_label, teams(*)')
+            .eq('tournament_id', tournamentId)
+
+          if (registeredTeamsError) {
+            console.error('Falha ao carregar equipes inscritas', registeredTeamsError)
+            const fallbackTeams = Array.from(teamMap.values()).filter((team): team is Team => Boolean(team))
+            setTeams(fallbackTeams)
+            setTeamGroups({})
+          } else {
+            const records = (registeredTeams || []) as TournamentTeamRecord[]
+            const normalizedTeams = records
+              .map((record) => record.teams)
+              .filter((team): team is Team => Boolean(team))
+
+            if (normalizedTeams.length > 0) {
+              setTeams(normalizedTeams)
+              const groupsMap: Record<string, string | null> = {}
+              records.forEach((record) => {
+                if (record.team_id) {
+                  groupsMap[record.team_id] = record.group_label
+                }
+              })
+              setTeamGroups(groupsMap)
+            } else {
+              const fallbackTeams = Array.from(teamMap.values()).filter((team): team is Team => Boolean(team))
+              setTeams(fallbackTeams)
+              setTeamGroups({})
+            }
+          }
+        } catch (error) {
+          console.error('Falha inesperada ao carregar equipes do torneio', error)
+          const fallbackTeams = Array.from(teamMap.values()).filter((team): team is Team => Boolean(team))
+          setTeams(fallbackTeams)
+          setTeamGroups({})
+        }
 
         const refereeIds = Array.from(
           new Set(
@@ -234,18 +287,22 @@ const TournamentInfoDetail = () => {
               description: scoreError.message,
               variant: 'destructive',
             })
-            setScoresByMatch({})
+            setScoresByMatch(new Map())
           } else {
-            const grouped =
-              scoreData?.reduce<Record<string, MatchScore[]>>((acc, score) => {
-                acc[score.match_id] = acc[score.match_id] || []
-                acc[score.match_id].push(score)
-                return acc
-              }, {}) || {}
+            const grouped = new Map<string, MatchScore[]>()
+            scoreData?.forEach((score) => {
+              if (!grouped.has(score.match_id)) {
+                grouped.set(score.match_id, [])
+              }
+              grouped.get(score.match_id)!.push(score)
+            })
+            grouped.forEach((scores) => {
+              scores.sort((a, b) => a.set_number - b.set_number)
+            })
             setScoresByMatch(grouped)
           }
         } else {
-          setScoresByMatch({})
+          setScoresByMatch(new Map())
         }
       } finally {
         setLoading(false)
@@ -335,143 +392,38 @@ const TournamentInfoDetail = () => {
     [matches],
   )
 
-  const standings = useMemo(() => {
-    type StandingsEntry = {
-      teamId: string
-      teamName: string
-      matchesPlayed: number
-      wins: number
-      losses: number
-      setsWon: number
-      setsLost: number
-      pointsFor: number
-      pointsAgainst: number
-      matchPoints: number
-    }
-
-    const table: Record<string, StandingsEntry> = {}
-
-    const ensureEntry = (teamId: string, teamName: string) => {
-      const normalizedName = teamName || 'Equipe'
-
-      if (!table[teamId]) {
-        table[teamId] = {
-          teamId,
-          teamName: normalizedName,
-          matchesPlayed: 0,
-          wins: 0,
-          losses: 0,
-          setsWon: 0,
-          setsLost: 0,
-          pointsFor: 0,
-          pointsAgainst: 0,
-          matchPoints: 0,
-        }
-      } else if (normalizedName && table[teamId].teamName !== normalizedName) {
-        table[teamId].teamName = normalizedName
-      }
-
-      return table[teamId]
-    }
-
+  const teamNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    teams.forEach((team) => {
+      map.set(team.id, team.name)
+    })
     matches.forEach((match) => {
-      const teamAId = match.teamA?.id ?? match.team_a_id
-      const teamBId = match.teamB?.id ?? match.team_b_id
-
-      if (!teamAId || !teamBId) {
-        return
+      if (match.team_a_id && match.teamA?.name) {
+        map.set(match.team_a_id, match.teamA.name)
       }
-
-      const teamAName = match.teamA?.name ?? 'Equipe A'
-      const teamBName = match.teamB?.name ?? 'Equipe B'
-
-      const teamAEntry = ensureEntry(teamAId, teamAName)
-      const teamBEntry = ensureEntry(teamBId, teamBName)
-
-      if (match.status !== 'completed') {
-        return
-      }
-
-      let setsWonA = 0
-      let setsWonB = 0
-      let pointsA = 0
-      let pointsB = 0
-
-      const recordedScores = scoresByMatch[match.id] || []
-      const state = matchStates[match.id]
-
-      if (recordedScores.length > 0) {
-        for (const score of recordedScores) {
-          pointsA += score.team_a_points
-          pointsB += score.team_b_points
-
-          if (score.team_a_points > score.team_b_points) {
-            setsWonA += 1
-          } else if (score.team_b_points > score.team_a_points) {
-            setsWonB += 1
-          }
-        }
-      } else if (state) {
-        setsWonA = state.setsWon.teamA
-        setsWonB = state.setsWon.teamB
-
-        state.scores.teamA.forEach((value, index) => {
-          pointsA += value
-          pointsB += state.scores.teamB[index] ?? 0
-        })
-      }
-
-      if (setsWonA === 0 && setsWonB === 0 && pointsA === 0 && pointsB === 0) {
-        return
-      }
-
-      teamAEntry.matchesPlayed += 1
-      teamBEntry.matchesPlayed += 1
-      teamAEntry.setsWon += setsWonA
-      teamAEntry.setsLost += setsWonB
-      teamBEntry.setsWon += setsWonB
-      teamBEntry.setsLost += setsWonA
-      teamAEntry.pointsFor += pointsA
-      teamAEntry.pointsAgainst += pointsB
-      teamBEntry.pointsFor += pointsB
-      teamBEntry.pointsAgainst += pointsA
-
-      if (setsWonA > setsWonB) {
-        teamAEntry.wins += 1
-        teamBEntry.losses += 1
-        teamAEntry.matchPoints += 2
-      } else if (setsWonB > setsWonA) {
-        teamBEntry.wins += 1
-        teamAEntry.losses += 1
-        teamBEntry.matchPoints += 2
-      } else if (setsWonA === setsWonB) {
-        teamAEntry.matchPoints += 1
-        teamBEntry.matchPoints += 1
+      if (match.team_b_id && match.teamB?.name) {
+        map.set(match.team_b_id, match.teamB.name)
       }
     })
+    return map
+  }, [matches, teams])
 
-    return Object.values(table).sort((a, b) => {
-      if (b.matchPoints !== a.matchPoints) {
-        return b.matchPoints - a.matchPoints
-      }
+  const groupAssignments = useMemo<GroupAssignment[]>(
+    () => buildGroupAssignments(teams, teamGroups),
+    [teams, teamGroups],
+  )
 
-      const setDiffA = a.setsWon - a.setsLost
-      const setDiffB = b.setsWon - b.setsLost
-
-      if (setDiffB !== setDiffA) {
-        return setDiffB - setDiffA
-      }
-
-      const pointDiffA = a.pointsFor - a.pointsAgainst
-      const pointDiffB = b.pointsFor - b.pointsAgainst
-
-      if (pointDiffB !== pointDiffA) {
-        return pointDiffB - pointDiffA
-      }
-
-      return a.teamName.localeCompare(b.teamName)
-    })
-  }, [matches, matchStates, scoresByMatch])
+  const standingsByGroup: GroupStanding[] = useMemo(
+    () =>
+      computeStandingsByGroup({
+        matches,
+        scoresByMatch,
+        matchStates,
+        groupAssignments,
+        teamNameMap,
+      }),
+    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
+  )
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -626,46 +578,44 @@ const TournamentInfoDetail = () => {
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {filteredAndSortedMatches.map((match) => {
-                  const scores = scoresByMatch[match.id] || []
-                  const liveState = matchStates[match.id]
-                  const displayScores = liveState
-                    ? liveState.scores.teamA.map((points, index) => ({
-                        match_id: match.id,
-                        set_number: index + 1,
-                        team_a_points: points,
-                        team_b_points: liveState.scores.teamB[index] ?? 0,
-                      }))
-                    : scores
+                      const scores = scoresByMatch.get(match.id) ?? []
+                      const liveState = matchStates[match.id]
+                      const displayScores = liveState
+                        ? liveState.scores.teamA.map((points, index) => ({
+                            match_id: match.id,
+                            set_number: index + 1,
+                            team_a_points: points,
+                            team_b_points: liveState.scores.teamB[index] ?? 0,
+                          }))
+                        : scores
 
-                  const setTotals = liveState
-                    ? liveState.setsWon
-                    : scores.reduce(
-                        (acc, score) => {
-                          if (score.team_a_points > score.team_b_points) acc.teamA += 1
-                          if (score.team_b_points > score.team_a_points) acc.teamB += 1
-                          return acc
-                        },
-                        { teamA: 0, teamB: 0 }
-                      )
+                      const setTotals = liveState
+                        ? liveState.setsWon
+                        : scores.reduce(
+                            (acc, score) => {
+                              if (score.team_a_points > score.team_b_points) acc.teamA += 1
+                              if (score.team_b_points > score.team_a_points) acc.teamB += 1
+                              return acc
+                            },
+                            { teamA: 0, teamB: 0 },
+                          )
 
-                  const activeTimerRemaining = liveState?.activeTimer
-                    ? Math.max(
-                        0,
-                        Math.ceil(
-                          (new Date(liveState.activeTimer.endsAt).getTime() - timerTick) / 1000,
-                        ),
-                      )
-                    : null
+                      const activeTimerRemaining = liveState?.activeTimer
+                        ? Math.max(
+                            0,
+                            Math.ceil((new Date(liveState.activeTimer.endsAt).getTime() - timerTick) / 1000),
+                          )
+                        : null
 
-                  const timerLabel = liveState?.activeTimer
-                    ? (() => {
-                        const typeLabels: Record<string, string> = {
-                          TIMEOUT_TEAM: 'Tempo de Equipe',
-                          TIMEOUT_TECHNICAL: 'Tempo Técnico',
-                          MEDICAL: 'Tempo Médico',
-                          SET_INTERVAL: 'Intervalo de Set',
-                        }
-                        const baseLabel = typeLabels[liveState.activeTimer.type] ?? 'Tempo Oficial'
+                      const timerLabel = liveState?.activeTimer
+                        ? (() => {
+                            const typeLabels: Record<string, string> = {
+                              TIMEOUT_TEAM: 'Tempo de Equipe',
+                              TIMEOUT_TECHNICAL: 'Tempo Técnico',
+                              MEDICAL: 'Tempo Médico',
+                              SET_INTERVAL: 'Intervalo de Set',
+                            }
+                            const baseLabel = typeLabels[liveState.activeTimer.type] ?? 'Tempo Oficial'
                         if (!liveState.activeTimer.team) {
                           return baseLabel
                         }
@@ -846,63 +796,85 @@ const TournamentInfoDetail = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {standings.length === 0 ? (
+                {standingsByGroup.length === 0 ? (
                   <p className="text-sm text-white/70">Nenhuma equipe possui resultados computados até o momento.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-white/10 text-sm">
-                      <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-white/60">
-                        <tr>
-                          <th className="px-3 py-2 text-left">#</th>
-                          <th className="px-3 py-2 text-left">Equipe</th>
-                          <th className="px-3 py-2 text-center">J</th>
-                          <th className="px-3 py-2 text-center">V</th>
-                          <th className="px-3 py-2 text-center">D</th>
-                          <th className="px-3 py-2 text-center">S+</th>
-                          <th className="px-3 py-2 text-center">S-</th>
-                          <th className="px-3 py-2 text-center">SΔ</th>
-                          <th className="px-3 py-2 text-center">P+</th>
-                          <th className="px-3 py-2 text-center">P-</th>
-                          <th className="px-3 py-2 text-center">PΔ</th>
-                          <th className="px-3 py-2 text-center">Pts</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-white/80">
-                        {standings.map((entry, index) => {
-                          const setBalance = entry.setsWon - entry.setsLost
-                          const pointBalance = entry.pointsFor - entry.pointsAgainst
+                  <div className="space-y-6">
+                    {standingsByGroup.map((group) => {
+                      const hasResults = group.hasResults
 
-                          return (
-                            <tr key={entry.teamId} className="transition hover:bg-white/5">
-                              <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
-                              <td className="px-3 py-2 font-medium text-white">{entry.teamName}</td>
-                              <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
-                              <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
-                              <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
-                              <td className="px-3 py-2 text-center">{entry.setsWon}</td>
-                              <td className="px-3 py-2 text-center">{entry.setsLost}</td>
-                              <td
-                                className={`px-3 py-2 text-center ${
-                                  setBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
-                                }`}
-                              >
-                                {setBalance}
-                              </td>
-                              <td className="px-3 py-2 text-center">{entry.pointsFor}</td>
-                              <td className="px-3 py-2 text-center">{entry.pointsAgainst}</td>
-                              <td
-                                className={`px-3 py-2 text-center ${
-                                  pointBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
-                                }`}
-                              >
-                                {pointBalance}
-                              </td>
-                              <td className="px-3 py-2 text-center font-semibold text-yellow-200">{entry.matchPoints}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                      return (
+                        <div key={group.key} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                              {group.label}
+                            </h3>
+                            {!hasResults && (
+                              <span className="text-[11px] text-white/50">
+                                Aguardando resultados para este grupo
+                              </span>
+                            )}
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-white/10 text-sm">
+                              <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-white/60">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">#</th>
+                                  <th className="px-3 py-2 text-left">Equipe</th>
+                                  <th className="px-3 py-2 text-center">J</th>
+                                  <th className="px-3 py-2 text-center">V</th>
+                                  <th className="px-3 py-2 text-center">D</th>
+                                  <th className="px-3 py-2 text-center">S+</th>
+                                  <th className="px-3 py-2 text-center">S-</th>
+                                  <th className="px-3 py-2 text-center">SΔ</th>
+                                  <th className="px-3 py-2 text-center">P+</th>
+                                  <th className="px-3 py-2 text-center">P-</th>
+                                  <th className="px-3 py-2 text-center">PΔ</th>
+                                  <th className="px-3 py-2 text-center">Pts</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5 text-white/80">
+                                {group.standings.map((entry, index) => {
+                                  const setBalance = entry.setsWon - entry.setsLost
+                                  const pointBalance = entry.pointsFor - entry.pointsAgainst
+
+                                  return (
+                                    <tr key={entry.teamId} className="transition hover:bg-white/5">
+                                      <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
+                                      <td className="px-3 py-2 font-medium text-white">{entry.teamName}</td>
+                                      <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
+                                      <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
+                                      <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsWon}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsLost}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          setBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {setBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsFor}</td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsAgainst}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          pointBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {pointBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold text-yellow-200">
+                                        {entry.matchPoints}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
