@@ -8,6 +8,8 @@ import {
   TieBreakerCriterion,
 } from '@/types/volleyball';
 import { calculateGroupStandings } from './standings';
+import { GroupStanding, computeStandingsByGroup } from '@/utils/tournamentStandings';
+import { getMatchConfigFromFormat } from '@/utils/matchConfig';
 
 type Match = Tables<'matches'>;
 type Team = Tables<'teams'>;
@@ -261,9 +263,17 @@ const createKnockoutMatches = async (
     throw new Error('Não foi possível identificar os classificados de todos os grupos');
   }
 
-  const pointsPerSet = options.pointsPerSet || [21, 21, 15];
-  const sideSwitchSum = options.sideSwitchSum || [7, 7, 5];
-  const bestOf = options.bestOf || 3;
+  // Obter configurações do torneio
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_quarterfinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_quarterfinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
 
   // Quartas de final
@@ -329,9 +339,18 @@ const createSemifinalMatches = async (
   }
 
   const newMatches: TablesInsert<'matches'>[] = [];
-  const pointsPerSet = options.pointsPerSet || [21, 21, 15];
-  const sideSwitchSum = options.sideSwitchSum || [7, 7, 5];
-  const bestOf = options.bestOf || 3;
+  
+  // Obter configurações do torneio
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_semifinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_semifinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
 
   // Buscar os vencedores

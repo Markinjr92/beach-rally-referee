@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
 import { formatDateShortPtBr, formatDateTimePtBr, toDatetimeLocalInputValue } from '@/utils/date'
+import { getMatchConfigFromFormat, MATCH_FORMAT_PRESETS, type MatchFormatPresetKey } from '@/utils/matchConfig'
 import {
   GroupAssignment,
   GroupStanding,
@@ -52,34 +53,15 @@ type MatchScore = Tables<'match_scores'>
 
 type TeamOption = { value: string; label: string }
 
-const MATCH_MODES = [
-  {
-    value: 'best3_21_15',
-    label: 'Melhor de 3 sets (21/21/15)',
-    bestOf: 3,
-    pointsPerSet: [21, 21, 15],
-  },
-  {
-    value: 'best3_15_15',
-    label: 'Melhor de 3 sets (15/15/15)',
-    bestOf: 3,
-    pointsPerSet: [15, 15, 15],
-  },
-  {
-    value: 'best3_15_10',
-    label: 'Melhor de 3 sets (15/15/10)',
-    bestOf: 3,
-    pointsPerSet: [15, 15, 10],
-  },
-  {
-    value: 'single_21',
-    label: 'Set único de 21 pontos',
-    bestOf: 1,
-    pointsPerSet: [21],
-  },
-] as const
+const MATCH_MODES = Object.entries(MATCH_FORMAT_PRESETS).map(([value, preset]) => ({
+  value: value as MatchFormatPresetKey,
+  label: preset.label,
+  bestOf: preset.bestOf,
+  pointsPerSet: preset.pointsPerSet,
+  sideSwitchSum: preset.sideSwitchSum,
+}))
 
-type MatchModeValue = typeof MATCH_MODES[number]['value']
+type MatchModeValue = MatchFormatPresetKey
 
 type TeamSearchSelectProps = {
   value: string
@@ -986,6 +968,7 @@ export default function TournamentDetailDB() {
                           status: 'scheduled',
                           best_of: selectedMode.bestOf,
                           points_per_set: [...selectedMode.pointsPerSet],
+                          side_switch_sum: [...selectedMode.sideSwitchSum],
                         }])
                         if (error) { toast({ title: 'Erro ao criar jogo', description: error.message }); return }
                         const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournament.id).order('scheduled_at', { ascending: true })

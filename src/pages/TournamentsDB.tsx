@@ -290,26 +290,22 @@ export default function TournamentsDB() {
           category: form.category || 'Misto',
           modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
           hasStatistics: form.hasStatistics,
-          format: form.matchFormats.final || 'melhorDe3',
           pointsPerSet: [...finalPreset.pointsPerSet],
           sideSwitchSum: [...finalPreset.sideSwitchSum],
           teamTimeoutsPerSet: finalPreset.teamTimeoutsPerSet,
         },
         phaseConfigs: {
           group: {
-            format: form.matchFormats.groups || 'melhorDe3',
             pointsPerSet: [...groupPreset.pointsPerSet],
             sideSwitchSum: [...groupPreset.sideSwitchSum],
             teamTimeoutsPerSet: groupPreset.teamTimeoutsPerSet,
           },
           knockout: {
-            format: form.matchFormats.final || 'melhorDe3',
             pointsPerSet: [...finalPreset.pointsPerSet],
             sideSwitchSum: [...finalPreset.sideSwitchSum],
             teamTimeoutsPerSet: finalPreset.teamTimeoutsPerSet,
           },
           thirdPlace: {
-            format: form.matchFormats.thirdPlace || 'melhorDe3',
             pointsPerSet: [...thirdPlacePreset.pointsPerSet],
             sideSwitchSum: [...thirdPlacePreset.sideSwitchSum],
             teamTimeoutsPerSet: thirdPlacePreset.teamTimeoutsPerSet,
