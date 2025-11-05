@@ -455,45 +455,69 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           end_date: string | null
+          format_id: string | null
           has_statistics: boolean
           id: string
+          include_third_place: boolean | null
           location: string | null
           logo_url: string | null
+          match_format_final: string | null
+          match_format_groups: string | null
+          match_format_quarterfinals: string | null
+          match_format_semifinals: string | null
+          match_format_third_place: string | null
           modality: string | null
           name: string
           sponsor_logos: Json | null
           start_date: string | null
           status: string | null
+          tie_breaker_order: Json | null
         }
         Insert: {
           category?: string | null
           created_at?: string | null
           created_by?: string | null
           end_date?: string | null
+          format_id?: string | null
           has_statistics?: boolean
           id?: string
+          include_third_place?: boolean | null
           location?: string | null
           logo_url?: string | null
+          match_format_final?: string | null
+          match_format_groups?: string | null
+          match_format_quarterfinals?: string | null
+          match_format_semifinals?: string | null
+          match_format_third_place?: string | null
           modality?: string | null
           name: string
           sponsor_logos?: Json | null
           start_date?: string | null
           status?: string | null
+          tie_breaker_order?: Json | null
         }
         Update: {
           category?: string | null
           created_at?: string | null
           created_by?: string | null
           end_date?: string | null
+          format_id?: string | null
           has_statistics?: boolean
           id?: string
+          include_third_place?: boolean | null
           location?: string | null
           logo_url?: string | null
+          match_format_final?: string | null
+          match_format_groups?: string | null
+          match_format_quarterfinals?: string | null
+          match_format_semifinals?: string | null
+          match_format_third_place?: string | null
           modality?: string | null
           name?: string
           sponsor_logos?: Json | null
           start_date?: string | null
           status?: string | null
+          tie_breaker_order?: Json | null
         }
         Relationships: [
           {
