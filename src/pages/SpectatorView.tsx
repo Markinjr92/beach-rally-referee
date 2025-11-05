@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Game, GameState, PointCategory, Timer } from "@/types/volleyball";
 import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
+import { normalizeMatchStatus } from "@/utils/matchStatus";
 import { cn } from "@/lib/utils";
 import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import { MatchLineChart } from "@/components/MatchLineChart";
@@ -179,6 +180,7 @@ export default function SpectatorView() {
       const sideSwitchSum = parseNumberArray(match.side_switch_sum, [7, 7, 5]);
       const format = inferMatchFormat(match.best_of, pointsPerSet);
 
+      const normalizedStatus = normalizeMatchStatus(match.status);
       const newGame: Game = {
         id: match.id,
         tournamentId: match.tournament_id,
@@ -196,7 +198,12 @@ export default function SpectatorView() {
         teamTimeoutsPerSet: 2,
         teamTimeoutDurationSec: 30,
         coinTossMode: 'initialThenAlternate',
-        status: match.status === 'in_progress' ? 'em_andamento' : match.status === 'completed' ? 'finalizado' : 'agendado',
+        status:
+          normalizedStatus === 'in_progress'
+            ? 'em_andamento'
+            : normalizedStatus === 'completed'
+              ? 'finalizado'
+              : 'agendado',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

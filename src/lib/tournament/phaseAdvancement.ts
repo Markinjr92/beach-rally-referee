@@ -10,6 +10,7 @@ import {
 import { calculateGroupStandings } from './standings';
 import { GroupStanding, computeStandingsByGroup } from '@/utils/tournamentStandings';
 import { getMatchConfigFromFormat } from '@/utils/matchConfig';
+import { isMatchCompleted } from '@/utils/matchStatus';
 
 type Match = Tables<'matches'>;
 type Team = Tables<'teams'>;
@@ -67,8 +68,8 @@ export const checkPhaseCompletion = async (
     };
   }
 
-  const completedMatches = matches.filter((m) => m.status === 'completed');
-  const pendingMatches = matches.filter((m) => m.status !== 'completed');
+  const completedMatches = matches.filter((m) => isMatchCompleted(m.status));
+  const pendingMatches = matches.filter((m) => !isMatchCompleted(m.status));
 
   const canAdvance = pendingMatches.length === 0 && matches.length > 0;
 
@@ -150,7 +151,7 @@ const calculateGroupQualifiers = async (
 
       // Calcular resultado
       let result = undefined;
-      if (m.status === 'completed' && matchScoresForMatch.length > 0) {
+      if (isMatchCompleted(m.status) && matchScoresForMatch.length > 0) {
         const setsWonA = matchScoresForMatch.filter(
           (s) => s.team_a_points > s.team_b_points,
         ).length;

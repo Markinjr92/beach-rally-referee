@@ -22,6 +22,7 @@ import {
   computeStandingsByGroup,
 } from '@/utils/tournamentStandings'
 import { getTournamentPhases } from '@/lib/tournament'
+import { isMatchCompleted, isMatchInProgress, normalizeMatchStatus } from '@/utils/matchStatus'
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 
 type Tournament = Tables<'tournaments'>
@@ -222,6 +223,7 @@ const TournamentInfoDetail = () => {
           const sideSwitchSum = parseNumberArray(match.side_switch_sum, [7, 7, 5])
           const format = inferMatchFormat(match.best_of, pointsPerSet)
 
+          const normalizedStatus = normalizeMatchStatus(match.status)
           const config: Game = {
             id: match.id,
             tournamentId: match.tournament_id,
@@ -252,9 +254,9 @@ const TournamentInfoDetail = () => {
             teamTimeoutDurationSec: 30,
             coinTossMode: 'initialThenAlternate',
             status:
-              match.status === 'in_progress'
+              normalizedStatus === 'in_progress'
                 ? 'em_andamento'
-                : match.status === 'completed'
+                : normalizedStatus === 'completed'
                   ? 'finalizado'
                   : 'agendado',
             createdAt: match.created_at || new Date().toISOString(),
@@ -361,7 +363,7 @@ const TournamentInfoDetail = () => {
     const term = searchTerm.trim().toLowerCase()
 
     const filtered = matches.filter((match) => {
-      if (showLiveOnly && match.status !== 'in_progress') {
+      if (showLiveOnly && !isMatchInProgress(match.status)) {
         return false
       }
 
@@ -414,7 +416,7 @@ const TournamentInfoDetail = () => {
   }, [matches, searchTerm, showLiveOnly, sortOption, currentPhaseFilter])
 
   const completedMatchesCount = useMemo(
-    () => matches.filter((match) => match.status === 'completed').length,
+    () => matches.filter((match) => isMatchCompleted(match.status)).length,
     [matches],
   )
 
@@ -681,7 +683,8 @@ const TournamentInfoDetail = () => {
                       : match.teamB?.name ?? 'Equipe B'
                     : null
 
-                  const isLive = match.status === 'in_progress'
+                  const normalizedStatus = normalizeMatchStatus(match.status)
+                  const isLive = normalizedStatus === 'in_progress'
                   const lastDisplayScore = displayScores.length > 0 ? displayScores[displayScores.length - 1] : null
                   const currentSetNumber = liveState?.currentSet ?? (isLive ? lastDisplayScore?.set_number ?? 1 : null)
                   const fallbackCurrentScore = currentSetNumber
@@ -708,9 +711,9 @@ const TournamentInfoDetail = () => {
                     ? `${serverName ?? 'Equipe'} #${liveState.currentServerPlayer}`
                     : null
                   const statusLabel =
-                    match.status === 'in_progress'
+                    normalizedStatus === 'in_progress'
                       ? 'Em andamento'
-                      : match.status === 'completed'
+                      : normalizedStatus === 'completed'
                         ? 'Finalizado'
                         : match.status || 'Agendado'
 
@@ -742,14 +745,14 @@ const TournamentInfoDetail = () => {
                       <div className="space-y-1 text-white">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold truncate">{match.teamA?.name || 'Equipe A'}</span>
-                          {(match.status === 'completed' || liveState) && (
+                          {(normalizedStatus === 'completed' || liveState) && (
                             <span className="text-[11px] font-semibold text-white/80">{setTotals.teamA}</span>
                           )}
                         </div>
                         <div className="text-[9px] uppercase tracking-[0.35em] text-white/40 text-center">vs</div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold truncate">{match.teamB?.name || 'Equipe B'}</span>
-                          {(match.status === 'completed' || liveState) && (
+                          {(normalizedStatus === 'completed' || liveState) && (
                             <span className="text-[11px] font-semibold text-white/80">{setTotals.teamB}</span>
                           )}
                         </div>
