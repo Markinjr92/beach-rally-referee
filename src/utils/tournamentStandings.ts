@@ -1,5 +1,6 @@
 import { Tables } from '@/integrations/supabase/types'
 import { GameState } from '@/types/volleyball'
+import { isMatchCompleted } from './matchStatus'
 
 export type StandingsEntry = {
   teamId: string
@@ -136,7 +137,7 @@ export const computeStandingsByGroup = ({
 }: StandingsComputationParams): GroupStanding[] => {
   if (!groupAssignments.length) return []
 
-  const completedMatches = matches.filter((match) => match.status === 'completed')
+  const completedMatches = matches.filter((match) => isMatchCompleted(match.status))
 
   return groupAssignments.map((group) => {
     const teamSet = new Set(group.teamIds)
