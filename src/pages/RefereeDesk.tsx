@@ -66,7 +66,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { parseGameModality, parseNumberArray } from "@/utils/parsers";
+import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import nilsonBall from '@/assets/nilson.png';
 import miasaBall from '@/assets/miasa.png';
 
@@ -688,13 +688,17 @@ export default function RefereeDesk() {
           .eq('id', match.tournament_id)
           .maybeSingle();
         const hasStatistics = tournament?.has_statistics ?? true;
+        const pointsPerSet = parseNumberArray(match.points_per_set, [21, 21, 15]);
+        const sideSwitchSum = parseNumberArray(match.side_switch_sum, [7, 7, 5]);
+        const format = inferMatchFormat(match.best_of, pointsPerSet);
+
         const newGame: Game = {
           id: match.id,
           tournamentId: match.tournament_id,
           title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
           category: 'Misto',
           modality: parseGameModality(match.modality),
-          format: 'melhorDe3',
+          format,
           teamA: {
             name: teamA?.name || 'Equipe A',
             players: [
@@ -709,9 +713,9 @@ export default function RefereeDesk() {
               { name: teamB?.player_b || 'B2', number: 2 },
             ],
           },
-          pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
+          pointsPerSet,
           needTwoPointLead: true,
-          sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
+          sideSwitchSum,
           hasTechnicalTimeout: false,
           technicalTimeoutSum: 0,
           teamTimeoutsPerSet: 2,

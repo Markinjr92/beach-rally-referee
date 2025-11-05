@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { formatDateTimePtBr } from '@/utils/date'
-import { parseGameModality, parseNumberArray } from '@/utils/parsers'
+import { inferMatchFormat, parseGameModality, parseNumberArray } from '@/utils/parsers'
 
 type Match = Tables<'matches'>
 type Team = Tables<'teams'>
@@ -142,13 +142,17 @@ const LiveMatches = () => {
         const configs: Record<string, Game> = {}
         for (const match of enrichedMatches) {
           const tournamentStats = tournamentMap.get(match.tournament_id)?.has_statistics ?? true
+          const pointsPerSet = parseNumberArray(match.points_per_set, [21, 21, 15])
+          const sideSwitchSum = parseNumberArray(match.side_switch_sum, [7, 7, 5])
+          const format = inferMatchFormat(match.best_of, pointsPerSet)
+
           configs[match.id] = {
             id: match.id,
             tournamentId: match.tournament_id,
             title: `${match.teamA?.name ?? 'Equipe A'} vs ${match.teamB?.name ?? 'Equipe B'}`,
             category: match.modality ? String(match.modality) : 'Misto',
             modality: parseGameModality(match.modality),
-            format: 'melhorDe3',
+            format,
             teamA: {
               name: match.teamA?.name || 'Equipe A',
               players: [
@@ -163,9 +167,9 @@ const LiveMatches = () => {
                 { name: match.teamB?.player_b || 'B2', number: 2 },
               ],
             },
-            pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
+            pointsPerSet,
             needTwoPointLead: true,
-            sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
+            sideSwitchSum,
             hasTechnicalTimeout: false,
             technicalTimeoutSum: 0,
             teamTimeoutsPerSet: 2,

@@ -1,5 +1,7 @@
 import type { Game } from "@/types/volleyball";
 
+type GameFormat = Game["format"];
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
@@ -11,11 +13,11 @@ export const parseNumberArray = (
   fallback: number[],
 ): number[] => {
   const fallbackLast = fallback[fallback.length - 1] ?? 0;
-  if (!Array.isArray(value)) {
+  if (!Array.isArray(value) || value.length === 0) {
     return [...fallback];
   }
 
-  const result = value.map((item, index) => {
+  return value.map((item, index) => {
     if (isFiniteNumber(item)) {
       return item;
     }
@@ -28,10 +30,42 @@ export const parseNumberArray = (
     const fallbackValue = fallback[index] ?? fallbackLast;
     return fallbackValue;
   });
+};
 
-  if (result.length < fallback.length) {
-    return [...result, ...fallback.slice(result.length)];
+const arraysAreEqual = (a: number[], b: number[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
+const normalizeBestOf = (bestOf: unknown): number | null => {
+  if (typeof bestOf === "number" && Number.isFinite(bestOf) && bestOf > 0) {
+    return bestOf;
+  }
+  if (typeof bestOf === "string") {
+    const parsed = Number(bestOf);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+export const inferMatchFormat = (
+  bestOf: unknown,
+  pointsPerSet: number[],
+): GameFormat => {
+  const normalizedBestOf = normalizeBestOf(bestOf);
+  const setsConfigured = pointsPerSet.length;
+
+  if ((normalizedBestOf ?? setsConfigured) <= 1 || setsConfigured <= 1) {
+    return "melhorDe1";
   }
 
-  return result;
+  if (arraysAreEqual(pointsPerSet, [15, 15, 15])) {
+    return "melhorDe3_15";
+  }
+
+  if (arraysAreEqual(pointsPerSet, [15, 15, 10])) {
+    return "melhorDe3_15_10";
+  }
+
+  return "melhorDe3";
 };
