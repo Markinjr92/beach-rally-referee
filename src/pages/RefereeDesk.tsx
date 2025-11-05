@@ -170,12 +170,12 @@ export default function RefereeDesk() {
     (team: 'A' | 'B') => {
       const players = getPlayersByTeam(team);
       if (!players.length) {
-        return team === 'A' ? 'Time Out A' : 'Time Out B';
+        return team === 'A' ? 'A' : 'B';
       }
       const [firstPlayer, secondPlayer] = players;
       const primaryName = firstPlayer?.name?.trim() ?? (team === 'A' ? 'A' : 'B');
       const secondaryInitial = secondPlayer?.name?.trim()?.charAt(0)?.toUpperCase() ?? '';
-      return `Time Out ${primaryName}${secondaryInitial ? ` ${secondaryInitial}` : ''}`;
+      return `${primaryName}${secondaryInitial ? ` ${secondaryInitial}` : ''}`;
     },
     [getPlayersByTeam]
   );
@@ -2426,7 +2426,7 @@ export default function RefereeDesk() {
                   onClick={() => void startTimeout('team', 'A')}
                   disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
-                  <Pause className="mr-2 h-4 w-4" />
+                  <Clock className="mr-2 h-4 w-4" />
                   {timeoutLabelA}
                 </Button>
                 <Button
@@ -2435,7 +2435,7 @@ export default function RefereeDesk() {
                   onClick={() => void startTimeout('team', 'B')}
                   disabled={!!gameState?.activeTimer || gameIsEnded}
                 >
-                  <Pause className="mr-2 h-4 w-4" />
+                  <Clock className="mr-2 h-4 w-4" />
                   {timeoutLabelB}
                 </Button>
               </div>
@@ -2445,7 +2445,6 @@ export default function RefereeDesk() {
                 onClick={() => void startTimeout('technical')}
                 disabled={!!gameState?.activeTimer || gameIsEnded}
               >
-                <Clock className="mr-2 h-4 w-4" />
                 Tempo Técnico
               </Button>
               <Button

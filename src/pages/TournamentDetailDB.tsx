@@ -55,27 +55,27 @@ type TeamOption = { value: string; label: string }
 const MATCH_MODES = [
   {
     value: 'best3_21_15',
-    label: 'Melhor de 3 sets de 21 e desempate de 15',
+    label: 'Melhor de 3 sets (21/21/15)',
     bestOf: 3,
     pointsPerSet: [21, 21, 15],
   },
   {
-    value: 'single_21',
-    label: '1 set de 21',
-    bestOf: 1,
-    pointsPerSet: [21],
+    value: 'best3_15_15',
+    label: 'Melhor de 3 sets (15/15/15)',
+    bestOf: 3,
+    pointsPerSet: [15, 15, 15],
   },
   {
     value: 'best3_15_10',
-    label: 'Melhor de 3 sets de 15 e desempate de 10',
+    label: 'Melhor de 3 sets (15/15/10)',
     bestOf: 3,
     pointsPerSet: [15, 15, 10],
   },
   {
-    value: 'best3_15_15',
-    label: 'Melhor de 3 sets de 15 e desempate de 15',
-    bestOf: 3,
-    pointsPerSet: [15, 15, 15],
+    value: 'single_21',
+    label: 'Set único de 21 pontos',
+    bestOf: 1,
+    pointsPerSet: [21],
   },
 ] as const
 
@@ -148,6 +148,13 @@ type MatchFormState = {
   mode: MatchModeValue
 }
 
+type EditingMatch = {
+  id: string
+  scheduled_at: string
+  court: string
+  phase: string
+} | null
+
 type EditingTeam = {
   id: string
   name: string
@@ -155,7 +162,7 @@ type EditingTeam = {
   player_b: string
 } | null
 
-type MatchFormatOption = 'melhorDe1' | 'melhorDe3'
+type MatchFormatOption = 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10'
 
 type TournamentConfig = {
   formatId?: TournamentFormatId
@@ -178,6 +185,8 @@ type TournamentTeamRecord = {
 
 const MATCH_FORMAT_LABELS: Record<MatchFormatOption, string> = {
   melhorDe3: 'Melhor de 3 sets (21/21/15)',
+  melhorDe3_15: 'Melhor de 3 sets (15/15/15)',
+  melhorDe3_15_10: 'Melhor de 3 sets (15/15/10)',
   melhorDe1: 'Set único de 21 pontos',
 }
 
@@ -213,6 +222,7 @@ export default function TournamentDetailDB() {
     mode: MATCH_MODES[0].value,
   })
   const [editingTeam, setEditingTeam] = useState<EditingTeam>(null)
+  const [editingMatch, setEditingMatch] = useState<EditingMatch>(null)
   const [logoUrl, setLogoUrl] = useState('')
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
   const [newSponsorUrl, setNewSponsorUrl] = useState('')
@@ -535,6 +545,32 @@ export default function TournamentDetailDB() {
     }
   }
 
+  const handleSaveMatchEdit = async () => {
+    if (!editingMatch) return
+    const { error } = await supabase
+      .from('matches')
+      .update({
+        scheduled_at: editingMatch.scheduled_at || null,
+        court: editingMatch.court || null,
+        phase: editingMatch.phase || null,
+      })
+      .eq('id', editingMatch.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao atualizar jogo', description: error.message })
+      return
+    }
+    
+    setMatches(prev => prev.map(m => m.id === editingMatch.id ? { 
+      ...m, 
+      scheduled_at: editingMatch.scheduled_at || null,
+      court: editingMatch.court || null,
+      phase: editingMatch.phase || null,
+    } : m))
+    setEditingMatch(null)
+    toast({ title: 'Jogo atualizado com sucesso' })
+  }
+
   // Calculate standings
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -658,17 +694,17 @@ export default function TournamentDetailDB() {
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="border-white/30 text-white hover:bg-white/15"
+                                className="bg-blue-500/90 text-white hover:bg-blue-600"
                                 onClick={() => setEditingTeam({ id: team.id, name: team.name, player_a: team.player_a, player_b: team.player_b })}
                               >
-                                <Edit2 size={16} />
+                                <Edit2 size={16} className="mr-1" />
+                                Editar
                               </Button>
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="border-white/30 text-white hover:bg-white/15"
+                                className="bg-red-500/90 text-white hover:bg-red-600"
                                 onClick={async () => {
+                                  if (!confirm('Tem certeza que deseja excluir esta dupla? Isso removerá todos os jogos associados.')) return
                                   await supabase.from('matches').delete().eq('tournament_id', tournament.id).or(`team_a_id.eq.${team.id},team_b_id.eq.${team.id}`)
                                   await supabase.from('tournament_teams').delete().eq('tournament_id', tournament.id).eq('team_id', team.id)
                                   await supabase.from('teams').delete().eq('id', team.id)
@@ -769,69 +805,127 @@ export default function TournamentDetailDB() {
                     const a = teams.find(t => t.id === m.team_a_id)
                     const b = teams.find(t => t.id === m.team_b_id)
                     return (
-                      <div key={m.id} className="flex flex-col gap-3 rounded-lg border border-white/15 bg-white/5 p-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                          <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
-                            <div className="flex items-center gap-2">
-                              <Clock size={16} className="text-white/60" />
-                              {formatDateTimePtBr(m.scheduled_at, { fallback: 'Sem horário agendado' })}
+                      <div key={m.id} className="rounded-lg border border-white/15 bg-white/5 p-3">
+                        {editingMatch?.id === m.id ? (
+                          <div className="space-y-3">
+                            <div className="font-semibold text-white">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <div className="space-y-1">
+                                <label className="text-xs text-white/70">Horário agendado</label>
+                                <Input
+                                  type="datetime-local"
+                                  value={editingMatch.scheduled_at}
+                                  onChange={(e) => setEditingMatch({ ...editingMatch, scheduled_at: e.target.value })}
+                                  className="bg-white/10 border-white/20 text-white"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-white/70">Quadra</label>
+                                <Input
+                                  value={editingMatch.court}
+                                  onChange={(e) => setEditingMatch({ ...editingMatch, court: e.target.value })}
+                                  className="bg-white/10 border-white/20 text-white"
+                                  placeholder="Ex: 1, A, Central"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-white/70">Fase</label>
+                                <Input
+                                  value={editingMatch.phase}
+                                  onChange={(e) => setEditingMatch({ ...editingMatch, phase: e.target.value })}
+                                  className="bg-white/10 border-white/20 text-white"
+                                  placeholder="Ex: Fase de Grupos"
+                                />
+                              </div>
                             </div>
-                            <Badge variant="outline" className="border-white/40 text-white">
-                              {m.phase || 'Jogo'}
-                            </Badge>
-                            {m.court && (
-                              <Badge variant="outline" className="border-white/40 text-white">
-                                Quadra {m.court}
-                              </Badge>
-                            )}
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveMatchEdit} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
+                                <Save size={16} className="mr-1" /> Salvar
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingMatch(null)} className="border-white/30 text-white hover:bg-white/15">
+                                <X size={16} className="mr-1" /> Cancelar
+                              </Button>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-semibold">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
-                            <div className="text-xs uppercase tracking-wide text-white/70">{m.status}</div>
+                        ) : (
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                              <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
+                                <div className="flex items-center gap-2">
+                                  <Clock size={16} className="text-white/60" />
+                                  {formatDateTimePtBr(m.scheduled_at, { fallback: 'Sem horário agendado' })}
+                                </div>
+                                <Badge variant="outline" className="border-white/40 text-white">
+                                  {m.phase || 'Jogo'}
+                                </Badge>
+                                {m.court && (
+                                  <Badge variant="outline" className="border-white/40 text-white">
+                                    Quadra {m.court}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-semibold">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
+                                <div className="text-xs uppercase tracking-wide text-white/70">{m.status}</div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Select value={m.status || 'scheduled'} onValueChange={async (v) => {
+                                await supabase.from('matches').update({ status: v }).eq('id', m.id)
+                                setMatches(prev => prev.map(x => x.id === m.id ? { ...x, status: v } : x))
+                              }}>
+                                <SelectTrigger className="w-full bg-white/10 border-white/30 text-white sm:w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                                <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
+                                  <SelectItem value="scheduled">Pendente</SelectItem>
+                                  <SelectItem value="in_progress">Em andamento</SelectItem>
+                                  <SelectItem value="completed">Finalizado</SelectItem>
+                                  <SelectItem value="canceled">Cancelado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                className="bg-amber-500/90 text-white hover:bg-amber-600"
+                                onClick={() => setEditingMatch({ 
+                                  id: m.id, 
+                                  scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '', 
+                                  court: m.court || '',
+                                  phase: m.phase || '',
+                                })}
+                              >
+                                <Edit2 size={16} className="mr-1" />
+                                Editar
+                              </Button>
+                              <Link to={`/referee/${m.id}`}>
+                                <Button size="sm" className="bg-blue-500/90 text-white hover:bg-blue-600">
+                                  Mesa
+                                </Button>
+                              </Link>
+                              <Link to={`/scoreboard/${m.id}`}>
+                                <Button size="sm" className="bg-emerald-500/90 text-white hover:bg-emerald-600">
+                                  Placar
+                                </Button>
+                              </Link>
+                              <Link to={`/spectator/${m.id}`}>
+                                <Button size="sm" className="bg-purple-500/90 text-white hover:bg-purple-600">
+                                  Torcida
+                                </Button>
+                              </Link>
+                              <Button
+                                size="sm"
+                                className="bg-red-500/90 text-white hover:bg-red-600"
+                                onClick={async () => {
+                                  if (!confirm('Remover este jogo?')) return
+                                  const { error } = await supabase.from('matches').delete().eq('id', m.id)
+                                  if (error) { toast({ title: 'Erro ao excluir jogo', description: error.message }); return }
+                                  setMatches(prev => prev.filter(x => x.id !== m.id))
+                                  toast({ title: 'Jogo removido' })
+                                }}
+                              >
+                                Excluir
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Select value={m.status || 'scheduled'} onValueChange={async (v) => {
-                            await supabase.from('matches').update({ status: v }).eq('id', m.id)
-                            setMatches(prev => prev.map(x => x.id === m.id ? { ...x, status: v } : x))
-                          }}>
-                            <SelectTrigger className="w-full bg-white/10 border-white/30 text-white sm:w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-                            <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
-                              <SelectItem value="scheduled">Pendente</SelectItem>
-                              <SelectItem value="in_progress">Em andamento</SelectItem>
-                              <SelectItem value="completed">Finalizado</SelectItem>
-                              <SelectItem value="canceled">Cancelado</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Link to={`/referee/${m.id}`}>
-                            <Button size="sm" className="bg-blue-500/90 text-white hover:bg-blue-600">
-                              Mesa
-                            </Button>
-                          </Link>
-                          <Link to={`/scoreboard/${m.id}`}>
-                            <Button size="sm" className="bg-emerald-500/90 text-white hover:bg-emerald-600">
-                              Placar
-                            </Button>
-                          </Link>
-                          <Link to={`/spectator/${m.id}`}>
-                            <Button size="sm" className="bg-purple-500/90 text-white hover:bg-purple-600">
-                              Torcida
-                            </Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            className="bg-red-500/90 text-white hover:bg-red-600"
-                            onClick={async () => {
-                              if (!confirm('Remover este jogo?')) return
-                              const { error } = await supabase.from('matches').delete().eq('id', m.id)
-                              if (error) { toast({ title: 'Erro ao excluir jogo', description: error.message }); return }
-                              setMatches(prev => prev.filter(x => x.id !== m.id))
-                              toast({ title: 'Jogo removido' })
-                            }}
-                          >
-                            Excluir
-                          </Button>
-                        </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1094,22 +1188,22 @@ export default function TournamentDetailDB() {
                             </Badge>
                           </div>
                         )}
-                          {tournamentConfig.matchFormats && (
-                            <div className="space-y-2">
-                              <span className="text-white/70">Formato das partidas:</span>
-                              <div className="grid gap-1 text-xs sm:grid-cols-2">
+                        {tournamentConfig.matchFormats && (
+                          <div className="space-y-2">
+                            <span className="text-white/70">Formato das partidas:</span>
+                            <div className="grid gap-1 text-xs sm:grid-cols-2">
                                 {Object.entries(tournamentConfig.matchFormats).map(([phase, value]) => {
-                                  if (!value) return null
-                                  return (
-                                    <div key={phase} className="flex items-center justify-between gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2">
+                                if (!value) return null
+                                return (
+                                  <div key={phase} className="flex items-center justify-between gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2">
                                       <span className="text-white/70">{PHASE_LABELS[phase] || phase}</span>
                                       <span className="font-semibold text-right text-white">{MATCH_FORMAT_LABELS[value as MatchFormatOption]}</span>
-                                    </div>
-                                  )
-                                })}
-                              </div>
+                                  </div>
+                                )
+                              })}
                             </div>
-                          )}
+                          </div>
+                        )}
                         <div className="space-y-2">
                           <span className="text-white/70">Critérios de desempate:</span>
                           <div className="flex flex-wrap gap-2">

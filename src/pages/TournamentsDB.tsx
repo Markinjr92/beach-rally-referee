@@ -35,7 +35,7 @@ import { Tournament as TournamentType, TournamentFormatId, TournamentTeam, TieBr
 
 type Tournament = Tables<'tournaments'>
 
-type MatchFormatOption = 'melhorDe1' | 'melhorDe3'
+type MatchFormatOption = 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10'
 
 interface CreateTournamentFormState {
   name: string
@@ -145,6 +145,16 @@ export default function TournamentsDB() {
           pointsPerSet: [21],
           sideSwitchSum: [7],
           teamTimeoutsPerSet: 1,
+        },
+        melhorDe3_15: {
+          pointsPerSet: [15, 15, 15],
+          sideSwitchSum: [5, 5, 5],
+          teamTimeoutsPerSet: 2,
+        },
+        melhorDe3_15_10: {
+          pointsPerSet: [15, 15, 10],
+          sideSwitchSum: [5, 5, 5],
+          teamTimeoutsPerSet: 2,
         },
       }) as const,
     [],
@@ -466,8 +476,18 @@ export default function TournamentsDB() {
   const matchFormatOptions: { value: MatchFormatOption; title: string; description: string }[] = [
     {
       value: 'melhorDe3',
-      title: 'Melhor de 3 sets',
-      description: 'Decisão tradicional em até 3 sets (21/21/15).',
+      title: 'Melhor de 3 sets (21/21/15)',
+      description: 'Formato tradicional: sets de 21, 21 e 15 pontos.',
+    },
+    {
+      value: 'melhorDe3_15',
+      title: 'Melhor de 3 sets (15/15/15)',
+      description: 'Formato rápido: todos os sets com 15 pontos.',
+    },
+    {
+      value: 'melhorDe3_15_10',
+      title: 'Melhor de 3 sets (15/15/10)',
+      description: 'Formato misto: sets de 15, 15 e 10 pontos.',
     },
     {
       value: 'melhorDe1',
@@ -638,38 +658,38 @@ export default function TournamentsDB() {
           <div className="grid gap-4 md:grid-cols-2">
             {getFormatPhases(form.formatId).map((phase) => (
               <div key={phase.key} className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
-                <div>
+              <div>
                   <Label className="text-white">{phase.label}</Label>
                   <p className="text-xs text-blue-50/80">Selecione o formato das partidas desta fase.</p>
-                </div>
-                <Select
-                  value={form.matchFormats[phase.key] || 'melhorDe3'}
-                  onValueChange={(value) =>
-                    setForm({
-                      ...form,
-                      matchFormats: { ...form.matchFormats, [phase.key]: value as MatchFormatOption },
-                    })
-                  }
-                >
-                  <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
-                    <SelectValue placeholder={`Formato - ${phase.label}`} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
-                    {matchFormatOptions.map((option) => (
-                      <SelectItem
-                        key={option.value}
-                        value={option.value}
-                        className="focus:bg-white/10 focus:text-white"
-                      >
-                        <div className="flex flex-col text-left">
-                          <span className="font-semibold">{option.title}</span>
-                          <span className="text-xs text-blue-50/80">{option.description}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
+              <Select
+                  value={form.matchFormats[phase.key] || 'melhorDe3'}
+                onValueChange={(value) =>
+                  setForm({
+                    ...form,
+                      matchFormats: { ...form.matchFormats, [phase.key]: value as MatchFormatOption },
+                  })
+                }
+              >
+                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                    <SelectValue placeholder={`Formato - ${phase.label}`} />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                  {matchFormatOptions.map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      className="focus:bg-white/10 focus:text-white"
+                    >
+                      <div className="flex flex-col text-left">
+                        <span className="font-semibold">{option.title}</span>
+                        <span className="text-xs text-blue-50/80">{option.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             ))}
           </div>
           <div
