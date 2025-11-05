@@ -8,7 +8,7 @@ import { Game, GameState, Timer } from "@/types/volleyball";
 import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
 import { cn } from "@/lib/utils";
-import { parseGameModality, parseNumberArray } from "@/utils/parsers";
+import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
   if (!activeTimer) {
@@ -70,18 +70,22 @@ export default function PublicScoreboard() {
         .in('id', [match.team_a_id, match.team_b_id]);
       const teamA = teams?.find(t => t.id === match.team_a_id);
       const teamB = teams?.find(t => t.id === match.team_b_id);
+      const pointsPerSet = parseNumberArray(match.points_per_set, [21, 21, 15]);
+      const sideSwitchSum = parseNumberArray(match.side_switch_sum, [7, 7, 5]);
+      const format = inferMatchFormat(match.best_of, pointsPerSet);
+
       const newGame: Game = {
         id: match.id,
         tournamentId: match.tournament_id,
         title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
         category: 'Misto',
         modality: parseGameModality(match.modality),
-        format: 'melhorDe3',
+        format,
         teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
         teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
-        pointsPerSet: parseNumberArray(match.points_per_set, [21, 21, 15]),
+        pointsPerSet,
         needTwoPointLead: true,
-        sideSwitchSum: parseNumberArray(match.side_switch_sum, [7, 7, 5]),
+        sideSwitchSum,
         hasTechnicalTimeout: false,
         technicalTimeoutSum: 0,
         teamTimeoutsPerSet: 2,

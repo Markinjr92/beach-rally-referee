@@ -110,7 +110,7 @@ export interface GameConfiguration {
   title: string;
   category: string; // F/M/Misto
   modality: 'dupla' | 'quarteto';
-  format: 'melhorDe1' | 'melhorDe3';
+  format: 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10';
   teamA: Team;
   teamB: Team;
   pointsPerSet: number[]; // [21, 21, 15]
