@@ -48,9 +48,11 @@ interface CreateTournamentFormState {
   formatId: TournamentFormatId
   includeThirdPlace: boolean
   matchFormats: {
-    group: MatchFormatOption
-    knockout: MatchFormatOption
-    thirdPlace: MatchFormatOption
+    groups?: MatchFormatOption
+    quarterfinals?: MatchFormatOption
+    semifinals?: MatchFormatOption
+    final?: MatchFormatOption
+    thirdPlace?: MatchFormatOption
   }
   tieBreakerOrder: TieBreakerCriterion[]
 }
@@ -70,8 +72,10 @@ export default function TournamentsDB() {
     formatId: "groups_and_knockout",
     includeThirdPlace: true,
     matchFormats: {
-      group: "melhorDe3",
-      knockout: "melhorDe3",
+      groups: "melhorDe3",
+      quarterfinals: "melhorDe3",
+      semifinals: "melhorDe3",
+      final: "melhorDe3",
       thirdPlace: "melhorDe3",
     },
     tieBreakerOrder: [...defaultTieBreakerOrder],
@@ -146,6 +150,44 @@ export default function TournamentsDB() {
     [],
   )
 
+  // Get phases that need match format configuration for each tournament format
+  const getFormatPhases = (formatId: TournamentFormatId): Array<{ key: keyof CreateTournamentFormState['matchFormats']; label: string }> => {
+    const phasesByFormat: Record<TournamentFormatId, Array<{ key: keyof CreateTournamentFormState['matchFormats']; label: string }>> = {
+      groups_and_knockout: [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
+      '3_groups_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
+      global_semis: [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
+      series_gold_silver: [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais (Ouro/Prata)' },
+        { key: 'final', label: 'Finais (Ouro/Prata)' },
+      ],
+      single_elimination: [
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
+      double_elimination: [
+        { key: 'quarterfinals', label: 'Chave de Vencedores/Repescagem' },
+        { key: 'final', label: 'Grande Final' },
+      ],
+    }
+    return phasesByFormat[formatId] || []
+  }
+
   const initializeTournamentStructure = async (tournament: Tables<'tournaments'>) => {
     try {
       const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: 12 }, (_, index) => ({
@@ -193,9 +235,9 @@ export default function TournamentsDB() {
       }))
 
       const formatId = form.formatId
-      const groupPreset = matchFormatPresets[form.matchFormats.group]
-      const knockoutPreset = matchFormatPresets[form.matchFormats.knockout]
-      const thirdPlacePreset = matchFormatPresets[form.matchFormats.thirdPlace]
+      const groupPreset = matchFormatPresets[form.matchFormats.groups || 'melhorDe3']
+      const knockoutPreset = matchFormatPresets[form.matchFormats.final || 'melhorDe3']
+      const thirdPlacePreset = matchFormatPresets[form.matchFormats.thirdPlace || 'melhorDe3']
 
       const structure = generateTournamentStructure({
         tournamentId: tournament.id,
@@ -206,26 +248,26 @@ export default function TournamentsDB() {
           category: form.category || 'Misto',
           modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
           hasStatistics: form.hasStatistics,
-          format: form.matchFormats.knockout,
+          format: form.matchFormats.final || 'melhorDe3',
           pointsPerSet: [...knockoutPreset.pointsPerSet],
           sideSwitchSum: [...knockoutPreset.sideSwitchSum],
           teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
         },
         phaseConfigs: {
           group: {
-            format: form.matchFormats.group,
+            format: form.matchFormats.groups || 'melhorDe3',
             pointsPerSet: [...groupPreset.pointsPerSet],
             sideSwitchSum: [...groupPreset.sideSwitchSum],
             teamTimeoutsPerSet: groupPreset.teamTimeoutsPerSet,
           },
           knockout: {
-            format: form.matchFormats.knockout,
+            format: form.matchFormats.final || 'melhorDe3',
             pointsPerSet: [...knockoutPreset.pointsPerSet],
             sideSwitchSum: [...knockoutPreset.sideSwitchSum],
             teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
           },
           thirdPlace: {
-            format: form.matchFormats.thirdPlace,
+            format: form.matchFormats.thirdPlace || 'melhorDe3',
             pointsPerSet: [...thirdPlacePreset.pointsPerSet],
             sideSwitchSum: [...thirdPlacePreset.sideSwitchSum],
             teamTimeoutsPerSet: thirdPlacePreset.teamTimeoutsPerSet,
@@ -297,20 +339,8 @@ export default function TournamentsDB() {
         includeThirdPlaceMatch: form.includeThirdPlace,
       }
 
-      const regulationHtml = buildTournamentRegulationHtml(tournamentForRegulation)
-
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(
-          `tournament:${tournament.id}:config`,
-          JSON.stringify({
-            formatId,
-            tieBreakerOrder: form.tieBreakerOrder,
-            includeThirdPlace: form.includeThirdPlace,
-            matchFormats: form.matchFormats,
-            regulationHtml,
-          }),
-        )
-      }
+      // Configuration is now persisted in the database via the tournaments table
+      // No need for localStorage anymore
     } catch (error) {
       console.error('Falha ao inicializar estrutura do torneio', error)
       toast({
@@ -367,6 +397,14 @@ export default function TournamentsDB() {
       modality: modality ?? null,
       start_date: startDateISO ?? null,
       end_date: endDateISO ?? null,
+      format_id: form.formatId,
+      tie_breaker_order: form.tieBreakerOrder,
+      include_third_place: form.includeThirdPlace,
+      match_format_groups: form.matchFormats.groups ?? null,
+      match_format_quarterfinals: form.matchFormats.quarterfinals ?? null,
+      match_format_semifinals: form.matchFormats.semifinals ?? null,
+      match_format_final: form.matchFormats.final ?? null,
+      match_format_third_place: form.matchFormats.thirdPlace ?? null,
     }
 
     const { data: createdTournament, error } = await supabase
@@ -406,8 +444,10 @@ export default function TournamentsDB() {
       formatId: "groups_and_knockout",
       includeThirdPlace: true,
       matchFormats: {
-        group: "melhorDe3",
-        knockout: "melhorDe3",
+        groups: "melhorDe3",
+        quarterfinals: "melhorDe3",
+        semifinals: "melhorDe3",
+        final: "melhorDe3",
         thirdPlace: "melhorDe3",
       },
       tieBreakerOrder: [...defaultTieBreakerOrder],
@@ -584,73 +624,53 @@ export default function TournamentsDB() {
       description: 'Personalize o formato de sets em cada fase e ajuste os critérios de desempate.',
       content: (
         <div className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-white text-base">Formato das Partidas por Fase</Label>
+              <Badge variant="outline" className="border-white/30 text-white">
+                {availableTournamentFormats[form.formatId]?.name}
+              </Badge>
+            </div>
+            <p className="text-xs text-blue-50/80">
+              Configure o formato de cada fase do torneio de acordo com a estrutura selecionada.
+            </p>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
-              <div>
-                <Label className="text-white">Fase de grupos</Label>
-                <p className="text-xs text-blue-50/80">Selecione o formato das partidas da fase classificatória.</p>
+            {getFormatPhases(form.formatId).map((phase) => (
+              <div key={phase.key} className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+                <div>
+                  <Label className="text-white">{phase.label}</Label>
+                  <p className="text-xs text-blue-50/80">Selecione o formato das partidas desta fase.</p>
+                </div>
+                <Select
+                  value={form.matchFormats[phase.key] || 'melhorDe3'}
+                  onValueChange={(value) =>
+                    setForm({
+                      ...form,
+                      matchFormats: { ...form.matchFormats, [phase.key]: value as MatchFormatOption },
+                    })
+                  }
+                >
+                  <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                    <SelectValue placeholder={`Formato - ${phase.label}`} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                    {matchFormatOptions.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        className="focus:bg-white/10 focus:text-white"
+                      >
+                        <div className="flex flex-col text-left">
+                          <span className="font-semibold">{option.title}</span>
+                          <span className="text-xs text-blue-50/80">{option.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select
-                value={form.matchFormats.group}
-                onValueChange={(value) =>
-                  setForm({
-                    ...form,
-                    matchFormats: { ...form.matchFormats, group: value as MatchFormatOption },
-                  })
-                }
-              >
-                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
-                  <SelectValue placeholder="Formato da fase de grupos" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
-                  {matchFormatOptions.map((option) => (
-                    <SelectItem
-                      key={option.value}
-                      value={option.value}
-                      className="focus:bg-white/10 focus:text-white"
-                    >
-                      <div className="flex flex-col text-left">
-                        <span className="font-semibold">{option.title}</span>
-                        <span className="text-xs text-blue-50/80">{option.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
-              <div>
-                <Label className="text-white">Fase eliminatória</Label>
-                <p className="text-xs text-blue-50/80">Defina o formato para as partidas decisivas.</p>
-              </div>
-              <Select
-                value={form.matchFormats.knockout}
-                onValueChange={(value) =>
-                  setForm({
-                    ...form,
-                    matchFormats: { ...form.matchFormats, knockout: value as MatchFormatOption },
-                  })
-                }
-              >
-                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
-                  <SelectValue placeholder="Formato da fase eliminatória" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
-                  {matchFormatOptions.map((option) => (
-                    <SelectItem
-                      key={option.value}
-                      value={option.value}
-                      className="focus:bg-white/10 focus:text-white"
-                    >
-                      <div className="flex flex-col text-left">
-                        <span className="font-semibold">{option.title}</span>
-                        <span className="text-xs text-blue-50/80">{option.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            ))}
           </div>
           <div
             className={cn(
@@ -697,6 +717,32 @@ export default function TournamentsDB() {
                 Ative a disputa de 3º lugar na etapa anterior para habilitar essa configuração.
               </p>
             )}
+          </div>
+          <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+            <div>
+              <Label className="text-white">Sistema de pontuação (padrão do sistema)</Label>
+              <p className="text-xs text-blue-50/80 mb-3">
+                Pontuação automática aplicada a todas as partidas do torneio.
+              </p>
+            </div>
+            <div className="space-y-3 text-xs text-blue-50/90">
+              <div className="rounded-lg bg-white/5 p-3 border border-white/20">
+                <p className="font-semibold text-white mb-2">Partidas de melhor de 3 sets:</p>
+                <ul className="space-y-1 ml-4">
+                  <li>• <span className="font-semibold text-emerald-200">3 pontos</span> para vitória por 2 sets a 0</li>
+                  <li>• <span className="font-semibold text-blue-200">2 pontos</span> para vitória por 2 sets a 1</li>
+                  <li>• <span className="font-semibold text-amber-200">1 ponto</span> para derrota por 1 set a 2</li>
+                  <li>• <span className="font-semibold text-rose-200">0 pontos</span> para derrota por 0 set a 2</li>
+                </ul>
+              </div>
+              <div className="rounded-lg bg-white/5 p-3 border border-white/20">
+                <p className="font-semibold text-white mb-2">Partidas de set único:</p>
+                <ul className="space-y-1 ml-4">
+                  <li>• <span className="font-semibold text-emerald-200">3 pontos</span> para vitória</li>
+                  <li>• <span className="font-semibold text-rose-200">0 pontos</span> para derrota</li>
+                </ul>
+              </div>
+            </div>
           </div>
           <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
             <div>

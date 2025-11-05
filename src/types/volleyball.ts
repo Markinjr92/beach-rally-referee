@@ -3,7 +3,8 @@ export type TournamentFormatId =
   | 'double_elimination'
   | 'global_semis'
   | 'series_gold_silver'
-  | 'single_elimination';
+  | 'single_elimination'
+  | '3_groups_quarterfinals';
 
 export type TieBreakerCriterion =
   | 'head_to_head'

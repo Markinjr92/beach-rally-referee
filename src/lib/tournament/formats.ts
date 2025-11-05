@@ -797,6 +797,139 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
       };
     },
   },
+  '3_groups_quarterfinals': {
+    id: '3_groups_quarterfinals',
+    name: '3 Grupos + Quartas com melhores 3º',
+    description:
+      'Três grupos com quatro duplas, todos contra todos. Classificam 1º e 2º de cada grupo + 2 melhores 3º colocados para as quartas de final.',
+    generate: (options) => {
+      ensureTwelveTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Eliminatórias',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-c', name: 'Grupo C', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      const groupSeeds: Record<string, number[]> = {
+        'grupo-a': [1, 6, 7, 12],
+        'grupo-b': [2, 5, 8, 11],
+        'grupo-c': [3, 4, 9, 10],
+      };
+
+      groups.forEach((group) => {
+        group.teamIds = groupSeeds[group.id].map((seed) => {
+          const team = teamsBySeed.get(seed);
+          if (!team) {
+            throw new Error(`Seed ${seed} não encontrado`);
+          }
+          return team.id;
+        });
+      });
+
+      const groupMatches = generateGroupStageMatches(options, phaseGroup, groups, teamsBySeed);
+
+      const placeholder = placeholderTeam;
+      const quarterfinals = [
+        {
+          title: 'Quartas de final 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('Melhor 3º'),
+        },
+        {
+          title: 'Quartas de final 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('2º Grupo C'),
+        },
+        {
+          title: 'Quartas de final 3',
+          teamA: placeholder('1º Grupo C'),
+          teamB: placeholder('2º Grupo B'),
+        },
+        {
+          title: 'Quartas de final 4',
+          teamA: placeholder('2º Grupo A'),
+          teamB: placeholder('2º Melhor 3º'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = quarterfinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+        }),
+      );
+
+      const semifinals = [
+        {
+          title: 'Semifinal 1',
+          teamA: placeholder('Vencedor Quartas 1'),
+          teamB: placeholder('Vencedor Quartas 2'),
+        },
+        {
+          title: 'Semifinal 2',
+          teamA: placeholder('Vencedor Quartas 3'),
+          teamB: placeholder('Vencedor Quartas 4'),
+        },
+      ];
+
+      knockoutMatches.push(
+        ...semifinals.map((match) =>
+          createMatch(options, phaseKnockout, {
+            round: 2,
+            title: match.title,
+            teamA: match.teamA,
+            teamB: match.teamB,
+          }),
+        ),
+      );
+
+      if (options.includeThirdPlaceMatch) {
+        knockoutMatches.push(
+          createMatch(options, phaseKnockout, {
+            round: 3,
+            title: 'Decisão 3º lugar',
+            teamA: placeholder('Perdedor Semifinal 1'),
+            teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
+          }),
+        );
+      }
+
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 4,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseKnockout],
+        groups,
+        matches: [...groupMatches, ...knockoutMatches],
+      };
+    },
+  },
 };
 
 export const availableTournamentFormats = formatDefinitions;

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDatePtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
 import { parseGameModality, parseNumberArray } from '@/utils/parsers'
-import { Game, GameState } from '@/types/volleyball'
+import { Game, GameState, TournamentFormatId } from '@/types/volleyball'
 import { createDefaultGameState } from '@/lib/matchState'
 import { loadMatchStates, subscribeToMatchState } from '@/lib/matchStateService'
 import {
@@ -21,6 +21,8 @@ import {
   buildGroupAssignments,
   computeStandingsByGroup,
 } from '@/utils/tournamentStandings'
+import { getTournamentPhases } from '@/lib/tournament'
+import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -57,6 +59,9 @@ const TournamentInfoDetail = () => {
   const [timerTick, setTimerTick] = useState(() => Date.now())
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false)
   const [activeSection, setActiveSection] = useState<'matches' | 'standings'>('matches')
+  const [availablePhases, setAvailablePhases] = useState<string[]>([])
+  const [currentPhaseFilter, setCurrentPhaseFilter] = useState<string>('')
+  const [tournamentFormatId, setTournamentFormatId] = useState<TournamentFormatId | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => setTimerTick(Date.now()), 1000)
@@ -320,6 +325,18 @@ const TournamentInfoDetail = () => {
   }, [loadTournamentData])
 
   useEffect(() => {
+    const loadPhases = async () => {
+      if (!tournamentId) return
+      const phases = await getTournamentPhases(tournamentId)
+      setAvailablePhases(phases)
+      if (phases.length > 0 && !currentPhaseFilter) {
+        setCurrentPhaseFilter(phases[0])
+      }
+    }
+    loadPhases()
+  }, [tournamentId, matches.length, currentPhaseFilter])
+
+  useEffect(() => {
     if (Object.keys(gameConfigs).length === 0) return
 
     const unsubscribeList = Object.entries(gameConfigs).map(([matchId, config]) =>
@@ -341,6 +358,11 @@ const TournamentInfoDetail = () => {
 
     const filtered = matches.filter((match) => {
       if (showLiveOnly && match.status !== 'in_progress') {
+        return false
+      }
+
+      // Filtrar por fase se selecionada
+      if (currentPhaseFilter && match.phase !== currentPhaseFilter) {
         return false
       }
 
@@ -385,7 +407,7 @@ const TournamentInfoDetail = () => {
     })
 
     return sorted
-  }, [matches, searchTerm, showLiveOnly, sortOption])
+  }, [matches, searchTerm, showLiveOnly, sortOption, currentPhaseFilter])
 
   const completedMatchesCount = useMemo(
     () => matches.filter((match) => match.status === 'completed').length,
@@ -528,7 +550,23 @@ const TournamentInfoDetail = () => {
             <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
               <CardHeader className="space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
+                    {availablePhases.length > 1 && (
+                      <Select value={currentPhaseFilter} onValueChange={setCurrentPhaseFilter}>
+                        <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white">
+                          <SelectValue placeholder="Todas as fases" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                          {availablePhases.map((phase) => (
+                            <SelectItem key={phase} value={phase}>
+                              {phase}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     <Input
                       value={searchTerm}
@@ -794,6 +832,57 @@ const TournamentInfoDetail = () => {
                       } finalizado${completedMatchesCount === 1 ? '' : 's'}.`
                     : 'Aguardando jogos finalizados para montar a classificação.'}
                 </CardDescription>
+                <div className="rounded-xl border border-white/20 bg-white/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="text-yellow-300" size={18} />
+                    <h4 className="text-sm font-semibold text-white">Sistema de Pontuação</h4>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2 text-xs text-white/80">
+                    <div className="rounded-lg bg-white/5 p-3 border border-white/15">
+                      <p className="font-semibold text-white mb-2">Melhor de 3 sets:</p>
+                      <ul className="space-y-1">
+                        <li className="flex items-center justify-between">
+                          <span>Vitória 2-0:</span>
+                          <span className="font-semibold text-emerald-200">3 pontos</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                          <span>Vitória 2-1:</span>
+                          <span className="font-semibold text-blue-200">2 pontos</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                          <span>Derrota 1-2:</span>
+                          <span className="font-semibold text-amber-200">1 ponto</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                          <span>Derrota 0-2:</span>
+                          <span className="font-semibold text-rose-200">0 pontos</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="rounded-lg bg-white/5 p-3 border border-white/15">
+                      <p className="font-semibold text-white mb-2">Set único:</p>
+                      <ul className="space-y-1">
+                        <li className="flex items-center justify-between">
+                          <span>Vitória:</span>
+                          <span className="font-semibold text-emerald-200">3 pontos</span>
+                        </li>
+                        <li className="flex items-center justify-between">
+                          <span>Derrota:</span>
+                          <span className="font-semibold text-rose-200">0 pontos</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                {tournamentFormatId && (
+                  <div className="rounded-xl border border-white/20 bg-white/5 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Activity className="text-blue-300" size={18} />
+                      <h4 className="text-sm font-semibold text-white">Critérios de Confronto</h4>
+                    </div>
+                    <TournamentBracketCriteria formatId={tournamentFormatId} />
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 {standingsByGroup.length === 0 ? (

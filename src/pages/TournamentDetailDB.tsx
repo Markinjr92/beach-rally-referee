@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown, Upload, Image as ImageIcon, Edit2, Save, X } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown, Upload, Image as ImageIcon, Edit2, Save, X, Play, AlertCircle } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -12,6 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Command,
   CommandEmpty,
@@ -27,8 +35,15 @@ import {
   buildGroupAssignments,
   computeStandingsByGroup,
 } from '@/utils/tournamentStandings'
-import { availableTournamentFormats, defaultTieBreakerOrder } from '@/lib/tournament'
+import { 
+  availableTournamentFormats, 
+  defaultTieBreakerOrder,
+  checkPhaseCompletion,
+  advanceToNextPhase,
+  getTournamentPhases,
+} from '@/lib/tournament'
 import type { TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
+import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -142,11 +157,17 @@ type EditingTeam = {
 
 type MatchFormatOption = 'melhorDe1' | 'melhorDe3'
 
-type StoredTournamentConfig = {
+type TournamentConfig = {
   formatId?: TournamentFormatId
   tieBreakerOrder?: TieBreakerCriterion[]
   includeThirdPlace?: boolean
-  matchFormats?: Partial<Record<'group' | 'knockout' | 'thirdPlace', MatchFormatOption>>
+  matchFormats?: {
+    groups?: MatchFormatOption
+    quarterfinals?: MatchFormatOption
+    semifinals?: MatchFormatOption
+    final?: MatchFormatOption
+    thirdPlace?: MatchFormatOption
+  }
 }
 
 type TournamentTeamRecord = {
@@ -158,6 +179,14 @@ type TournamentTeamRecord = {
 const MATCH_FORMAT_LABELS: Record<MatchFormatOption, string> = {
   melhorDe3: 'Melhor de 3 sets (21/21/15)',
   melhorDe1: 'Set único de 21 pontos',
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  groups: 'Fase de grupos',
+  quarterfinals: 'Quartas de final',
+  semifinals: 'Semifinais',
+  final: 'Final',
+  thirdPlace: 'Disputa de 3º',
 }
 
 const TIE_BREAKER_LABELS: Record<TieBreakerCriterion, string> = {
@@ -189,7 +218,21 @@ export default function TournamentDetailDB() {
   const [newSponsorUrl, setNewSponsorUrl] = useState('')
   const [teamGroups, setTeamGroups] = useState<Record<string, string | null>>({})
   const [matchScores, setMatchScores] = useState<MatchScore[]>([])
-  const [tournamentConfig, setTournamentConfig] = useState<StoredTournamentConfig | null>(null)
+  const [tournamentConfig, setTournamentConfig] = useState<TournamentConfig | null>(null)
+  
+  // Phase advancement states
+  const [availablePhases, setAvailablePhases] = useState<string[]>([])
+  const [currentPhaseFilter, setCurrentPhaseFilter] = useState<string>('')
+  const [showAdvancePhaseDialog, setShowAdvancePhaseDialog] = useState(false)
+  const [phaseCheckResult, setPhaseCheckResult] = useState<{
+    canAdvance: boolean
+    currentPhase: string
+    totalMatches: number
+    completedMatches: number
+    pendingMatches: Match[]
+    message: string
+  } | null>(null)
+  const [isAdvancingPhase, setIsAdvancingPhase] = useState(false)
 
   const loadTournamentTeams = useCallback(async () => {
     if (!tournamentId) return
@@ -258,22 +301,28 @@ export default function TournamentDetailDB() {
   }, [matches, matchForm.scheduled_at])
 
   useEffect(() => {
-    if (!tournamentId) return
-    if (typeof window === 'undefined') return
-
-    try {
-      const stored = window.localStorage.getItem(`tournament:${tournamentId}:config`)
-      if (!stored) {
-        setTournamentConfig(null)
-        return
+    const loadConfig = async () => {
+      if (!tournament) return
+      
+      // Load configuration from database fields
+      const config: TournamentConfig = {
+        formatId: tournament.format_id as TournamentFormatId | undefined,
+        tieBreakerOrder: tournament.tie_breaker_order as TieBreakerCriterion[] | undefined,
+        includeThirdPlace: tournament.include_third_place ?? true,
+        matchFormats: {
+          groups: tournament.match_format_groups as MatchFormatOption | undefined,
+          quarterfinals: tournament.match_format_quarterfinals as MatchFormatOption | undefined,
+          semifinals: tournament.match_format_semifinals as MatchFormatOption | undefined,
+          final: tournament.match_format_final as MatchFormatOption | undefined,
+          thirdPlace: tournament.match_format_third_place as MatchFormatOption | undefined,
+        },
       }
-      const parsed = JSON.parse(stored) as StoredTournamentConfig
-      setTournamentConfig(parsed)
-    } catch (error) {
-      console.error('Falha ao carregar configuração local do torneio', error)
-      setTournamentConfig(null)
+      
+      setTournamentConfig(config)
     }
-  }, [tournamentId])
+    
+    loadConfig()
+  }, [tournament])
 
   useEffect(() => {
     const loadScores = async () => {
@@ -298,6 +347,64 @@ export default function TournamentDetailDB() {
 
     loadScores()
   }, [matches, toast])
+
+  useEffect(() => {
+    const loadPhases = async () => {
+      if (!tournamentId) return
+      const phases = await getTournamentPhases(tournamentId)
+      setAvailablePhases(phases)
+      if (phases.length > 0 && !currentPhaseFilter) {
+        setCurrentPhaseFilter(phases[0])
+      }
+    }
+    loadPhases()
+  }, [tournamentId, matches, currentPhaseFilter])
+
+  const handleCheckPhase = async (phase: string) => {
+    if (!tournamentId) return
+    const result = await checkPhaseCompletion(tournamentId, phase)
+    setPhaseCheckResult(result)
+    setShowAdvancePhaseDialog(true)
+  }
+
+  const handleAdvancePhase = async () => {
+    if (!tournamentId || !phaseCheckResult || !tournamentConfig) return
+    
+    setIsAdvancingPhase(true)
+    
+    const result = await advanceToNextPhase({
+      tournamentId,
+      currentPhase: phaseCheckResult.currentPhase,
+      formatId: tournamentConfig.formatId || 'groups_and_knockout',
+      includeThirdPlace: tournamentConfig.includeThirdPlace ?? true,
+      tieBreakerOrder: tournamentConfig.tieBreakerOrder || defaultTieBreakerOrder,
+        pointsPerSet: tournamentConfig.matchFormats?.final === 'melhorDe3' ? [21, 21, 15] : [21],
+        sideSwitchSum: tournamentConfig.matchFormats?.final === 'melhorDe3' ? [7, 7, 5] : [7],
+        bestOf: tournamentConfig.matchFormats?.final === 'melhorDe3' ? 3 : 1,
+      modality: tournament?.modality || 'dupla',
+    })
+
+    setIsAdvancingPhase(false)
+    
+    if (result.success) {
+      toast({ title: 'Fase finalizada!', description: result.message })
+      setShowAdvancePhaseDialog(false)
+      // Recarregar matches e phases
+      const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournamentId).order('scheduled_at', { ascending: true })
+      setMatches(m || [])
+      const phases = await getTournamentPhases(tournamentId)
+      setAvailablePhases(phases)
+      if (phases.length > 0) {
+        setCurrentPhaseFilter(phases[phases.length - 1])
+      }
+    } else {
+      toast({ 
+        title: 'Erro ao finalizar fase', 
+        description: result.error || result.message,
+        variant: 'destructive' 
+      })
+    }
+  }
 
   const teamOptions = useMemo(() => teams.map(t => ({ value: t.id, label: t.name })), [teams])
 
@@ -621,11 +728,44 @@ export default function TournamentDetailDB() {
           <TabsContent value="matches" className="mt-0">
             <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
               <CardHeader>
-                <CardTitle className="text-xl">Jogos</CardTitle>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle className="text-xl">Jogos</CardTitle>
+                  {availablePhases.length > 1 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white/70">Fase:</span>
+                      <Select value={currentPhaseFilter} onValueChange={setCurrentPhaseFilter}>
+                        <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white">
+                          <SelectValue placeholder="Selecionar fase" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                          {availablePhases.map((phase) => (
+                            <SelectItem key={phase} value={phase}>
+                              {phase}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+                {currentPhaseFilter && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <Button
+                      onClick={() => handleCheckPhase(currentPhaseFilter)}
+                      className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+                      size="sm"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      Finalizar "{currentPhaseFilter}"
+                    </Button>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {matches.map(m => {
+                  {matches
+                    .filter((m) => !currentPhaseFilter || m.phase === currentPhaseFilter)
+                    .map(m => {
                     const a = teams.find(t => t.id === m.team_a_id)
                     const b = teams.find(t => t.id === m.team_b_id)
                     return (
@@ -954,29 +1094,22 @@ export default function TournamentDetailDB() {
                             </Badge>
                           </div>
                         )}
-                        {tournamentConfig.matchFormats && (
-                          <div className="space-y-2">
-                            <span className="text-white/70">Formato das partidas:</span>
-                            <div className="grid gap-1 text-xs sm:grid-cols-2">
-                              {(['group', 'knockout', 'thirdPlace'] as const).map((phase) => {
-                                const value = tournamentConfig.matchFormats?.[phase]
-                                if (!value) return null
-                                const label =
-                                  phase === 'group'
-                                    ? 'Fase de grupos'
-                                    : phase === 'knockout'
-                                    ? 'Eliminatória'
-                                    : 'Disputa de 3º'
-                                return (
-                                  <div key={phase} className="flex items-center justify-between gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2">
-                                    <span className="text-white/70">{label}</span>
-                                    <span className="font-semibold text-right text-white">{MATCH_FORMAT_LABELS[value]}</span>
-                                  </div>
-                                )
-                              })}
+                          {tournamentConfig.matchFormats && (
+                            <div className="space-y-2">
+                              <span className="text-white/70">Formato das partidas:</span>
+                              <div className="grid gap-1 text-xs sm:grid-cols-2">
+                                {Object.entries(tournamentConfig.matchFormats).map(([phase, value]) => {
+                                  if (!value) return null
+                                  return (
+                                    <div key={phase} className="flex items-center justify-between gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2">
+                                      <span className="text-white/70">{PHASE_LABELS[phase] || phase}</span>
+                                      <span className="font-semibold text-right text-white">{MATCH_FORMAT_LABELS[value as MatchFormatOption]}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
                         <div className="space-y-2">
                           <span className="text-white/70">Critérios de desempate:</span>
                           <div className="flex flex-wrap gap-2">
@@ -990,12 +1123,106 @@ export default function TournamentDetailDB() {
                       </div>
                     </div>
                   )}
+                  {tournamentConfig?.formatId && (
+                    <div className="space-y-3 pt-6 border-t border-white/20">
+                      <h4 className="text-base font-semibold">Critérios de Confronto</h4>
+                      <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+                        <TournamentBracketCriteria formatId={tournamentConfig.formatId} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Modal de Confirmação de Finalização de Fase */}
+      <Dialog open={showAdvancePhaseDialog} onOpenChange={setShowAdvancePhaseDialog}>
+        <DialogContent className="bg-slate-900/95 border border-white/20 text-white backdrop-blur-xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Play className="h-5 w-5 text-emerald-400" />
+              Finalizar Fase
+            </DialogTitle>
+            <DialogDescription className="text-white/70">
+              {phaseCheckResult?.currentPhase}
+            </DialogDescription>
+          </DialogHeader>
+
+          {phaseCheckResult && (
+            <div className="space-y-4 py-4">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Total de jogos:</span>
+                  <span className="font-semibold">{phaseCheckResult.totalMatches}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/70">Jogos finalizados:</span>
+                  <span className="font-semibold text-emerald-400">
+                    {phaseCheckResult.completedMatches}
+                  </span>
+                </div>
+                {phaseCheckResult.pendingMatches.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white/70">Jogos pendentes:</span>
+                    <span className="font-semibold text-amber-400">
+                      {phaseCheckResult.pendingMatches.length}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className={cn(
+                  'rounded-lg p-4 flex items-start gap-3',
+                  phaseCheckResult.canAdvance
+                    ? 'bg-emerald-500/10 border border-emerald-400/30'
+                    : 'bg-amber-500/10 border border-amber-400/30',
+                )}
+              >
+                <AlertCircle
+                  className={cn(
+                    'h-5 w-5 flex-shrink-0 mt-0.5',
+                    phaseCheckResult.canAdvance ? 'text-emerald-400' : 'text-amber-400',
+                  )}
+                />
+                <div className="space-y-2 flex-1">
+                  <p className={cn('text-sm', phaseCheckResult.canAdvance ? 'text-emerald-100' : 'text-amber-100')}>
+                    {phaseCheckResult.message}
+                  </p>
+                  {phaseCheckResult.canAdvance && (
+                    <p className="text-xs text-white/70">
+                      Ao confirmar, a próxima fase será criada automaticamente com base na classificação
+                      atual. Esta ação não pode ser desfeita.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAdvancePhaseDialog(false)}
+              className="border-white/20 text-white hover:bg-white/10"
+            >
+              Cancelar
+            </Button>
+            {phaseCheckResult?.canAdvance && (
+              <Button
+                onClick={handleAdvancePhase}
+                disabled={isAdvancingPhase}
+                className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+              >
+                {isAdvancingPhase ? 'Processando...' : 'Confirmar e Finalizar'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
