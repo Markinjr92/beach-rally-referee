@@ -67,6 +67,8 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { parseGameModality, parseNumberArray } from "@/utils/parsers";
+import nilsonBall from '@/assets/nilson.png';
+import miasaBall from '@/assets/miasa.png';
 
 type Json = Database['public']['Tables']['match_states']['Row']['scores'];
 
@@ -87,8 +89,8 @@ const mainCategories = [
 ];
 
 const coinLabels: Record<CoinSide, string> = {
-  heads: 'Cara',
-  tails: 'Coroa'
+  heads: 'Bola A',
+  tails: 'Bola B'
 };
 
 export default function RefereeDesk() {
@@ -1672,9 +1674,9 @@ export default function RefereeDesk() {
   };
 
   const coinStatusMessage = useMemo(() => {
-    if (isFlippingCoin) return 'Girando moeda...';
+    if (isFlippingCoin) return 'Sorteando bola...';
     if (coinResultLabel) return `Resultado: ${coinResultLabel}`;
-    return 'Toque em "Jogar Moeda" para iniciar.';
+    return 'Toque em "Sortear Bola" para iniciar.';
   }, [coinResultLabel, isFlippingCoin]);
 
   if (!game || !gameState) {
@@ -2054,7 +2056,7 @@ export default function RefereeDesk() {
     },
     {
       icon: Coins,
-      label: 'Moeda',
+      label: 'Sorteio',
       onClick: () => {
         resetCoinState();
         setCoinDialogOpen(true);
@@ -2477,7 +2479,7 @@ export default function RefereeDesk() {
                 }}
               >
                 <Coins className="mr-2 h-4 w-4" />
-                Moeda
+                Sorteio
               </Button>
               <div className="space-y-3 border-t border-white/10 pt-3">
                 <div className="text-sm font-medium text-white/80">Controles de Override:</div>
@@ -2670,46 +2672,24 @@ export default function RefereeDesk() {
         >
           <DialogContent className="bg-slate-950/95 text-white border border-white/20">
             <DialogHeader>
-              <DialogTitle>Sorteio de moeda</DialogTitle>
+              <DialogTitle>Sorteio da bola</DialogTitle>
               <DialogDescription className="text-white/70">
-                Simule o lançamento da moeda oficial de R$ 1 e defina quem começa.
+                Simule o sorteio da bola para definir quem começa.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
               <div className="flex flex-col items-center gap-5">
                 <div
                   className={cn(
-                    "relative flex h-40 w-40 items-center justify-center rounded-full bg-gradient-to-br from-[#f0f2f7] to-[#b5bcc6] shadow-[0_20px_40px_rgba(0,0,0,0.35)] transition-transform duration-500 ease-in-out",
+                    "relative flex h-48 w-48 items-center justify-center transition-transform duration-500 ease-in-out",
                     isFlippingCoin && "animate-coin-flip"
                   )}
                 >
-                  <div
-                    className={cn(
-                      "relative flex h-[82%] w-[82%] flex-col items-center justify-center gap-2 rounded-full bg-gradient-to-br text-[#2c2416] font-bold uppercase tracking-[0.25em]",
-                      coinFaceToShow === 'tails'
-                        ? "from-[#d7dce3] to-[#9ea5b4] text-[#102539]"
-                        : "from-[#f8d98f] to-[#c68c2d]"
-                    )}
-                  >
-                    {coinFaceToShow === 'heads' ? (
-                      <>
-                        <span className="text-5xl leading-none tracking-normal">1</span>
-                        <span className="text-lg font-semibold tracking-[0.4em]">REAL</span>
-                        <span className="text-[0.7rem] tracking-[0.45em] text-[#3f3b2d]">BRASIL</span>
-                        <div className="pointer-events-none absolute inset-1 rounded-full border border-white/40" />
-                        <div className="pointer-events-none absolute -top-3 right-6 h-12 w-12 rounded-full border border-white/30 bg-white/20" />
-                        <div className="pointer-events-none absolute -bottom-7 left-8 h-20 w-20 rotate-[-25deg] bg-white/10" />
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-xs font-semibold tracking-[0.4em] text-white/80">REPÚBLICA</span>
-                        <span className="text-2xl font-black tracking-[0.2em] text-white">BRASIL</span>
-                        <span className="text-[0.7rem] tracking-[0.45em] text-white/70">ORDEM E PROGRESSO</span>
-                        <div className="pointer-events-none absolute inset-2 rounded-full border border-white/30" />
-                        <div className="pointer-events-none absolute -bottom-6 right-7 h-16 w-16 rotate-12 rounded-full bg-gradient-to-br from-[#1f3d54]/25 to-transparent" />
-                      </>
-                    )}
-                  </div>
+                  <img
+                    src={coinFaceToShow === 'heads' ? nilsonBall : miasaBall}
+                    alt={coinFaceToShow === 'heads' ? 'Bola A' : 'Bola B'}
+                    className="h-full w-full object-contain drop-shadow-2xl"
+                  />
                 </div>
                 <div className="w-full max-w-xs">
                   <Button
@@ -2718,11 +2698,31 @@ export default function RefereeDesk() {
                     disabled={isFlippingCoin}
                     onClick={handleCoinFlip}
                   >
-                    Jogar Moeda
+                    Sortear Bola
                   </Button>
                 </div>
               </div>
               <div className="text-center text-sm text-white/80 min-h-[1.5rem]">{coinStatusMessage}</div>
+              
+              {/* Prévia das duas opções */}
+              <div className="pt-4 border-t border-white/20">
+                <p className="text-xs text-white/60 text-center mb-3">Opções do sorteio:</p>
+                <div className="flex items-center justify-center gap-6">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-16 w-16 rounded-lg bg-white/5 border border-white/20 p-2 flex items-center justify-center">
+                      <img src={nilsonBall} alt="Bola A" className="h-full w-full object-contain" />
+                    </div>
+                    <span className="text-xs text-white/70">Bola A</span>
+                  </div>
+                  <span className="text-white/40">ou</span>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-16 w-16 rounded-lg bg-white/5 border border-white/20 p-2 flex items-center justify-center">
+                      <img src={miasaBall} alt="Bola B" className="h-full w-full object-contain" />
+                    </div>
+                    <span className="text-xs text-white/70">Bola B</span>
+                  </div>
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button

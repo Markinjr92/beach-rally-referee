@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { ArrowLeft, Calendar, MapPin, Plus, Trophy } from "lucide-react"
+import { ArrowLeft, Calendar, MapPin, Plus, Trophy, GripVertical } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -133,6 +133,30 @@ export default function TournamentsDB() {
     })
   }
 
+  const handleTieBreakerDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', index.toString())
+  }
+
+  const handleTieBreakerDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleTieBreakerDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+    const dragIndex = parseInt(e.dataTransfer.getData('text/plain'), 10)
+    
+    if (dragIndex === dropIndex) return
+    
+    setForm((prev) => {
+      const next = [...prev.tieBreakerOrder]
+      const [draggedItem] = next.splice(dragIndex, 1)
+      next.splice(dropIndex, 0, draggedItem)
+      return { ...prev, tieBreakerOrder: next }
+    })
+  }
+
   const matchFormatPresets = useMemo(
     () =>
       ({
@@ -245,9 +269,17 @@ export default function TournamentsDB() {
       }))
 
       const formatId = form.formatId
-      const groupPreset = matchFormatPresets[form.matchFormats.groups || 'melhorDe3']
-      const knockoutPreset = matchFormatPresets[form.matchFormats.final || 'melhorDe3']
-      const thirdPlacePreset = matchFormatPresets[form.matchFormats.thirdPlace || 'melhorDe3']
+      // Get presets for each phase based on user configuration
+      const getPreset = (formatOption: MatchFormatOption | undefined) => {
+        const defaultFormat = 'melhorDe3'
+        return matchFormatPresets[formatOption || defaultFormat]
+      }
+      
+      const groupPreset = getPreset(form.matchFormats.groups)
+      const quarterfinalsPreset = getPreset(form.matchFormats.quarterfinals)
+      const semifinalsPreset = getPreset(form.matchFormats.semifinals)
+      const finalPreset = getPreset(form.matchFormats.final)
+      const thirdPlacePreset = getPreset(form.matchFormats.thirdPlace)
 
       const structure = generateTournamentStructure({
         tournamentId: tournament.id,
@@ -259,9 +291,9 @@ export default function TournamentsDB() {
           modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
           hasStatistics: form.hasStatistics,
           format: form.matchFormats.final || 'melhorDe3',
-          pointsPerSet: [...knockoutPreset.pointsPerSet],
-          sideSwitchSum: [...knockoutPreset.sideSwitchSum],
-          teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
+          pointsPerSet: [...finalPreset.pointsPerSet],
+          sideSwitchSum: [...finalPreset.sideSwitchSum],
+          teamTimeoutsPerSet: finalPreset.teamTimeoutsPerSet,
         },
         phaseConfigs: {
           group: {
@@ -272,9 +304,9 @@ export default function TournamentsDB() {
           },
           knockout: {
             format: form.matchFormats.final || 'melhorDe3',
-            pointsPerSet: [...knockoutPreset.pointsPerSet],
-            sideSwitchSum: [...knockoutPreset.sideSwitchSum],
-            teamTimeoutsPerSet: knockoutPreset.teamTimeoutsPerSet,
+            pointsPerSet: [...finalPreset.pointsPerSet],
+            sideSwitchSum: [...finalPreset.sideSwitchSum],
+            teamTimeoutsPerSet: finalPreset.teamTimeoutsPerSet,
           },
           thirdPlace: {
             format: form.matchFormats.thirdPlace || 'melhorDe3',
@@ -321,7 +353,7 @@ export default function TournamentsDB() {
               modality: match.modality,
               points_per_set: match.pointsPerSet,
               side_switch_sum: match.sideSwitchSum,
-              best_of: match.format === 'melhorDe3' ? 3 : 1,
+              best_of: match.pointsPerSet.length,
             } as TablesInsert<'matches'>
           })
           .filter((entry): entry is TablesInsert<'matches'> => entry !== null)
@@ -772,12 +804,21 @@ export default function TournamentsDB() {
               </p>
             </div>
             <div className="space-y-2">
+              <p className="text-xs text-blue-50/70 mb-2 flex items-center gap-2">
+                <GripVertical size={14} className="text-blue-50/50" />
+                Arraste os itens para reordenar a prioridade
+              </p>
               {form.tieBreakerOrder.map((criterion, index) => (
                 <div
                   key={`${criterion}-${index}`}
-                  className="flex items-center gap-3 rounded-xl border border-white/25 bg-white/5 px-3 py-2"
+                  draggable
+                  onDragStart={(e) => handleTieBreakerDragStart(e, index)}
+                  onDragOver={handleTieBreakerDragOver}
+                  onDrop={(e) => handleTieBreakerDrop(e, index)}
+                  className="flex items-center gap-3 rounded-xl border border-white/25 bg-white/5 px-3 py-2 cursor-move hover:bg-white/10 hover:border-white/35 transition-all"
                 >
-                  <span className="w-12 text-xs font-semibold text-blue-50/80">{index + 1}º</span>
+                  <GripVertical size={16} className="text-blue-50/50 flex-shrink-0" />
+                  <span className="w-10 text-xs font-semibold text-blue-50/80">{index + 1}º</span>
                   <Select
                     value={criterion}
                     onValueChange={(value) => handleTieBreakerChange(index, value as TieBreakerCriterion)}
