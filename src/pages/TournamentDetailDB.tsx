@@ -441,6 +441,77 @@ export default function TournamentDetailDB() {
     [groupAssignments, matches, scoresByMatch, teamNameMap],
   )
 
+  const eliminationSummaries = useMemo(() => {
+    if (!matches.length) return []
+
+    const eliminationPhaseOrder = ['Quartas de final', 'Semifinal', 'Disputa 3º lugar', 'Final']
+    const statusLabels: Record<string, string> = {
+      scheduled: 'Agendado',
+      in_progress: 'Em andamento',
+      completed: 'Finalizado',
+      cancelled: 'Cancelado',
+    }
+
+    return eliminationPhaseOrder
+      .map((phaseLabel) => {
+        const phaseMatches = matches.filter((match) => match.phase === phaseLabel)
+        if (!phaseMatches.length) return null
+
+        const formattedMatches = phaseMatches.map((match) => {
+          const teamAName = teamNameMap.get(match.team_a_id) ?? 'Equipe A'
+          const teamBName = teamNameMap.get(match.team_b_id) ?? 'Equipe B'
+
+          const recordedScores = scoresByMatch.get(match.id) ?? []
+          let resultLabel = statusLabels[match.status || 'scheduled'] || match.status || 'Agendado'
+
+          if (recordedScores.length > 0) {
+            let setsWonA = 0
+            let setsWonB = 0
+            const setsDescription: string[] = []
+
+            recordedScores
+              .slice()
+              .sort((a, b) => a.set_number - b.set_number)
+              .forEach((setScore) => {
+                if (setScore.team_a_points > setScore.team_b_points) {
+                  setsWonA += 1
+                } else if (setScore.team_b_points > setScore.team_a_points) {
+                  setsWonB += 1
+                }
+                setsDescription.push(`${setScore.team_a_points}x${setScore.team_b_points}`)
+              })
+
+            resultLabel = `${setsWonA} x ${setsWonB}`
+            if (setsDescription.length) {
+              resultLabel = `${resultLabel} (${setsDescription.join(', ')})`
+            }
+          }
+
+          const metadata: string[] = []
+          if (match.scheduled_at) {
+            metadata.push(`Data: ${formatDateShortPtBr(match.scheduled_at, { fallback: 'A definir' })}`)
+          }
+          if (match.court) {
+            metadata.push(`Quadra: ${match.court}`)
+          }
+
+          return {
+            id: match.id,
+            phase: phaseLabel,
+            pairing: `${teamAName} × ${teamBName}`,
+            result: resultLabel,
+            metadata: metadata.join(' • '),
+          }
+        })
+
+        return {
+          phase: phaseLabel,
+          matches: formattedMatches,
+        }
+      })
+      .filter((entry): entry is { phase: string; matches: { id: string; phase: string; pairing: string; result: string; metadata: string }[] } => entry !== null)
+  }, [matches, scoresByMatch, teamNameMap])
+
   if (!tournament) return (
     <div className="min-h-screen bg-gradient-ocean flex items-center justify-center">
       <p className="text-sm text-white/80">Torneio não encontrado</p>
@@ -991,60 +1062,96 @@ export default function TournamentDetailDB() {
                 <CardTitle className="text-xl">Tabela de Classificação</CardTitle>
               </CardHeader>
               <CardContent className="space-y-8">
-                {standingsByGroup.length === 0 ? (
+                {standingsByGroup.length === 0 && eliminationSummaries.length === 0 ? (
                   <p className="text-sm text-white/70">Nenhuma equipe ou partida registrada até o momento.</p>
                 ) : (
-                  standingsByGroup.map((group) => {
-                    const groupHasMatches = group.hasResults
+                  <div className="space-y-10">
+                    {standingsByGroup.map((group) => {
+                      const groupHasMatches = group.hasResults
 
-                    return (
-                      <div key={group.key} className="space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-lg font-semibold text-white">{group.label}</h3>
+                      return (
+                        <div key={group.key} className="space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-lg font-semibold text-white">{group.label}</h3>
+                            <Badge variant="outline" className="border-white/30 text-white/80">
+                              {group.standings.length} {group.standings.length === 1 ? 'dupla' : 'duplas'}
+                            </Badge>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-white/10 text-sm">
+                              <thead>
+                                <tr className="text-left text-white/70">
+                                  <th className="px-4 py-3 font-medium">Posição</th>
+                                  <th className="px-4 py-3 font-medium">Dupla</th>
+                                  <th className="px-4 py-3 font-medium text-center">PJ</th>
+                                  <th className="px-4 py-3 font-medium text-center">V</th>
+                                  <th className="px-4 py-3 font-medium text-center">D</th>
+                                  <th className="px-4 py-3 font-medium text-center">Sets</th>
+                                  <th className="px-4 py-3 font-medium text-center">Pts</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.standings.map((entry, index) => (
+                                  <tr key={entry.teamId} className="border-b border-white/10 hover:bg-white/5">
+                                    <td className="px-4 py-3 font-bold text-white">{index + 1}</td>
+                                    <td className="px-4 py-3">{entry.teamName}</td>
+                                    <td className="px-4 py-3 text-center text-white/80">{entry.matchesPlayed}</td>
+                                    <td className="px-4 py-3 text-center text-emerald-300">{entry.wins}</td>
+                                    <td className="px-4 py-3 text-center text-rose-300">{entry.losses}</td>
+                                    <td className="px-4 py-3 text-center text-white/80">
+                                      {entry.setsWon}
+                                      <span className="text-white/50"> / </span>
+                                      {entry.setsLost}
+                                    </td>
+                                    <td className="px-4 py-3 text-center font-bold text-white">{entry.matchPoints}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          {!groupHasMatches && (
+                            <p className="text-xs text-white/60">
+                              Nenhum jogo finalizado para este grupo ainda. Assim que os resultados forem registrados, a classificação será atualizada automaticamente.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {eliminationSummaries.length > 0 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-semibold text-white">Chave eliminatória</h3>
                           <Badge variant="outline" className="border-white/30 text-white/80">
-                            {group.standings.length} {group.standings.length === 1 ? 'dupla' : 'duplas'}
+                            {eliminationSummaries.reduce((total, phase) => total + phase.matches.length, 0)} jogos
                           </Badge>
                         </div>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-white/10 text-sm">
-                            <thead>
-                              <tr className="text-left text-white/70">
-                                <th className="px-4 py-3 font-medium">Posição</th>
-                                <th className="px-4 py-3 font-medium">Dupla</th>
-                                <th className="px-4 py-3 font-medium text-center">PJ</th>
-                                <th className="px-4 py-3 font-medium text-center">V</th>
-                                <th className="px-4 py-3 font-medium text-center">D</th>
-                                <th className="px-4 py-3 font-medium text-center">Sets</th>
-                                <th className="px-4 py-3 font-medium text-center">Pts</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {group.standings.map((entry, index) => (
-                                <tr key={entry.teamId} className="border-b border-white/10 hover:bg-white/5">
-                                  <td className="px-4 py-3 font-bold text-white">{index + 1}</td>
-                                  <td className="px-4 py-3">{entry.teamName}</td>
-                                  <td className="px-4 py-3 text-center text-white/80">{entry.matchesPlayed}</td>
-                                  <td className="px-4 py-3 text-center text-emerald-300">{entry.wins}</td>
-                                  <td className="px-4 py-3 text-center text-rose-300">{entry.losses}</td>
-                                  <td className="px-4 py-3 text-center text-white/80">
-                                    {entry.setsWon}
-                                    <span className="text-white/50"> / </span>
-                                    {entry.setsLost}
-                                  </td>
-                                  <td className="px-4 py-3 text-center font-bold text-white">{entry.matchPoints}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        <div className="space-y-6">
+                          {eliminationSummaries.map((phase) => (
+                            <div key={phase.phase} className="space-y-3">
+                              <h4 className="text-base font-semibold text-white/90">{phase.phase}</h4>
+                              <div className="space-y-2">
+                                {phase.matches.map((match) => (
+                                  <div
+                                    key={match.id}
+                                    className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-medium">{match.pairing}</span>
+                                      <span className="text-white/80">{match.result}</span>
+                                    </div>
+                                    {match.metadata && (
+                                      <p className="mt-2 text-xs text-white/60">{match.metadata}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        {!groupHasMatches && (
-                          <p className="text-xs text-white/60">
-                            Nenhum jogo finalizado para este grupo ainda. Assim que os resultados forem registrados, a classificação será atualizada automaticamente.
-                          </p>
-                        )}
                       </div>
-                    )
-                  })
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>

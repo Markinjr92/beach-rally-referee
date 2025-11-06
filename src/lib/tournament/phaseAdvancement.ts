@@ -44,6 +44,15 @@ export interface AdvancePhaseResult {
   error?: string;
 }
 
+type PhaseHandlerContext = {
+  options: AdvancePhaseOptions;
+  teams: Team[];
+  matches: Match[];
+  matchScores: MatchScore[];
+};
+
+type PhaseHandler = (context: PhaseHandlerContext) => Promise<TablesInsert<'matches'>[]>;
+
 /**
  * Verifica se a fase atual pode ser finalizada
  */
@@ -253,16 +262,15 @@ const createKnockoutMatches = async (
 ): Promise<TablesInsert<'matches'>[]> => {
   const newMatches: TablesInsert<'matches'>[] = [];
 
-  // Formato: 4 grupos (A, B, C, D)
-  // Quartas: 1ºA x 2ºD, 1ºB x 2ºC, 1ºC x 2ºB, 1ºD x 2ºA
-  const groupA = qualifiers.get('Grupo A');
-  const groupB = qualifiers.get('Grupo B');
-  const groupC = qualifiers.get('Grupo C');
-  const groupD = qualifiers.get('Grupo D');
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
 
-  if (!groupA || !groupB || !groupC || !groupD) {
-    throw new Error('Não foi possível identificar os classificados de todos os grupos');
+  if (sortedGroups.length !== 4) {
+    throw new Error('O formato de grupos + eliminatória requer exatamente 4 grupos.');
   }
+
+  const [groupA, groupB, groupC, groupD] = sortedGroups.map(([, value]) => value);
 
   // Obter configurações do torneio
   const { data: tournament } = await supabase
@@ -340,7 +348,7 @@ const createSemifinalMatches = async (
   }
 
   const newMatches: TablesInsert<'matches'>[] = [];
-  
+
   // Obter configurações do torneio
   const { data: tournament } = await supabase
     .from('tournaments')
@@ -486,19 +494,59 @@ export const advanceToNextPhase = async (
   options: AdvancePhaseOptions,
 ): Promise<AdvancePhaseResult> => {
   try {
-    // Determinar qual é a próxima fase
-    const phaseMapping: Record<string, string> = {
-      'Fase de Grupos': 'Quartas de final',
-      'Quartas de final': 'Semifinal',
-      Semifinal: 'Final',
+    const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
+      groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
     };
 
-    const nextPhase = phaseMapping[options.currentPhase];
-    if (!nextPhase) {
+    const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
+      groups_and_knockout: {
+        'Fase de Grupos': async (context) => {
+          const qualifiers = await calculateGroupQualifiers(
+            context.options.tournamentId,
+            context.teams,
+            context.matches,
+            context.matchScores,
+            context.options.tieBreakerOrder || [],
+          );
+          return createKnockoutMatches(context.options, qualifiers);
+        },
+        'Quartas de final': async (context) => {
+          const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+          return createSemifinalMatches(context.options, quarterfinalsMatches);
+        },
+        Semifinal: async (context) => {
+          const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+          return createFinalMatches(context.options, semifinalMatches);
+        },
+      },
+    };
+
+    const formatPhases = phaseSequences[options.formatId];
+    if (!formatPhases) {
+      return {
+        success: false,
+        message: 'Formato de torneio não suportado para avanço automático.',
+        error: `Formato ${options.formatId} não possui configuração de fases cadastrada.`,
+      };
+    }
+
+    const currentPhaseIndex = formatPhases.indexOf(options.currentPhase);
+    if (currentPhaseIndex === -1 || currentPhaseIndex === formatPhases.length - 1) {
       return {
         success: false,
         message: 'Fase atual não pode ser avançada',
         error: 'Fase não reconhecida ou já é a fase final',
+      };
+    }
+
+    const nextPhase = formatPhases[currentPhaseIndex + 1];
+    const handler = formatHandlers[options.formatId]?.[options.currentPhase];
+
+    if (!handler) {
+      return {
+        success: false,
+        message: 'Avanço automático não configurado para esta fase.',
+        error: `Fase "${options.currentPhase}" não possui regra de transição no formato ${options.formatId}.`,
       };
     }
 
@@ -533,26 +581,14 @@ export const advanceToNextPhase = async (
       throw new Error('Erro ao carregar dados do torneio');
     }
 
-    let newMatchesPayload: TablesInsert<'matches'>[] = [];
+    const handlerContext: PhaseHandlerContext = {
+      options,
+      teams,
+      matches,
+      matchScores,
+    };
 
-    // Criar jogos da próxima fase baseado na fase atual
-    if (options.currentPhase === 'Fase de Grupos') {
-      // Calcular classificados
-      const qualifiers = await calculateGroupQualifiers(
-        options.tournamentId,
-        teams,
-        matches,
-        matchScores,
-        options.tieBreakerOrder || [],
-      );
-      newMatchesPayload = await createKnockoutMatches(options, qualifiers);
-    } else if (options.currentPhase === 'Quartas de final') {
-      const quarterfinalsMatches = matches.filter((m) => m.phase === 'Quartas de final');
-      newMatchesPayload = await createSemifinalMatches(options, quarterfinalsMatches);
-    } else if (options.currentPhase === 'Semifinal') {
-      const semifinalMatches = matches.filter((m) => m.phase === 'Semifinal');
-      newMatchesPayload = await createFinalMatches(options, semifinalMatches);
-    }
+    const newMatchesPayload = await handler(handlerContext);
 
     // Inserir novos jogos
     const { data: createdMatches, error: insertError } = await supabase
