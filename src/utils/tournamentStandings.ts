@@ -217,16 +217,29 @@ export const computeStandingsByGroup = ({
         }
 
         // Build sets array for scoring calculation
-        const sets = recordedScores.map((score, index) => ({
-          setNumber: index + 1,
-          teamAScore: score.team_a_points,
-          teamBScore: score.team_b_points
-        }))
+        let sets: Array<{ setNumber: number; teamAScore: number; teamBScore: number }> = []
+        
+        if (recordedScores.length > 0) {
+          sets = recordedScores.map((score, index) => ({
+            setNumber: index + 1,
+            teamAScore: score.team_a_points,
+            teamBScore: score.team_b_points
+          }))
+        } else if (matchStates?.[match.id]) {
+          const state = matchStates[match.id]
+          sets = state.scores.teamA.map((scoreA, index) => ({
+            setNumber: index + 1,
+            teamAScore: scoreA,
+            teamBScore: state.scores.teamB[index] ?? 0
+          })).filter(set => set.teamAScore > 0 || set.teamBScore > 0)
+        }
 
-        // Use official scoring system
-        const matchPoints = calculateMatchPoints({ winner, sets })
-        entryA.matchPoints += matchPoints.teamA
-        entryB.matchPoints += matchPoints.teamB
+        // Use official scoring system only if we have sets data
+        if (sets.length > 0) {
+          const matchPoints = calculateMatchPoints({ winner, sets })
+          entryA.matchPoints += matchPoints.teamA
+          entryB.matchPoints += matchPoints.teamB
+        }
       } else {
         // Draw (shouldn't happen in volleyball, but handle it)
         entryA.matchPoints += 1

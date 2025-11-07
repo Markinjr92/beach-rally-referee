@@ -1091,33 +1091,58 @@ export default function TournamentDetailDB() {
                           </div>
                           <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-white/10 text-sm">
-                              <thead>
-                                <tr className="text-left text-white/70">
-                                  <th className="px-4 py-3 font-medium">Posição</th>
-                                  <th className="px-4 py-3 font-medium">Dupla</th>
-                                  <th className="px-4 py-3 font-medium text-center">PJ</th>
-                                  <th className="px-4 py-3 font-medium text-center">V</th>
-                                  <th className="px-4 py-3 font-medium text-center">D</th>
-                                  <th className="px-4 py-3 font-medium text-center">Sets</th>
-                                  <th className="px-4 py-3 font-medium text-center">Pts</th>
+                              <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-white/60">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">#</th>
+                                  <th className="px-3 py-2 text-left">Equipe</th>
+                                  <th className="px-3 py-2 text-center">J</th>
+                                  <th className="px-3 py-2 text-center">V</th>
+                                  <th className="px-3 py-2 text-center">D</th>
+                                  <th className="px-3 py-2 text-center">S+</th>
+                                  <th className="px-3 py-2 text-center">S-</th>
+                                  <th className="px-3 py-2 text-center">SΔ</th>
+                                  <th className="px-3 py-2 text-center">P+</th>
+                                  <th className="px-3 py-2 text-center">P-</th>
+                                  <th className="px-3 py-2 text-center">PΔ</th>
+                                  <th className="px-3 py-2 text-center">Pts</th>
                                 </tr>
                               </thead>
-                              <tbody>
-                                {group.standings.map((entry, index) => (
-                                  <tr key={entry.teamId} className="border-b border-white/10 hover:bg-white/5">
-                                    <td className="px-4 py-3 font-bold text-white">{index + 1}</td>
-                                    <td className="px-4 py-3">{entry.teamName}</td>
-                                    <td className="px-4 py-3 text-center text-white/80">{entry.matchesPlayed}</td>
-                                    <td className="px-4 py-3 text-center text-emerald-300">{entry.wins}</td>
-                                    <td className="px-4 py-3 text-center text-rose-300">{entry.losses}</td>
-                                    <td className="px-4 py-3 text-center text-white/80">
-                                      {entry.setsWon}
-                                      <span className="text-white/50"> / </span>
-                                      {entry.setsLost}
-                                    </td>
-                                    <td className="px-4 py-3 text-center font-bold text-white">{entry.matchPoints}</td>
-                                  </tr>
-                                ))}
+                              <tbody className="divide-y divide-white/5 text-white/80">
+                                {group.standings.map((entry, index) => {
+                                  const setBalance = entry.setsWon - entry.setsLost
+                                  const pointBalance = entry.pointsFor - entry.pointsAgainst
+
+                                  return (
+                                    <tr key={entry.teamId} className="transition hover:bg-white/5">
+                                      <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
+                                      <td className="px-3 py-2 font-medium text-white">{entry.teamName}</td>
+                                      <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
+                                      <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
+                                      <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsWon}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsLost}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          setBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {setBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsFor}</td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsAgainst}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          pointBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {pointBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold text-yellow-200">
+                                        {entry.matchPoints}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
                               </tbody>
                             </table>
                           </div>
