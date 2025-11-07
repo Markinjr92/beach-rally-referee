@@ -2,19 +2,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables, TablesInsert } from '@/integrations/supabase/types';
 import {
   TournamentFormatId,
-  TournamentMatch,
-  TournamentStanding,
-  TournamentTeam,
   TieBreakerCriterion,
 } from '@/types/volleyball';
-import { calculateGroupStandings } from './standings';
-import { GroupStanding, computeStandingsByGroup } from '@/utils/tournamentStandings';
 import { getMatchConfigFromFormat } from '@/utils/matchConfig';
 import { isMatchCompleted } from '@/utils/matchStatus';
+import { buildGroupAssignments, computeStandingsByGroup } from '@/utils/tournamentStandings';
 
 type Match = Tables<'matches'>;
 type Team = Tables<'teams'>;
 type MatchScore = Tables<'match_scores'>;
+type EnrichedStanding = {
+  teamId: string;
+  teamName: string;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  setsWon: number;
+  setsLost: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  matchPoints: number;
+};
 
 export interface PhaseAdvancementCheck {
   canAdvance: boolean;
@@ -52,6 +60,12 @@ type PhaseHandlerContext = {
 };
 
 type PhaseHandler = (context: PhaseHandlerContext) => Promise<TablesInsert<'matches'>[]>;
+type GroupQualifierEntry = {
+  first: string;
+  second: string;
+  third?: string;
+  standings: EnrichedStanding[];
+};
 
 /**
  * Verifica se a fase atual pode ser finalizada
@@ -102,9 +116,8 @@ const calculateGroupQualifiers = async (
   teams: Team[],
   matches: Match[],
   matchScores: MatchScore[],
-  tieBreakerOrder: TieBreakerCriterion[],
-): Promise<Map<string, { first: string; second: string }>> => {
-  // Buscar grupos das equipes
+  _tieBreakerOrder: TieBreakerCriterion[],
+): Promise<Map<string, GroupQualifierEntry>> => {
   const { data: tournamentTeams } = await supabase
     .from('tournament_teams')
     .select('team_id, group_label')
@@ -114,141 +127,60 @@ const calculateGroupQualifiers = async (
     throw new Error('Não foi possível carregar os grupos das equipes');
   }
 
-  // Agrupar equipes por grupo
-  const groupTeams = new Map<string, string[]>();
+  const teamGroups: Record<string, string | null> = {};
   tournamentTeams.forEach((tt) => {
-    if (tt.group_label) {
-      if (!groupTeams.has(tt.group_label)) {
-        groupTeams.set(tt.group_label, []);
-      }
-      groupTeams.get(tt.group_label)!.push(tt.team_id);
-    }
+    teamGroups[tt.team_id] = tt.group_label;
   });
 
-  // Calcular classificação de cada grupo
-  const qualifiers = new Map<string, { first: string; second: string }>();
+  const groupAssignments = buildGroupAssignments(teams, teamGroups);
 
-  for (const [groupLabel, teamIds] of groupTeams.entries()) {
-    // Filtrar jogos do grupo
-    const groupMatches = matches.filter((m) => {
-      return teamIds.includes(m.team_a_id) && teamIds.includes(m.team_b_id);
-    });
-
-    // Converter para formato esperado pela função de standings
-    const tournamentTeamObjects: TournamentTeam[] = teamIds
-      .map((teamId) => {
-        const team = teams.find((t) => t.id === teamId);
-        if (!team) return null;
-        return {
-          id: `tt-${teamId}`,
-          seed: 1,
-          team: {
-            name: team.name,
-            players: [
-              { name: team.player_a, number: 1 },
-              { name: team.player_b, number: 2 },
-            ],
-          },
-        };
-      })
-      .filter((t): t is TournamentTeam => t !== null);
-
-    const tournamentMatchObjects: TournamentMatch[] = groupMatches.map((m) => {
-      const teamA = teams.find((t) => t.id === m.team_a_id);
-      const teamB = teams.find((t) => t.id === m.team_b_id);
-      const matchScoresForMatch = matchScores.filter((ms) => ms.match_id === m.id);
-
-      // Calcular resultado
-      let result = undefined;
-      if (isMatchCompleted(m.status) && matchScoresForMatch.length > 0) {
-        const setsWonA = matchScoresForMatch.filter(
-          (s) => s.team_a_points > s.team_b_points,
-        ).length;
-        const setsWonB = matchScoresForMatch.filter(
-          (s) => s.team_b_points > s.team_a_points,
-        ).length;
-
-        result = {
-          winner: (setsWonA > setsWonB ? 'A' : 'B') as 'A' | 'B',
-          sets: matchScoresForMatch.map((s) => ({
-            setNumber: s.set_number,
-            teamAScore: s.team_a_points,
-            teamBScore: s.team_b_points,
-          })),
-        };
-      }
-
-      return {
-        id: m.id,
-        gameId: m.id,
-        tournamentId: m.tournament_id,
-        title: `${teamA?.name || 'A'} vs ${teamB?.name || 'B'}`,
-        category: 'Misto',
-        modality: 'dupla' as const,
-        format: 'melhorDe3' as const,
-        teamA: {
-          name: teamA?.name || 'A',
-          players: [
-            { name: teamA?.player_a || 'A1', number: 1 },
-            { name: teamA?.player_b || 'A2', number: 2 },
-          ],
-        },
-        teamB: {
-          name: teamB?.name || 'B',
-          players: [
-            { name: teamB?.player_a || 'B1', number: 1 },
-            { name: teamB?.player_b || 'B2', number: 2 },
-          ],
-        },
-        phaseId: 'fase-grupos',
-        phaseName: m.phase || 'Fase de Grupos',
-        round: 1,
-        groupId: groupLabel,
-        groupName: groupLabel,
-        teamAId: `tt-${m.team_a_id}`,
-        teamBId: `tt-${m.team_b_id}`,
-        result,
-        pointsPerSet: [21, 21, 15],
-        needTwoPointLead: true,
-        sideSwitchSum: [7, 7, 5],
-        hasTechnicalTimeout: false,
-        technicalTimeoutSum: 0,
-        teamTimeoutsPerSet: 2,
-        teamTimeoutDurationSec: 30,
-        coinTossMode: 'initialThenAlternate' as const,
-        status: 'agendado' as const,
-        createdAt: m.created_at || new Date().toISOString(),
-        updatedAt: m.created_at || new Date().toISOString(),
-        hasStatistics: true,
-      };
-    });
-
-    const groupObj = {
-      id: groupLabel,
-      name: groupLabel,
-      phaseId: 'fase-grupos',
-      teamIds: tournamentTeamObjects.map((t) => t.id),
-    };
-
-    // Calcular standings
-    const standings = calculateGroupStandings({
-      matches: tournamentMatchObjects,
-      teams: tournamentTeamObjects,
-      group: groupObj,
-      tieBreakerOrder,
-    });
-
-    if (standings.length >= 2) {
-      // Pegar os team_ids originais (remover o prefixo 'tt-')
-      const firstTeamId = standings[0].teamId.replace('tt-', '');
-      const secondTeamId = standings[1].teamId.replace('tt-', '');
-
-      qualifiers.set(groupLabel, {
-        first: firstTeamId,
-        second: secondTeamId,
-      });
+  const scoresByMatch = new Map<string, MatchScore[]>();
+  matchScores.forEach((score) => {
+    if (!scoresByMatch.has(score.match_id)) {
+      scoresByMatch.set(score.match_id, []);
     }
-  }
+    scoresByMatch.get(score.match_id)!.push(score);
+  });
+  scoresByMatch.forEach((scores) => {
+    scores.sort((a, b) => a.set_number - b.set_number);
+  });
+
+  const teamNameMap = new Map<string, string>();
+  teams.forEach((team) => {
+    teamNameMap.set(team.id, team.name);
+  });
+
+  const standingsByGroup = computeStandingsByGroup({
+    matches,
+    scoresByMatch,
+    groupAssignments,
+    teamNameMap,
+  });
+
+  const qualifiers = new Map<string, GroupQualifierEntry>();
+
+  standingsByGroup.forEach((group) => {
+    if (group.standings.length < 2) return;
+    const [first, second, third] = group.standings;
+
+    qualifiers.set(group.key, {
+      first: first.teamId,
+      second: second.teamId,
+      third: third?.teamId,
+      standings: group.standings.map((entry) => ({
+        teamId: entry.teamId,
+        teamName: entry.teamName,
+        matchesPlayed: entry.matchesPlayed,
+        wins: entry.wins,
+        losses: entry.losses,
+        setsWon: entry.setsWon,
+        setsLost: entry.setsLost,
+        pointsFor: entry.pointsFor,
+        pointsAgainst: entry.pointsAgainst,
+        matchPoints: entry.matchPoints,
+      })),
+    });
+  });
 
   return qualifiers;
 };
@@ -258,7 +190,7 @@ const calculateGroupQualifiers = async (
  */
 const createKnockoutMatches = async (
   options: AdvancePhaseOptions,
-  qualifiers: Map<string, { first: string; second: string }>,
+  qualifiers: Map<string, GroupQualifierEntry>,
 ): Promise<TablesInsert<'matches'>[]> => {
   const newMatches: TablesInsert<'matches'>[] = [];
 
@@ -332,6 +264,154 @@ const createKnockoutMatches = async (
       modality,
     },
   );
+
+  return newMatches;
+};
+
+type ThirdPlaceCandidate = {
+  groupLabel: string;
+  teamId: string;
+  standing: EnrichedStanding;
+};
+
+const compareDesc = (a: number, b: number) => {
+  if (a === b) return 0;
+  if (a > b) return -1;
+  return 1;
+};
+
+const computeRatio = (won: number, lost: number) => {
+  if (won === 0 && lost === 0) return 0;
+  if (lost === 0) return Number.POSITIVE_INFINITY;
+  return won / lost;
+};
+
+const compareThirdStandings = (a: EnrichedStanding, b: EnrichedStanding) => {
+  if (a.matchPoints !== b.matchPoints) {
+    return compareDesc(a.matchPoints, b.matchPoints);
+  }
+
+  if (a.wins !== b.wins) {
+    return compareDesc(a.wins, b.wins);
+  }
+
+  const setsRatioA = computeRatio(a.setsWon, a.setsLost);
+  const setsRatioB = computeRatio(b.setsWon, b.setsLost);
+  if (setsRatioA !== setsRatioB) {
+    return compareDesc(setsRatioA, setsRatioB);
+  }
+
+  const pointsRatioA = computeRatio(a.pointsFor, a.pointsAgainst);
+  const pointsRatioB = computeRatio(b.pointsFor, b.pointsAgainst);
+  if (pointsRatioA !== pointsRatioB) {
+    return compareDesc(pointsRatioA, pointsRatioB);
+  }
+
+  if (a.pointsFor !== b.pointsFor) {
+    return compareDesc(a.pointsFor, b.pointsFor);
+  }
+
+  return a.teamName.localeCompare(b.teamName, 'pt-BR');
+};
+
+const selectBestThirdPlacedTeams = (
+  sortedGroups: Array<[string, GroupQualifierEntry]>,
+  count: number,
+): ThirdPlaceCandidate[] => {
+  const candidates: ThirdPlaceCandidate[] = [];
+
+  sortedGroups.forEach(([label, entry]) => {
+    if (!entry.third) return;
+    const standing = entry.standings.find((item) => item.teamId === entry.third);
+    if (!standing) return;
+    candidates.push({
+      groupLabel: label,
+      teamId: entry.third,
+      standing,
+    });
+  });
+
+  candidates.sort((a, b) => compareThirdStandings(a.standing, b.standing));
+  return candidates.slice(0, count);
+};
+
+const createThreeGroupQuarterfinalMatches = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
+
+  if (sortedGroups.length !== 3) {
+    throw new Error('O formato 3 grupos + quartas requer exatamente 3 grupos configurados.');
+  }
+
+  const [groupA, groupB, groupC] = sortedGroups.map(([, value]) => value);
+
+  const bestThirds = selectBestThirdPlacedTeams(sortedGroups, 2);
+  if (bestThirds.length < 2) {
+    throw new Error('Não foi possível determinar os dois melhores terceiros colocados.');
+  }
+
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_quarterfinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_quarterfinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+
+  const newMatches: TablesInsert<'matches'>[] = [
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.first,
+      team_b_id: bestThirds[0].teamId,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupB.first,
+      team_b_id: groupC.second,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupC.first,
+      team_b_id: groupB.second,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.second,
+      team_b_id: bestThirds[1].teamId,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+  ];
 
   return newMatches;
 };
@@ -496,6 +576,7 @@ export const advanceToNextPhase = async (
   try {
     const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
       groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+      '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
     };
 
     const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
@@ -509,6 +590,26 @@ export const advanceToNextPhase = async (
             context.options.tieBreakerOrder || [],
           );
           return createKnockoutMatches(context.options, qualifiers);
+        },
+        'Quartas de final': async (context) => {
+          const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+          return createSemifinalMatches(context.options, quarterfinalsMatches);
+        },
+        Semifinal: async (context) => {
+          const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+          return createFinalMatches(context.options, semifinalMatches);
+        },
+      },
+      '3_groups_quarterfinals': {
+        'Fase de Grupos': async (context) => {
+          const qualifiers = await calculateGroupQualifiers(
+            context.options.tournamentId,
+            context.teams,
+            context.matches,
+            context.matchScores,
+            context.options.tieBreakerOrder || [],
+          );
+          return createThreeGroupQuarterfinalMatches(context.options, qualifiers);
         },
         'Quartas de final': async (context) => {
           const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');

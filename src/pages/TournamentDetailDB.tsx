@@ -45,13 +45,14 @@ import {
   advanceToNextPhase,
   getTournamentPhases,
 } from '@/lib/tournament'
-import type { TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
+import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
 type Match = Tables<'matches'>
 type MatchScore = Tables<'match_scores'>
+type MatchStateRecord = Pick<Tables<'match_states'>, 'match_id' | 'scores' | 'sets_won'>
 
 type TeamOption = { value: string; label: string }
 
@@ -167,6 +168,89 @@ type TournamentTeamRecord = {
   teams: Team | null
 }
 
+const toFiniteNumber = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return fallback
+}
+
+const toNumberArray = (value: unknown): number[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map((item) => toFiniteNumber(item, 0))
+}
+
+const parseTeamScoreArrays = (value: unknown): { teamA: number[]; teamB: number[] } => {
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return {
+      teamA: toNumberArray(record.teamA),
+      teamB: toNumberArray(record.teamB),
+    }
+  }
+  return { teamA: [], teamB: [] }
+}
+
+const parseTeamSets = (value: unknown): { teamA: number; teamB: number } => {
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return {
+      teamA: toFiniteNumber(record.teamA, 0),
+      teamB: toFiniteNumber(record.teamB, 0),
+    }
+  }
+  return { teamA: 0, teamB: 0 }
+}
+
+const mapMatchStateRowToGameState = (row: MatchStateRecord): GameState | null => {
+  const setsWon = parseTeamSets(row.sets_won)
+  const scores = parseTeamScoreArrays(row.scores)
+  const hasSetData = setsWon.teamA > 0 || setsWon.teamB > 0
+  const hasScoreData =
+    scores.teamA.some((value) => value > 0) || scores.teamB.some((value) => value > 0)
+
+  if (!hasSetData && !hasScoreData) {
+    return null
+  }
+
+  const totalSets = Math.max(scores.teamA.length, scores.teamB.length, setsWon.teamA + setsWon.teamB, 1)
+  const padScores = (list: number[]) =>
+    list.length >= totalSets ? list : [...list, ...new Array(totalSets - list.length).fill(0)]
+
+  return {
+    id: row.match_id,
+    gameId: row.match_id,
+    currentSet: totalSets,
+    setsWon,
+    scores: {
+      teamA: padScores(scores.teamA),
+      teamB: padScores(scores.teamB),
+    },
+    currentServerTeam: 'A',
+    currentServerPlayer: 1,
+    possession: 'A',
+    leftIsTeamA: true,
+    timeoutsUsed: {
+      teamA: new Array(totalSets).fill(0),
+      teamB: new Array(totalSets).fill(0),
+    },
+    technicalTimeoutUsed: new Array(totalSets).fill(false),
+    sidesSwitched: new Array(totalSets).fill(0),
+    serviceOrders: { teamA: [], teamB: [] },
+    nextServerIndex: { teamA: 0, teamB: 0 },
+    setConfigurations: [],
+    isGameEnded: true,
+  }
+}
+
 const MATCH_FORMAT_LABELS: Record<MatchFormatOption, string> = {
   melhorDe3: 'Melhor de 3 sets (21/21/15)',
   melhorDe3_15: 'Melhor de 3 sets (15/15/15)',
@@ -214,6 +298,7 @@ export default function TournamentDetailDB() {
   const [newSponsorUrl, setNewSponsorUrl] = useState('')
   const [teamGroups, setTeamGroups] = useState<Record<string, string | null>>({})
   const [matchScores, setMatchScores] = useState<MatchScore[]>([])
+  const [matchStates, setMatchStates] = useState<Record<string, GameState>>({})
   const [tournamentConfig, setTournamentConfig] = useState<TournamentConfig | null>(null)
   
   // Phase advancement states
@@ -345,6 +430,60 @@ export default function TournamentDetailDB() {
   }, [matches, toast])
 
   useEffect(() => {
+    let isCancelled = false
+
+    const loadStates = async () => {
+      if (!matches.length) {
+        if (!isCancelled) {
+          setMatchStates({})
+        }
+        return
+      }
+
+      const matchIds = matches.map((match) => match.id)
+
+      try {
+        const { data, error } = await supabase
+          .from('match_states')
+          .select('match_id, scores, sets_won')
+          .in('match_id', matchIds)
+
+        if (error) {
+          if ((error as { code?: string })?.code === 'PGRST205') {
+            if (!isCancelled) {
+              setMatchStates({})
+            }
+            return
+          }
+          throw error
+        }
+
+        if (isCancelled) return
+
+        const parsedStates: Record<string, GameState> = {}
+        ;(data as MatchStateRecord[] | null)?.forEach((row) => {
+          const mapped = mapMatchStateRowToGameState(row)
+          if (mapped) {
+            parsedStates[row.match_id] = mapped
+          }
+        })
+        setMatchStates(parsedStates)
+      } catch (error) {
+        console.error('Erro ao carregar estados das partidas', error)
+        if (!isCancelled) {
+          setMatchStates({})
+        }
+      }
+    }
+
+    void loadStates()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [matches])
+
+  useEffect(() => {
     const loadPhases = async () => {
       if (!tournamentId) return
       const phases = await getTournamentPhases(tournamentId)
@@ -441,10 +580,11 @@ export default function TournamentDetailDB() {
       computeStandingsByGroup({
         matches,
         scoresByMatch,
+        matchStates,
         groupAssignments,
         teamNameMap,
       }),
-    [groupAssignments, matches, scoresByMatch, teamNameMap],
+    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
   )
 
   const eliminationSummaries = useMemo(() => {

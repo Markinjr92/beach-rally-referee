@@ -65,11 +65,13 @@ export const buildGroupAssignments = (
 
   const multipleGroups = rawGroups.size > 1
 
-  return Array.from(rawGroups.entries()).map(([key, entry]) => ({
+  const groups = Array.from(rawGroups.entries()).map(([key, entry]) => ({
     key,
     label: entry.rawLabel ?? (multipleGroups ? 'Grupo Único' : 'Classificação Geral'),
     teamIds: entry.teamIds,
   }))
+
+  return groups.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR', { sensitivity: 'base' }))
 }
 
 const ensureStandingsEntry = (
