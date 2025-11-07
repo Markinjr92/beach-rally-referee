@@ -1,6 +1,7 @@
 import { Tables } from '@/integrations/supabase/types'
 import { GameState } from '@/types/volleyball'
 import { isMatchCompleted } from './matchStatus'
+import { calculateMatchPoints, summarizeSets } from '@/lib/tournament/scoring'
 
 export type StandingsEntry = {
   teamId: string
@@ -203,15 +204,31 @@ export const computeStandingsByGroup = ({
       entryB.pointsFor += pointsB
       entryB.pointsAgainst += pointsA
 
-      if (setsWonA > setsWonB) {
-        entryA.wins += 1
-        entryB.losses += 1
-        entryA.matchPoints += 2
-      } else if (setsWonB > setsWonA) {
-        entryB.wins += 1
-        entryA.losses += 1
-        entryB.matchPoints += 2
+      // Calculate match points using the official scoring system
+      const winner = setsWonA > setsWonB ? 'A' : setsWonB > setsWonA ? 'B' : null
+      
+      if (winner) {
+        if (winner === 'A') {
+          entryA.wins += 1
+          entryB.losses += 1
+        } else {
+          entryB.wins += 1
+          entryA.losses += 1
+        }
+
+        // Build sets array for scoring calculation
+        const sets = recordedScores.map((score, index) => ({
+          setNumber: index + 1,
+          teamAScore: score.team_a_points,
+          teamBScore: score.team_b_points
+        }))
+
+        // Use official scoring system
+        const matchPoints = calculateMatchPoints({ winner, sets })
+        entryA.matchPoints += matchPoints.teamA
+        entryB.matchPoints += matchPoints.teamB
       } else {
+        // Draw (shouldn't happen in volleyball, but handle it)
         entryA.matchPoints += 1
         entryB.matchPoints += 1
       }

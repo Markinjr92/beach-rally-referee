@@ -5,6 +5,8 @@ import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown, Upload, Imag
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
 import { useToast } from '@/components/ui/use-toast'
+import { useAuth } from '@/hooks/useAuth'
+import { useUserRoles } from '@/hooks/useUserRoles'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -192,6 +194,8 @@ const TIE_BREAKER_LABELS: Record<TieBreakerCriterion, string> = {
 export default function TournamentDetailDB() {
   const { tournamentId } = useParams()
   const { toast } = useToast()
+  const { user, loading: authLoading } = useAuth()
+  const { roles } = useUserRoles(user, authLoading)
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
@@ -424,6 +428,8 @@ export default function TournamentDetailDB() {
     })
     return map
   }, [teams])
+
+  const isAdminSistema = roles.includes('admin_sistema')
 
   const groupAssignments = useMemo<GroupAssignment[]>(
     () => buildGroupAssignments(teams, teamGroups),
@@ -923,11 +929,15 @@ export default function TournamentDetailDB() {
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Select value={m.status || 'scheduled'} onValueChange={async (v) => {
-                                await supabase.from('matches').update({ status: v }).eq('id', m.id)
-                                setMatches(prev => prev.map(x => x.id === m.id ? { ...x, status: v } : x))
-                              }}>
-                                <SelectTrigger className="w-full bg-white/10 border-white/30 text-white sm:w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                              <Select 
+                                value={m.status || 'scheduled'} 
+                                onValueChange={async (v) => {
+                                  await supabase.from('matches').update({ status: v }).eq('id', m.id)
+                                  setMatches(prev => prev.map(x => x.id === m.id ? { ...x, status: v } : x))
+                                }}
+                                disabled={m.status === 'completed' && !isAdminSistema}
+                              >
+                                <SelectTrigger className="w-full bg-white/10 border-white/30 text-white sm:w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"><SelectValue placeholder="Status" /></SelectTrigger>
                                 <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
                                   <SelectItem value="scheduled">Pendente</SelectItem>
                                   <SelectItem value="in_progress">Em andamento</SelectItem>
@@ -935,19 +945,21 @@ export default function TournamentDetailDB() {
                                   <SelectItem value="canceled">Cancelado</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <Button
-                                size="sm"
-                                className="bg-amber-500/90 text-white hover:bg-amber-600"
-                                onClick={() => setEditingMatch({ 
-                                  id: m.id, 
-                                  scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '', 
-                                  court: m.court || '',
-                                  phase: m.phase || '',
-                                })}
-                              >
-                                <Edit2 size={16} className="mr-1" />
-                                Editar
-                              </Button>
+                              {(m.status !== 'completed' || isAdminSistema) && (
+                                <Button
+                                  size="sm"
+                                  className="bg-amber-500/90 text-white hover:bg-amber-600"
+                                  onClick={() => setEditingMatch({ 
+                                    id: m.id, 
+                                    scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '', 
+                                    court: m.court || '',
+                                    phase: m.phase || '',
+                                  })}
+                                >
+                                  <Edit2 size={16} className="mr-1" />
+                                  Editar
+                                </Button>
+                              )}
                               <Link to={`/referee/${m.id}`}>
                                 <Button size="sm" className="bg-blue-500/90 text-white hover:bg-blue-600">
                                   Mesa
