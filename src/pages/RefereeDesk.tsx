@@ -58,6 +58,7 @@ import {
   saveLocalMatchState,
 } from "@/lib/localStorage";
 import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Select,
   SelectContent,
@@ -128,6 +129,11 @@ export default function RefereeDesk() {
   const [firstChoiceOption, setFirstChoiceOption] = useState<CoinChoice>('serve');
   const [secondChoiceServeDecision, setSecondChoiceServeDecision] = useState<'serve' | 'receive' | null>(null);
   const [sideSelections, setSideSelections] = useState<{ A: CourtSide | null; B: CourtSide | null }>({ A: null, B: null });
+  const [pointConfirmation, setPointConfirmation] = useState<{
+    team: 'A' | 'B';
+    category?: PointCategory;
+    message: string;
+  } | null>(null);
 
   const getPlayersByTeam = useCallback(
     (team: 'A' | 'B') => {
@@ -959,7 +965,7 @@ export default function RefereeDesk() {
     getDefaultServiceOrder,
   ]);
 
-  const addPoint = async (team: 'A' | 'B', category?: PointCategory) => {
+  const addPoint = async (team: 'A' | 'B', category?: PointCategory, options?: { bypassConfirmation?: boolean }) => {
     if (!gameState || !game || timer !== null || isSyncing) return;
     if (!isCurrentSetConfigured) {
       toast({
@@ -992,7 +998,7 @@ export default function RefereeDesk() {
       prospectiveWinnerScore >= targetPoints &&
       prospectiveWinnerScore - prospectiveOpponentScore >= minimumLead;
 
-    if (wouldFinishSet) {
+    if (wouldFinishSet && !options?.bypassConfirmation) {
       const winnerKey = team === 'A' ? 'teamA' : 'teamB';
       const updatedSetsWon = {
         teamA: gameState.setsWon.teamA + (winnerKey === 'teamA' ? 1 : 0),
@@ -1005,9 +1011,12 @@ export default function RefereeDesk() {
       const confirmationMessage = wouldFinishMatch
         ? 'Este ponto finaliza o set e a partida. Tem certeza de que deseja prosseguir?'
         : 'Este ponto finaliza o set. Tem certeza de que deseja prosseguir?';
-      if (typeof window !== 'undefined' && !window.confirm(confirmationMessage)) {
-        return;
-      }
+      setPointConfirmation({
+        team,
+        category,
+        message: confirmationMessage,
+      });
+      return;
     }
 
     const previousState = snapshotState(gameState);
@@ -1187,6 +1196,13 @@ export default function RefereeDesk() {
     }
 
     setShowPointCategories(null);
+  };
+
+  const handlePointConfirmation = async () => {
+    if (!pointConfirmation) return;
+    const { team, category } = pointConfirmation;
+    setPointConfirmation(null);
+    await addPoint(team, category, { bypassConfirmation: true });
   };
 
   const handleCategorySelection = (team: 'A' | 'B', category: string) => {
@@ -2749,6 +2765,20 @@ export default function RefereeDesk() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <ConfirmDialog
+          open={Boolean(pointConfirmation)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPointConfirmation(null);
+            }
+          }}
+          title="Confirmar registro de ponto"
+          description={pointConfirmation?.message}
+          confirmText="Registrar ponto"
+          cancelText="Revisar"
+          onConfirm={handlePointConfirmation}
+          onCancel={() => setPointConfirmation(null)}
+        />
 
       </div>
     </div>

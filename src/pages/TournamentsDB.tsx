@@ -32,6 +32,7 @@ import {
   generateTournamentStructure,
 } from "@/lib/tournament"
 import { Tournament as TournamentType, TournamentFormatId, TournamentTeam, TieBreakerCriterion } from "@/types/volleyball"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 
 type Tournament = Tables<'tournaments'>
 
@@ -1055,12 +1056,20 @@ export default function TournamentsDB() {
                       {tournament.status !== 'completed' && (
                         <>
                           {tournament.status !== 'active' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center gap-1 border-emerald-300/40 bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30"
-                              onClick={async () => {
-                                if (!confirm('Iniciar este torneio?')) return
+                            <ConfirmDialog
+                              title="Iniciar torneio"
+                              description="Esta ação ativará o torneio imediatamente. Deseja continuar?"
+                              confirmText="Iniciar agora"
+                              trigger={
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex items-center gap-1 border-emerald-300/40 bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30"
+                                >
+                                  Iniciar
+                                </Button>
+                              }
+                              onConfirm={async () => {
                                 const { error } = await supabase
                                   .from('tournaments')
                                   .update({ status: 'active' })
@@ -1071,21 +1080,27 @@ export default function TournamentsDB() {
                                 }
                                 setTournaments((prev) =>
                                   prev.map((item) =>
-                                    item.id === tournament.id ? { ...item, status: 'active' } : item
-                                  )
+                                    item.id === tournament.id ? { ...item, status: 'active' } : item,
+                                  ),
                                 )
                                 toast({ title: 'Torneio iniciado' })
                               }}
-                            >
-                              Iniciar
-                            </Button>
+                            />
                           )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center gap-1 border-white/40 bg-white/10 text-white hover:bg-white/20"
-                            onClick={async () => {
-                              if (!confirm('Finalizar este torneio?')) return
+                          <ConfirmDialog
+                            title="Finalizar torneio"
+                            description="Confirme para encerrar este torneio. A classificação final será mantida."
+                            confirmText="Finalizar"
+                            trigger={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1 border-white/40 bg-white/10 text-white hover:bg-white/20"
+                              >
+                                Finalizar
+                              </Button>
+                            }
+                            onConfirm={async () => {
                               const { error } = await supabase
                                 .from('tournaments')
                                 .update({ status: 'completed' })
@@ -1096,34 +1111,38 @@ export default function TournamentsDB() {
                               }
                               setTournaments((prev) =>
                                 prev.map((item) =>
-                                  item.id === tournament.id ? { ...item, status: 'completed' } : item
-                                )
+                                  item.id === tournament.id ? { ...item, status: 'completed' } : item,
+                                ),
                               )
                               toast({ title: 'Torneio finalizado' })
                             }}
-                          >
-                            Finalizar
-                          </Button>
+                          />
                         </>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="flex items-center gap-1 bg-white/10 border border-white/20 text-white hover:bg-white/20"
-                        onClick={async () => {
-                          if (!confirm("Tem certeza que deseja apagar este torneio? Esta ação removerá jogos e inscrições."))
-                            return
-                          const { error } = await supabase.from("tournaments").delete().eq("id", tournament.id)
+                      <ConfirmDialog
+                        title="Excluir torneio"
+                        description="Esta ação removerá o torneio, jogos e inscrições associados. Deseja continuar?"
+                        confirmText="Excluir torneio"
+                        destructive
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="flex items-center gap-1 bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                          >
+                            Excluir
+                          </Button>
+                        }
+                        onConfirm={async () => {
+                          const { error } = await supabase.from('tournaments').delete().eq('id', tournament.id)
                           if (error) {
-                            toast({ title: "Erro ao deletar", description: error.message })
+                            toast({ title: 'Erro ao deletar', description: error.message })
                             return
                           }
                           setTournaments((prev) => prev.filter((x) => x.id !== tournament.id))
-                          toast({ title: "Torneio removido" })
+                          toast({ title: 'Torneio removido' })
                         }}
-                      >
-                        Excluir
-                      </Button>
+                      />
                     </div>
                   </div>
                 </CardContent>

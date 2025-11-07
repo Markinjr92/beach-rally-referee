@@ -47,6 +47,7 @@ import {
 } from '@/lib/tournament'
 import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -899,20 +900,28 @@ export default function TournamentDetailDB() {
                                 <Edit2 size={16} className="mr-1" />
                                 Editar
                               </Button>
-                              <Button
-                                size="sm"
-                                className="bg-red-500/90 text-white hover:bg-red-600"
-                                onClick={async () => {
-                                  if (!confirm('Tem certeza que deseja excluir esta dupla? Isso removerá todos os jogos associados.')) return
-                                  await supabase.from('matches').delete().eq('tournament_id', tournament.id).or(`team_a_id.eq.${team.id},team_b_id.eq.${team.id}`)
+                              <ConfirmDialog
+                                title="Excluir dupla"
+                                description="Esta ação removerá a dupla e todos os jogos associados. Deseja continuar?"
+                                confirmText="Excluir dupla"
+                                destructive
+                                trigger={
+                                  <Button size="sm" className="bg-red-500/90 text-white hover:bg-red-600">
+                                    Excluir
+                                  </Button>
+                                }
+                                onConfirm={async () => {
+                                  await supabase
+                                    .from('matches')
+                                    .delete()
+                                    .eq('tournament_id', tournament.id)
+                                    .or(`team_a_id.eq.${team.id},team_b_id.eq.${team.id}`)
                                   await supabase.from('tournament_teams').delete().eq('tournament_id', tournament.id).eq('team_id', team.id)
                                   await supabase.from('teams').delete().eq('id', team.id)
                                   await loadTournamentTeams()
                                   toast({ title: 'Dupla removida' })
                                 }}
-                              >
-                                Excluir
-                              </Button>
+                              />
                             </div>
                           </>
                         )}
@@ -1115,19 +1124,26 @@ export default function TournamentDetailDB() {
                                   Torcida
                                 </Button>
                               </Link>
-                              <Button
-                                size="sm"
-                                className="bg-red-500/90 text-white hover:bg-red-600"
-                                onClick={async () => {
-                                  if (!confirm('Remover este jogo?')) return
+                              <ConfirmDialog
+                                title="Excluir jogo"
+                                description="Confirme para remover este jogo da tabela. Esta ação não pode ser desfeita."
+                                confirmText="Excluir jogo"
+                                destructive
+                                trigger={
+                                  <Button size="sm" className="bg-red-500/90 text-white hover:bg-red-600">
+                                    Excluir
+                                  </Button>
+                                }
+                                onConfirm={async () => {
                                   const { error } = await supabase.from('matches').delete().eq('id', m.id)
-                                  if (error) { toast({ title: 'Erro ao excluir jogo', description: error.message }); return }
+                                  if (error) {
+                                    toast({ title: 'Erro ao excluir jogo', description: error.message })
+                                    return
+                                  }
                                   setMatches(prev => prev.filter(x => x.id !== m.id))
                                   toast({ title: 'Jogo removido' })
                                 }}
-                              >
-                                Excluir
-                              </Button>
+                              />
                             </div>
                           </div>
                         )}
