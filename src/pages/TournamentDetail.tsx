@@ -320,7 +320,15 @@ export default function TournamentDetail() {
       return hasThirdPlace ? thirdPlaceFormat.length > 0 : true;
     }
     return true;
-  }, [safeStepIndex, selectedFormat, regularPhaseFormat, finalPhaseFormat, hasThirdPlace, thirdPlaceFormat]);
+  }, [
+    safeStepIndex,
+    selectedTeamsCount,
+    selectedFormat,
+    regularPhaseFormat,
+    finalPhaseFormat,
+    hasThirdPlace,
+    thirdPlaceFormat,
+  ]);
 
   const isLastStep = safeStepIndex === totalSteps - 1;
 
