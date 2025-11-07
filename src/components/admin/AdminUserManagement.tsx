@@ -18,9 +18,13 @@ type AdminListUser = {
   is_active?: boolean;
 };
 
+type AdminFunctionUser = Partial<AdminListUser> & {
+  id?: string | null;
+};
+
 type AdminUserManagementResponse = {
   ok: boolean;
-  users?: AdminListUser[];
+  users?: AdminFunctionUser[];
   message?: string;
 };
 
@@ -74,13 +78,13 @@ export const AdminUserManagement = () => {
     }
 
     // Normalize API response: ensure we always have user_id for keys/edit/reset
-    const apiUsers = (data.users as any[]) ?? [];
-    const normalizedUsers: AdminListUser[] = apiUsers.map((u) => ({
-      user_id: u.user_id ?? u.id,
-      email: u.email ?? null,
-      name: u.name ?? null,
-      roles: Array.isArray(u.roles) ? u.roles : [],
-      is_active: typeof u.is_active === "boolean" ? u.is_active : true,
+    const apiUsers = data.users ?? [];
+    const normalizedUsers: AdminListUser[] = apiUsers.map((user) => ({
+      user_id: user.user_id ?? user.id ?? "",
+      email: user.email ?? null,
+      name: user.name ?? null,
+      roles: Array.isArray(user.roles) ? user.roles : [],
+      is_active: typeof user.is_active === "boolean" ? user.is_active : true,
     }));
 
     setUsers(normalizedUsers);
