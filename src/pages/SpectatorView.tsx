@@ -418,7 +418,7 @@ export default function SpectatorView() {
                       </h2>
                       <div className="bg-white/20 text-white rounded-xl px-3 py-2 shadow-lg backdrop-blur-sm min-w-[96px] text-right">
                         <span className="block text-[10px] font-semibold uppercase tracking-[0.26em] text-white/75">
-                          WPA
+                          % VENC
                         </span>
                         <span className="text-xl font-bold leading-none">{wpaLeft.toFixed(1)}%</span>
                       </div>
@@ -467,7 +467,7 @@ export default function SpectatorView() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="bg-white/20 text-white rounded-xl px-3 py-2 shadow-lg backdrop-blur-sm min-w-[96px] text-left">
                         <span className="block text-[10px] font-semibold uppercase tracking-[0.26em] text-white/75">
-                          WPA
+                          % VENC
                         </span>
                         <span className="text-xl font-bold leading-none">{wpaRight.toFixed(1)}%</span>
                       </div>
