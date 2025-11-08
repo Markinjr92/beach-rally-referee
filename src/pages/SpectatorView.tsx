@@ -12,6 +12,7 @@ import { normalizeMatchStatus } from "@/utils/matchStatus";
 import { cn } from "@/lib/utils";
 import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import { MatchLineChart } from "@/components/MatchLineChart";
+import { calculateWinProbability } from "@/lib/wpa";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
   if (!activeTimer) {
@@ -306,6 +307,32 @@ export default function SpectatorView() {
     return scoreHistory.filter(entry => entry.setNumber === gameState.currentSet);
   }, [gameState, scoreHistory]);
 
+  const momentumSequence = useMemo(() => {
+    if (currentSetHistory.length === 0) return [] as Array<'A' | 'B'>;
+
+    let lastScoreA = 0;
+    let lastScoreB = 0;
+    const sequence: Array<'A' | 'B'> = [];
+
+    for (const entry of currentSetHistory) {
+      if (entry.teamA > lastScoreA) {
+        sequence.push('A');
+      } else if (entry.teamB > lastScoreB) {
+        sequence.push('B');
+      }
+
+      lastScoreA = entry.teamA;
+      lastScoreB = entry.teamB;
+    }
+
+    return sequence;
+  }, [currentSetHistory]);
+
+  const recentMomentum = useMemo(() => {
+    const lastSeven = momentumSequence.slice(-7);
+    return Array(Math.max(0, 7 - lastSeven.length)).fill(null).concat(lastSeven) as Array<'A' | 'B' | null>;
+  }, [momentumSequence]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-ocean text-white flex items-center justify-center">
@@ -329,8 +356,20 @@ export default function SpectatorView() {
   const rightTeam = gameState.leftIsTeamA ? 'B' : 'A';
   const leftHasPossession = gameState.possession === leftTeam;
   const rightHasPossession = gameState.possession === rightTeam;
-  const possessionGlow = 'shadow-[0_0_40px_rgba(250,204,21,0.35)]';
+  const possessionGlow = 'ring-2 ring-yellow-300/70 shadow-[0_0_40px_rgba(250,204,21,0.45)]';
   const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
+  const leftTeamName = leftTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const rightTeamName = rightTeam === 'A' ? game.teamA.name : game.teamB.name;
+  const maxPointsCurrentSet =
+    game.pointsPerSet[currentSetIndex] ?? game.pointsPerSet[game.pointsPerSet.length - 1] ?? 21;
+  const wpaTeamA = calculateWinProbability(scoreA, scoreB, maxPointsCurrentSet);
+  const wpaTeamB = 100 - wpaTeamA;
+  const wpaLeft = leftTeam === 'A' ? wpaTeamA : wpaTeamB;
+  const wpaRight = rightTeam === 'A' ? wpaTeamA : wpaTeamB;
+  const teamCardClasses: Record<'A' | 'B', string> = {
+    A: 'bg-gradient-to-br from-team-a to-team-a/60',
+    B: 'bg-gradient-to-br from-team-b to-team-b/60'
+  };
 
   const timerDescriptor = buildTimerDescriptor(game, gameState.activeTimer ?? null);
 
@@ -364,30 +403,41 @@ export default function SpectatorView() {
           <div className="lg:col-span-3">
             <Card className="bg-white/10 border-white/20 text-white">
               <CardContent className="p-8">
-                <div className="grid grid-cols-5 gap-6 items-center">
+                <div className="grid grid-cols-5 gap-6 items-stretch">
                   {/* Left Team */}
                   <div
                     className={cn(
-                      'col-span-2 text-center',
+                      'col-span-2 rounded-2xl p-6 text-left border border-white/15 backdrop-blur-sm shadow-[0_20px_45px_rgba(0,0,0,0.35)] transition-all duration-300',
+                      teamCardClasses[leftTeam],
                       leftHasPossession && possessionGlow
                     )}
                   >
-                    <h2 className="text-2xl font-bold mb-4">
-                      {leftTeam === 'A' ? game.teamA.name : game.teamB.name}
-                    </h2>
-                    <div className="text-7xl font-bold mb-4 animate-bounce-in">
-                      {leftTeam === 'A' ? scoreA : scoreB}
+                    <div className="flex items-start justify-between gap-4">
+                      <h2 className="text-2xl font-bold leading-tight drop-shadow-md">
+                        {leftTeamName}
+                      </h2>
+                      <div className="bg-white/20 text-white rounded-xl px-3 py-2 shadow-lg backdrop-blur-sm min-w-[96px] text-right">
+                        <span className="block text-[10px] font-semibold uppercase tracking-[0.26em] text-white/75">
+                          WPA
+                        </span>
+                        <span className="text-xl font-bold leading-none">{wpaLeft.toFixed(1)}%</span>
+                      </div>
                     </div>
-                    {gameState.currentServerTeam === leftTeam && (
-                      <Badge className="bg-serving text-white text-lg px-4 py-2">
-                        <Zap className="mr-2" size={20} />
-                        SACANDO #{gameState.currentServerPlayer}
-                      </Badge>
-                    )}
+                    <div className="mt-6 flex flex-col items-center gap-4">
+                      <div className="text-7xl font-black drop-shadow-lg animate-bounce-in">
+                        {leftTeam === 'A' ? scoreA : scoreB}
+                      </div>
+                      {gameState.currentServerTeam === leftTeam && (
+                        <Badge className="bg-serving text-white text-base px-4 py-2 shadow-lg">
+                          <Zap className="mr-2" size={18} />
+                          SACANDO #{gameState.currentServerPlayer}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Center */}
-                  <div className="text-center">
+                  <div className="text-center flex flex-col items-center justify-center gap-4">
                     <Trophy className="mx-auto mb-4 text-yellow-300" size={40} />
                     <div className="text-lg font-semibold">
                       Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
@@ -409,22 +459,33 @@ export default function SpectatorView() {
                   {/* Right Team */}
                   <div
                     className={cn(
-                      'col-span-2 text-center',
+                      'col-span-2 rounded-2xl p-6 text-right border border-white/15 backdrop-blur-sm shadow-[0_20px_45px_rgba(0,0,0,0.35)] transition-all duration-300',
+                      teamCardClasses[rightTeam],
                       rightHasPossession && possessionGlow
                     )}
                   >
-                    <h2 className="text-2xl font-bold mb-4">
-                      {rightTeam === 'A' ? game.teamA.name : game.teamB.name}
-                    </h2>
-                    <div className="text-7xl font-bold mb-4 animate-bounce-in">
-                      {rightTeam === 'A' ? scoreA : scoreB}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="bg-white/20 text-white rounded-xl px-3 py-2 shadow-lg backdrop-blur-sm min-w-[96px] text-left">
+                        <span className="block text-[10px] font-semibold uppercase tracking-[0.26em] text-white/75">
+                          WPA
+                        </span>
+                        <span className="text-xl font-bold leading-none">{wpaRight.toFixed(1)}%</span>
+                      </div>
+                      <h2 className="text-2xl font-bold leading-tight drop-shadow-md">
+                        {rightTeamName}
+                      </h2>
                     </div>
-                    {gameState.currentServerTeam === rightTeam && (
-                      <Badge className="bg-serving text-white text-lg px-4 py-2">
-                        <Zap className="mr-2" size={20} />
-                        SACANDO #{gameState.currentServerPlayer}
-                      </Badge>
-                    )}
+                    <div className="mt-6 flex flex-col items-center gap-4">
+                      <div className="text-7xl font-black drop-shadow-lg animate-bounce-in">
+                        {rightTeam === 'A' ? scoreA : scoreB}
+                      </div>
+                      {gameState.currentServerTeam === rightTeam && (
+                        <Badge className="bg-serving text-white text-base px-4 py-2 shadow-lg">
+                          <Zap className="mr-2" size={18} />
+                          SACANDO #{gameState.currentServerPlayer}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -516,17 +577,44 @@ export default function SpectatorView() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-4 text-xs uppercase tracking-wide text-white/70">
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-team-a shadow-glow" />
+                      {game.teamA.name}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-team-b shadow-glow" />
+                      {game.teamB.name}
+                    </span>
+                  </div>
+
                   <div>
                     <h4 className="text-sm font-semibold uppercase tracking-wide text-white/70">
-                      Últimos 5 pontos
+                      Últimos 7 pontos
                     </h4>
-                    <div className="mt-2 flex gap-2">
-                      {[...Array(5)].map((_, index) => (
+                    <div className="mt-3 grid grid-cols-7 gap-2">
+                      {recentMomentum.map((point, index) => (
                         <div
                           key={index}
-                          className={`h-2 flex-1 rounded-full ${index < 3 ? 'bg-team-a' : 'bg-team-b/60'}`}
-                        />
+                          title={
+                            point === 'A'
+                              ? `Ponto de ${game.teamA.name}`
+                              : point === 'B'
+                                ? `Ponto de ${game.teamB.name}`
+                                : 'Sem registro'
+                          }
+                          className={cn(
+                            'h-8 rounded-lg border border-white/15 flex items-center justify-center text-xs font-bold tracking-widest transition-all',
+                            point === 'A'
+                              ? 'bg-team-a text-white shadow-[0_12px_24px_rgba(0,0,0,0.35)]'
+                              : point === 'B'
+                                ? 'bg-team-b text-white shadow-[0_12px_24px_rgba(0,0,0,0.35)]'
+                                : 'bg-white/10 text-white/40'
+                          )}
+                        >
+                          {point ?? '—'}
+                        </div>
                       ))}
                     </div>
                   </div>
