@@ -429,37 +429,6 @@ export default function RefereeDesk() {
     });
   }, [toast]);
 
-  const ensureMatchInProgress = useCallback(async () => {
-    if (!game?.id) {
-      return;
-    }
-    if (game.status === 'em_andamento') {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('matches')
-        .update({ status: 'in_progress' as TablesUpdate<'matches'>['status'] })
-        .eq('id', game.id);
-      if (error) {
-        throw error;
-      }
-      setGame(prev => (prev ? { ...prev, status: 'em_andamento' } : prev));
-    } catch (error) {
-      if (isLikelyOfflineError(error)) {
-        enqueueOfflineOperation('updateMatch', {
-          matchId: game.id,
-          values: { status: 'in_progress' as TablesUpdate<'matches'>['status'] },
-        });
-        setGame(prev => (prev ? { ...prev, status: 'em_andamento' } : prev));
-        showOfflineSyncNotice();
-      } else {
-        console.error('Failed to update match status to in progress', error);
-      }
-    }
-  }, [game, showOfflineSyncNotice]);
-
   const showOfflineSyncNotice = useCallback(() => {
     if (offlineNoticeDisplayed.current) return;
     offlineNoticeDisplayed.current = true;
@@ -1491,7 +1460,6 @@ export default function RefereeDesk() {
           },
         },
       });
-      await ensureMatchInProgress();
       setSetConfigDialogOpen(false);
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
