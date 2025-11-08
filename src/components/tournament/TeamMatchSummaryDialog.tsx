@@ -43,7 +43,8 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
             {summaries.map((entry) => {
               const outcomeClass = outcomeStyles[entry.outcome]
               const outcomeLabel = outcomeLabels[entry.outcome]
-              const setsLabel = entry.sets.length > 0 ? entry.sets.map((set) => set.label).join(' • ') : null
+              const hasSetScores = entry.sets.length > 0
+              const setsLabel = hasSetScores ? entry.sets.map((set) => set.label).join(' • ') : null
               const phaseParts = [entry.phase, entry.round].filter(Boolean)
               const phaseLabel = phaseParts.join(' • ')
               const matchLabel = entry.label ?? phaseLabel ?? 'Partida'
@@ -57,6 +58,8 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
               } else if (entry.outcome === 'pending' && entry.status === 'in_progress') {
                 resultSummary = `${outcomeLabel}: ${entry.resultLabel}`
               }
+
+              const showSetBreakdown = entry.status === 'completed' && hasSetScores
 
               return (
                 <div
@@ -81,12 +84,27 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
                   <div className="mt-2 space-y-1 text-xs text-white/70">
                     {phaseLabel && <div>Fase: {phaseLabel}</div>}
                     {entry.status !== 'completed' && <div>Status: {entry.statusLabel}</div>}
-                    {setsLabel && (
+                    {entry.status !== 'completed' && setsLabel && (
                       <div>
                         Sets: <span className="font-medium text-white">{setsLabel}</span>
                       </div>
                     )}
                   </div>
+                  {showSetBreakdown && (
+                    <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2">
+                      <div className="text-[11px] uppercase tracking-[0.2em] text-white/50">Placar dos sets</div>
+                      <div className="mt-1 space-y-1 text-xs text-white/80">
+                        {entry.sets.map((set, index) => (
+                          <div key={index} className="flex items-center justify-between">
+                            <span>Set {index + 1}</span>
+                            <span className="font-semibold text-white">
+                              {set.teamPoints} x {set.opponentPoints}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
