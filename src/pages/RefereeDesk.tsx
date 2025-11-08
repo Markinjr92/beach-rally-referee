@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScoreButton } from "@/components/ui/score-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+  Plus,
   RotateCcw,
   Clock,
   Trophy,
@@ -1737,18 +1739,11 @@ export default function RefereeDesk() {
   const serverPlayerDisplay = isCurrentSetConfigured ? gameState.currentServerPlayer : '-';
   const leftTeamColorClass = leftTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
   const rightTeamColorClass = rightTeam === 'A' ? 'bg-team-a' : 'bg-team-b';
+  const leftScoreButtonVariant = leftTeam === 'A' ? 'team' : 'teamB';
+  const rightScoreButtonVariant = rightTeam === 'A' ? 'team' : 'teamB';
   const leftHasPossession = isCurrentSetConfigured && gameState.possession === leftTeam;
   const rightHasPossession = isCurrentSetConfigured && gameState.possession === rightTeam;
   const possessionGlow = 'shadow-[0_0_35px_rgba(250,204,21,0.4)]';
-  const canModifyScore = timer === null && !gameIsEnded && isCurrentSetConfigured;
-  const handleScoreInteraction = (team: 'A' | 'B') => {
-    if (!canModifyScore) return;
-    if (game?.hasStatistics === false) {
-      void addPoint(team);
-      return;
-    }
-    setShowPointCategories(team);
-  };
   const possessionTeamName = isCurrentSetConfigured
     ? gameState.possession === 'A'
       ? game.teamA.name
@@ -2163,26 +2158,14 @@ export default function RefereeDesk() {
           <div className="overflow-hidden rounded-3xl border border-white/20 text-white shadow-scoreboard">
             <div className="grid grid-cols-2">
               <div
-                role="button"
-                tabIndex={canModifyScore ? 0 : -1}
-                aria-disabled={!canModifyScore}
-                onClick={() => handleScoreInteraction(leftTeam)}
-                onKeyDown={event => {
-                  if (!canModifyScore) return;
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleScoreInteraction(leftTeam);
-                  }
-                }}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-4 p-6 text-center transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70',
-                  canModifyScore ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-not-allowed opacity-80',
+                  'flex flex-col items-center justify-center gap-3 p-4 text-center',
                   leftTeamColorClass,
                   leftHasPossession && possessionGlow
                 )}
               >
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-white/90">{leftTeamName}</h2>
-                <div className="text-6xl font-black sm:text-7xl">
+                <div className="text-5xl font-black">
                   {leftTeam === 'A' ? scoreA : scoreB}
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -2204,26 +2187,14 @@ export default function RefereeDesk() {
                 )}
               </div>
               <div
-                role="button"
-                tabIndex={canModifyScore ? 0 : -1}
-                aria-disabled={!canModifyScore}
-                onClick={() => handleScoreInteraction(rightTeam)}
-                onKeyDown={event => {
-                  if (!canModifyScore) return;
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleScoreInteraction(rightTeam);
-                  }
-                }}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-4 p-6 text-center transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70',
-                  canModifyScore ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-not-allowed opacity-80',
+                  'flex flex-col items-center justify-center gap-3 p-4 text-center',
                   rightTeamColorClass,
                   rightHasPossession && possessionGlow
                 )}
               >
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-white/90">{rightTeamName}</h2>
-                <div className="text-6xl font-black sm:text-7xl">
+                <div className="text-5xl font-black">
                   {rightTeam === 'A' ? scoreA : scoreB}
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -2264,8 +2235,39 @@ export default function RefereeDesk() {
               </div>
             </div>
           </div>
-          <div className="rounded-2xl border border-white/15 bg-white/5 p-3 text-center text-xs text-white/80">
-            Toque no placar da dupla correspondente para adicionar um ponto.
+          <div className="grid grid-cols-2 gap-3">
+            <ScoreButton
+              variant={leftScoreButtonVariant}
+              size="score"
+              onClick={() => {
+                if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                if (game?.hasStatistics === false) {
+                  void addPoint(leftTeam);
+                  return;
+                }
+                setShowPointCategories(leftTeam);
+              }}
+              disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
+              className="h-20 w-full text-4xl"
+            >
+              <Plus size={24} />
+            </ScoreButton>
+            <ScoreButton
+              variant={rightScoreButtonVariant}
+              size="score"
+              onClick={() => {
+                if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                if (game?.hasStatistics === false) {
+                  void addPoint(rightTeam);
+                  return;
+                }
+                setShowPointCategories(rightTeam);
+              }}
+              disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
+              className="h-20 w-full text-4xl"
+            >
+              <Plus size={24} />
+            </ScoreButton>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {mobileControlButtons.map(({ icon: Icon, label, onClick, disabled }) => (
@@ -2288,26 +2290,14 @@ export default function RefereeDesk() {
           <CardContent className="p-0">
             <div className="grid overflow-hidden rounded-3xl border border-white/20 text-white shadow-scoreboard md:grid-cols-[1fr_minmax(0,260px)_1fr]">
               <div
-                role="button"
-                tabIndex={canModifyScore ? 0 : -1}
-                aria-disabled={!canModifyScore}
-                onClick={() => handleScoreInteraction(leftTeam)}
-                onKeyDown={event => {
-                  if (!canModifyScore) return;
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleScoreInteraction(leftTeam);
-                  }
-                }}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-6 p-10 text-center transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70',
-                  canModifyScore ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-not-allowed opacity-80',
+                  'flex flex-col items-center justify-center gap-5 p-8 text-center',
                   leftTeamColorClass,
                   leftHasPossession && possessionGlow
                 )}
               >
                 <h2 className="text-3xl font-semibold text-white/90">{leftTeamName}</h2>
-                <div className="text-8xl font-extrabold sm:text-9xl">
+                <div className="text-7xl sm:text-8xl font-extrabold">
                   {leftTeam === 'A' ? scoreA : scoreB}
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -2349,26 +2339,14 @@ export default function RefereeDesk() {
                 </div>
               </div>
               <div
-                role="button"
-                tabIndex={canModifyScore ? 0 : -1}
-                aria-disabled={!canModifyScore}
-                onClick={() => handleScoreInteraction(rightTeam)}
-                onKeyDown={event => {
-                  if (!canModifyScore) return;
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleScoreInteraction(rightTeam);
-                  }
-                }}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-6 p-10 text-center transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70',
-                  canModifyScore ? 'cursor-pointer hover:scale-[1.02]' : 'cursor-not-allowed opacity-80',
+                  'flex flex-col items-center justify-center gap-5 p-8 text-center',
                   rightTeamColorClass,
                   rightHasPossession && possessionGlow
                 )}
               >
                 <h2 className="text-3xl font-semibold text-white/90">{rightTeamName}</h2>
-                <div className="text-8xl font-extrabold sm:text-9xl">
+                <div className="text-7xl sm:text-8xl font-extrabold">
                   {rightTeam === 'A' ? scoreA : scoreB}
                 </div>
                 <div className="flex flex-wrap justify-center gap-2">
@@ -2404,12 +2382,45 @@ export default function RefereeDesk() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-                <p className="text-base font-semibold text-white">Adicionar pontos</p>
-                <p>
-                  Clique diretamente no placar do time correspondente para registrar um ponto. O botão de soma foi integrado ao
-                  próprio card do placar para agilizar o controle.
-                </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <h4 className="text-lg font-semibold text-white/90">{leftTeamName}</h4>
+                  <ScoreButton
+                    variant={leftScoreButtonVariant}
+                    size="score"
+                    onClick={() => {
+                      if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                      if (game?.hasStatistics === false) {
+                        void addPoint(leftTeam);
+                        return;
+                      }
+                      setShowPointCategories(leftTeam);
+                    }}
+                    disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
+                    className="h-28 w-full text-5xl"
+                  >
+                    <Plus size={28} />
+                  </ScoreButton>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="text-lg font-semibold text-white/90">{rightTeamName}</h4>
+                  <ScoreButton
+                    variant={rightScoreButtonVariant}
+                    size="score"
+                    onClick={() => {
+                      if (timer !== null || gameIsEnded || !isCurrentSetConfigured) return;
+                      if (game?.hasStatistics === false) {
+                        void addPoint(rightTeam);
+                        return;
+                      }
+                      setShowPointCategories(rightTeam);
+                    }}
+                    disabled={timer !== null || gameIsEnded || !isCurrentSetConfigured}
+                    className="h-28 w-full text-5xl"
+                  >
+                    <Plus size={28} />
+                  </ScoreButton>
+                </div>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
                 <p className="font-semibold text-white">Histórico rápido</p>
