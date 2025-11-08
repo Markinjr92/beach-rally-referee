@@ -64,8 +64,8 @@ import {
   buildGroupAssignments,
   computeStandingsByGroup,
 } from '@/utils/tournamentStandings'
-import { 
-  availableTournamentFormats, 
+import {
+  availableTournamentFormats,
   defaultTieBreakerOrder,
   checkPhaseCompletion,
   getTournamentPhases,
@@ -75,6 +75,8 @@ import { getNextPhaseLabel, phaseFormatKeyMap } from '@/lib/tournament/phaseConf
 import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
+import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -344,6 +346,7 @@ export default function TournamentDetailDB() {
   const [teamGroups, setTeamGroups] = useState<Record<string, string | null>>({})
   const [matchScores, setMatchScores] = useState<MatchScore[]>([])
   const [matchStates, setMatchStates] = useState<Record<string, GameState>>({})
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [tournamentConfig, setTournamentConfig] = useState<TournamentConfig | null>(null)
   
   // Phase advancement states
@@ -749,6 +752,14 @@ export default function TournamentDetailDB() {
       }),
     [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
   )
+
+  const teamMatchSummaries = useMemo(
+    () => buildTeamMatchSummaryMap(matches, scoresByMatch, teamNameMap),
+    [matches, scoresByMatch, teamNameMap],
+  )
+
+  const selectedTeamSummaries = selectedTeamId ? teamMatchSummaries.get(selectedTeamId) ?? [] : []
+  const selectedTeamName = selectedTeamId ? teamNameMap.get(selectedTeamId) ?? 'Equipe' : ''
 
   const eliminationSummaries = useMemo(() => {
     if (!matches.length) return []
@@ -1498,7 +1509,15 @@ export default function TournamentDetailDB() {
                                   return (
                                     <tr key={entry.teamId} className="transition hover:bg-white/5">
                                       <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
-                                      <td className="px-3 py-2 font-medium text-white">{entry.teamName}</td>
+                                      <td className="px-3 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedTeamId(entry.teamId)}
+                                          className="w-full text-left font-medium text-white transition-colors hover:text-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded"
+                                        >
+                                          {entry.teamName}
+                                        </button>
+                                      </td>
                                       <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
                                       <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
                                       <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
@@ -1979,6 +1998,16 @@ export default function TournamentDetailDB() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <TeamMatchSummaryDialog
+        open={selectedTeamId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedTeamId(null)
+          }
+        }}
+        teamName={selectedTeamName}
+        summaries={selectedTeamSummaries}
+      />
     </div>
   )
 }
