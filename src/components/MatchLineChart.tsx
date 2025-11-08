@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp } from 'lucide-react';
+import { calculateWinProbability } from '@/lib/wpa';
 
 interface MatchLineChartProps {
   teamAName: string;
@@ -20,28 +21,6 @@ export function MatchLineChart({
 }: MatchLineChartProps) {
   const maxPoints = pointsPerSet[currentSet - 1] || 21;
 
-  // Calcular Win Probability Added (WPA) simplificado
-  const calculateWPA = (scoreA: number, scoreB: number, maxPoints: number): number => {
-    const totalScore = scoreA + scoreB;
-    if (totalScore === 0) return 50; // Início do jogo
-    
-    const diff = scoreA - scoreB;
-    const maxDiff = maxPoints;
-    const progressFactor = totalScore / (maxPoints * 2);
-    
-    // Fórmula simplificada de probabilidade baseada em diferença e progresso
-    let winProb = 50 + (diff / maxDiff) * 50 * (1 + progressFactor);
-    
-    // Ajustar para match/set points
-    if (scoreA >= maxPoints - 1 && scoreA > scoreB) {
-      winProb = Math.min(95, winProb + 10);
-    } else if (scoreB >= maxPoints - 1 && scoreB > scoreA) {
-      winProb = Math.max(5, winProb - 10);
-    }
-    
-    return Math.max(0, Math.min(100, winProb));
-  };
-
   const chartData = useMemo(() => {
     if (scoresHistory.length === 0) {
       return [];
@@ -51,7 +30,7 @@ export function MatchLineChart({
       point: index + 1,
       [teamAName]: point.teamA,
       [teamBName]: point.teamB,
-      wpa: calculateWPA(point.teamA, point.teamB, maxPoints)
+      wpa: calculateWinProbability(point.teamA, point.teamB, maxPoints)
     }));
   }, [scoresHistory, teamAName, teamBName, maxPoints]);
 
@@ -98,44 +77,54 @@ export function MatchLineChart({
               stroke="rgba(255,255,255,0.7)"
               label={{ value: 'Pontos', angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.7)' }}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'rgba(0,0,0,0.8)', 
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'rgba(10,16,24,0.92)',
                 border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px',
-                color: 'white'
+                borderRadius: '12px',
+                color: 'white',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.35)'
               }}
               formatter={(value: number, name: string) => {
                 if (name === 'wpa') {
-                  return [`${value.toFixed(1)}%`, 'Prob. Vitória A'];
+                  return [`${value.toFixed(1)}%`, `Prob. vitória ${teamAName}`];
                 }
                 return [value, name];
               }}
+              labelFormatter={label => `Rally ${label}`}
             />
-            <Legend wrapperStyle={{ color: 'white' }} />
+            <Legend
+              wrapperStyle={{ color: 'white', paddingTop: 16 }}
+              formatter={value => {
+                if (value === 'wpa') {
+                  return 'Prob. vitória ' + teamAName;
+                }
+                return value;
+              }}
+            />
             <ReferenceLine y={maxPoints} stroke="rgba(255,255,255,0.3)" strokeDasharray="3 3" />
-            <Line 
-              type="monotone" 
-              dataKey={teamAName} 
-              stroke="hsl(205, 87%, 50%)" 
-              strokeWidth={3}
-              dot={{ fill: 'hsl(205, 87%, 50%)', r: 3 }}
+            <Line
+              type="monotone"
+              dataKey={teamAName}
+              stroke="hsl(var(--team-a))"
+              strokeWidth={4}
+              dot={{ fill: 'hsl(var(--team-a))', r: 4 }}
               activeDot={{ r: 5 }}
             />
-            <Line 
-              type="monotone" 
-              dataKey={teamBName} 
-              stroke="hsl(25, 95%, 53%)" 
-              strokeWidth={3}
-              dot={{ fill: 'hsl(25, 95%, 53%)', r: 3 }}
+            <Line
+              type="monotone"
+              dataKey={teamBName}
+              stroke="hsl(var(--team-b))"
+              strokeWidth={4}
+              dot={{ fill: 'hsl(var(--team-b))', r: 4 }}
               activeDot={{ r: 5 }}
             />
-            <Line 
-              type="monotone" 
-              dataKey="wpa" 
-              stroke="hsl(142, 76%, 46%)" 
-              strokeWidth={2}
-              strokeDasharray="5 5"
+            <Line
+              type="monotone"
+              dataKey="wpa"
+              stroke="hsl(160, 100%, 45%)"
+              strokeWidth={2.5}
+              strokeDasharray="6 6"
               dot={false}
               yAxisId="right"
             />
@@ -148,8 +137,13 @@ export function MatchLineChart({
             />
           </LineChart>
         </ResponsiveContainer>
-        <div className="mt-4 text-xs text-white/60">
-          <p><strong>WPA (Win Probability Added)</strong>: Probabilidade de vitória da {teamAName} em cada momento do jogo.</p>
+        <div className="mt-4 text-xs text-white/70 space-y-1">
+          <p>
+            <strong>WPA (Win Probability Added)</strong>: indica a probabilidade instantânea de vitória da {teamAName}.
+          </p>
+          <p>
+            Para {teamBName}, considere <strong>100% - WPA</strong> para obter a probabilidade correspondente.
+          </p>
         </div>
       </CardContent>
     </Card>
