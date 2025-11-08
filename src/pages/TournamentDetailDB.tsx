@@ -42,9 +42,10 @@ import {
   availableTournamentFormats, 
   defaultTieBreakerOrder,
   checkPhaseCompletion,
-  advanceToNextPhase,
   getTournamentPhases,
 } from '@/lib/tournament'
+import { getBracketSectionForPhase, type BracketSection } from '@/lib/tournament/bracketCriteria'
+import { getNextPhaseLabel, phaseFormatKeyMap } from '@/lib/tournament/phaseConfig'
 import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -54,6 +55,17 @@ type Team = Tables<'teams'>
 type Match = Tables<'matches'>
 type MatchScore = Tables<'match_scores'>
 type MatchStateRecord = Pick<Tables<'match_states'>, 'match_id' | 'scores' | 'sets_won'>
+type MatchSetupEntry = {
+  id: string
+  label: string
+  description: string
+  phase: string
+  teamAId: string
+  teamBId: string
+  bestOf: number
+  pointsText: string
+  sideSwitchText: string
+}
 
 type TeamOption = { value: string; label: string }
 
@@ -168,6 +180,12 @@ type TournamentTeamRecord = {
   group_label: string | null
   teams: Team | null
 }
+
+const parseNumberList = (value: string): number[] =>
+  value
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((num) => Number.isFinite(num))
 
 const toFiniteNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -314,7 +332,12 @@ export default function TournamentDetailDB() {
     pendingMatches: Match[]
     message: string
   } | null>(null)
-  const [isAdvancingPhase, setIsAdvancingPhase] = useState(false)
+  const [matchSetupPhase, setMatchSetupPhase] = useState<string>('')
+  const [matchSetupEntries, setMatchSetupEntries] = useState<MatchSetupEntry[]>([])
+  const [showMatchSetupDialog, setShowMatchSetupDialog] = useState(false)
+  const [isSavingMatchSetup, setIsSavingMatchSetup] = useState(false)
+  const [matchSetupError, setMatchSetupError] = useState<string | null>(null)
+  const [nextPhaseSection, setNextPhaseSection] = useState<BracketSection | null>(null)
 
   const loadTournamentTeams = useCallback(async () => {
     if (!tournamentId) return
@@ -503,46 +526,154 @@ export default function TournamentDetailDB() {
     setShowAdvancePhaseDialog(true)
   }
 
-  const handleAdvancePhase = async () => {
-    if (!tournamentId || !phaseCheckResult || !tournamentConfig) return
-    
-    setIsAdvancingPhase(true)
-    
-    const result = await advanceToNextPhase({
-      tournamentId,
-      currentPhase: phaseCheckResult.currentPhase,
-      formatId: tournamentConfig.formatId || 'groups_and_knockout',
-      includeThirdPlace: tournamentConfig.includeThirdPlace ?? true,
-      tieBreakerOrder: tournamentConfig.tieBreakerOrder || defaultTieBreakerOrder,
-        pointsPerSet: tournamentConfig.matchFormats?.final === 'melhorDe3' ? [21, 21, 15] : [21],
-        sideSwitchSum: tournamentConfig.matchFormats?.final === 'melhorDe3' ? [7, 7, 5] : [7],
-        bestOf: tournamentConfig.matchFormats?.final === 'melhorDe3' ? 3 : 1,
-      modality: tournament?.modality || 'dupla',
+  const updateMatchSetupEntry = (id: string, patch: Partial<MatchSetupEntry>) => {
+    setMatchSetupEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
+  }
+
+  const handlePrepareMatchSetup = () => {
+    if (!phaseCheckResult?.canAdvance || !tournamentConfig?.formatId) {
+      toast({
+        title: 'Fase não disponível',
+        description: 'Finalize todos os jogos antes de configurar os confrontos.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const nextPhaseLabel = getNextPhaseLabel(tournamentConfig.formatId, phaseCheckResult.currentPhase)
+    if (!nextPhaseLabel) {
+      toast({
+        title: 'Próxima fase não configurada',
+        description: 'Não há fase seguinte definida para este formato.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const section = getBracketSectionForPhase(tournamentConfig.formatId, nextPhaseLabel)
+    if (!section || !section.matches.length) {
+      toast({
+        title: 'Critérios indisponíveis',
+        description: 'Defina os confrontos manualmente nas configurações do torneio.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const entries = section.matches.map((match, index) => {
+      const phaseLabel = match.phaseOverride ?? nextPhaseLabel
+      const defaults = getDefaultMatchSettings(phaseLabel)
+      return {
+        id: `${phaseLabel}-${match.label}-${index}`,
+        label: match.label,
+        description: match.description,
+        phase: match.phaseOverride ?? nextPhaseLabel,
+        teamAId: '',
+        teamBId: '',
+        bestOf: defaults.bestOf,
+        pointsText: defaults.pointsPerSet.join(', '),
+        sideSwitchText: defaults.sideSwitchSum.join(', '),
+      }
     })
 
-    setIsAdvancingPhase(false)
-    
-    if (result.success) {
-      toast({ title: 'Fase finalizada!', description: result.message })
-      setShowAdvancePhaseDialog(false)
-      // Recarregar matches e phases
-      const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournamentId).order('scheduled_at', { ascending: true })
-      setMatches(m || [])
+    setMatchSetupPhase(nextPhaseLabel)
+    setNextPhaseSection(section)
+    setMatchSetupEntries(entries)
+    setMatchSetupError(null)
+    setShowAdvancePhaseDialog(false)
+    setShowMatchSetupDialog(true)
+  }
+
+  const handleSaveMatchSetup = async () => {
+    if (!tournamentId || !matchSetupEntries.length) return
+
+    for (const entry of matchSetupEntries) {
+      if (!entry.teamAId || !entry.teamBId) {
+        setMatchSetupError('Selecione as duas equipes em todos os confrontos.')
+        return
+      }
+      if (entry.teamAId === entry.teamBId) {
+        setMatchSetupError('Um confronto não pode ter a mesma equipe nos dois lados.')
+        return
+      }
+      if (entry.bestOf <= 0) {
+        setMatchSetupError('Informe o número de sets (best of) para cada confronto.')
+        return
+      }
+      if (!parseNumberList(entry.pointsText).length) {
+        setMatchSetupError('Informe os pontos por set (ex.: 21, 21, 15).')
+        return
+      }
+      if (!parseNumberList(entry.sideSwitchText).length) {
+        setMatchSetupError('Informe os valores de troca de quadra (ex.: 7, 7, 5).')
+        return
+      }
+    }
+
+    const payload = matchSetupEntries.map((entry) => ({
+      tournament_id: tournamentId,
+      team_a_id: entry.teamAId,
+      team_b_id: entry.teamBId,
+      phase: entry.phase,
+      status: 'scheduled',
+      best_of: entry.bestOf,
+      points_per_set: parseNumberList(entry.pointsText),
+      side_switch_sum: parseNumberList(entry.sideSwitchText),
+      modality: tournament?.modality || 'dupla',
+    }))
+
+    setIsSavingMatchSetup(true)
+    try {
+      const { error } = await supabase.from('matches').insert(payload)
+      if (error) throw error
+
+      toast({
+        title: `${matchSetupPhase} configurada`,
+        description: `${payload.length} confronto(s) foram criados.`,
+      })
+
+      setShowMatchSetupDialog(false)
+      setMatchSetupEntries([])
+      setMatchSetupError(null)
+      setPhaseCheckResult(null)
+
+      const { data: updatedMatches } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('scheduled_at', { ascending: true })
+      setMatches(updatedMatches || [])
+
       const phases = await getTournamentPhases(tournamentId)
       setAvailablePhases(phases)
-      if (phases.length > 0) {
-        setCurrentPhaseFilter(phases[phases.length - 1])
+      if (matchSetupPhase) {
+        setCurrentPhaseFilter(matchSetupPhase)
       }
-    } else {
-      toast({ 
-        title: 'Erro ao finalizar fase', 
-        description: result.error || result.message,
-        variant: 'destructive' 
-      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao salvar confrontos'
+      setMatchSetupError(message)
+      toast({ title: 'Erro ao salvar confrontos', description: message, variant: 'destructive' })
+    } finally {
+      setIsSavingMatchSetup(false)
     }
   }
 
   const teamOptions = useMemo(() => teams.map(t => ({ value: t.id, label: t.name })), [teams])
+
+  const getDefaultMatchSettings = useCallback(
+    (phaseLabel: string) => {
+      const normalized = phaseLabel.trim().toLowerCase()
+      const formatKey = phaseFormatKeyMap[normalized] ?? 'groups'
+      const formatOption = tournamentConfig?.matchFormats?.[formatKey]
+      const config = getMatchConfigFromFormat(formatOption || tournamentConfig?.matchFormats?.groups || 'melhorDe3')
+      return {
+        bestOf: config.bestOf ?? 3,
+        pointsPerSet: config.pointsPerSet ?? [21, 21, 15],
+        sideSwitchSum: config.sideSwitchSum ?? [7, 7, 5],
+      }
+    },
+    [tournamentConfig],
+  )
 
   const scoresByMatch = useMemo(() => {
     const grouped = new Map<string, MatchScore[]>()
@@ -1571,8 +1702,8 @@ export default function TournamentDetailDB() {
                   </p>
                   {phaseCheckResult.canAdvance && (
                     <p className="text-xs text-white/70">
-                      Ao confirmar, a próxima fase será criada automaticamente com base na classificação
-                      atual. Esta ação não pode ser desfeita.
+                      Ao confirmar, você poderá definir manualmente os confrontos da próxima fase, seguindo
+                      os critérios de cruzamento configurados para o torneio.
                     </p>
                   )}
                 </div>
@@ -1590,13 +1721,143 @@ export default function TournamentDetailDB() {
             </Button>
             {phaseCheckResult?.canAdvance && (
               <Button
-                onClick={handleAdvancePhase}
-                disabled={isAdvancingPhase}
+                onClick={handlePrepareMatchSetup}
                 className="bg-emerald-500/90 text-white hover:bg-emerald-600"
               >
-                {isAdvancingPhase ? 'Processando...' : 'Confirmar e Finalizar'}
+                Definir confrontos
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de configuração manual de confrontos */}
+      <Dialog
+        open={showMatchSetupDialog}
+        onOpenChange={(open) => {
+          setShowMatchSetupDialog(open)
+          if (!open) {
+            setMatchSetupError(null)
+          }
+        }}
+      >
+        <DialogContent className="bg-slate-900/95 border border-white/15 text-white backdrop-blur-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Configurar {matchSetupPhase}</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Defina manualmente os confrontos desta fase seguindo o critério oficial.
+            </DialogDescription>
+          </DialogHeader>
+
+          {nextPhaseSection && (
+            <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4 text-xs text-white/70">
+              <p className="font-semibold text-white mb-2">Critério de confrontos</p>
+              <ul className="space-y-1">
+                {nextPhaseSection.matches.map((match) => (
+                  <li key={`${nextPhaseSection.phase}-${match.label}`}>
+                    <span className="font-semibold text-white">{match.label}:</span> {match.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {matchSetupEntries.map((entry) => (
+              <div key={entry.id} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">{entry.label}</p>
+                  <p className="text-xs text-white/70">{entry.description || 'Defina os participantes deste confronto.'}</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-white/70">Equipe A</Label>
+                    <Select value={entry.teamAId} onValueChange={(value) => updateMatchSetupEntry(entry.id, { teamAId: value })}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                        <SelectValue placeholder="Selecione a equipe A" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-950/90 text-white">
+                        {teamOptions.map((option) => (
+                          <SelectItem key={`${entry.id}-teamA-${option.value}`} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-white/70">Equipe B</Label>
+                    <Select value={entry.teamBId} onValueChange={(value) => updateMatchSetupEntry(entry.id, { teamBId: value })}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                        <SelectValue placeholder="Selecione a equipe B" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-950/90 text-white">
+                        {teamOptions.map((option) => (
+                          <SelectItem key={`${entry.id}-teamB-${option.value}`} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-white/70">Melhor de</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={entry.bestOf}
+                      onChange={(event) =>
+                        updateMatchSetupEntry(entry.id, { bestOf: Number(event.target.value) || 0 })
+                      }
+                      className="bg-white/10 border-white/20 text-white"
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-1">
+                    <Label className="text-xs text-white/70">Pontos por set</Label>
+                    <Input
+                      value={entry.pointsText}
+                      onChange={(event) => updateMatchSetupEntry(entry.id, { pointsText: event.target.value })}
+                      placeholder="Ex.: 21, 21, 15"
+                      className="bg-white/10 border-white/20 text-white"
+                    />
+                    <p className="text-[10px] text-white/60">Separe por vírgulas.</p>
+                  </div>
+                  <div className="space-y-1 md:col-span-1">
+                    <Label className="text-xs text-white/70">Troca de quadra</Label>
+                    <Input
+                      value={entry.sideSwitchText}
+                      onChange={(event) => updateMatchSetupEntry(entry.id, { sideSwitchText: event.target.value })}
+                      placeholder="Ex.: 7, 7, 5"
+                      className="bg-white/10 border-white/20 text-white"
+                    />
+                    <p className="text-[10px] text-white/60">Valores acumulados por set.</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-white/50">Fase: {entry.phase}</p>
+              </div>
+            ))}
+          </div>
+
+          {matchSetupError && <p className="text-sm text-rose-300">{matchSetupError}</p>}
+
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              className="border-white/20 text-white hover:bg-white/10"
+              onClick={() => setShowMatchSetupDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveMatchSetup}
+              disabled={isSavingMatchSetup || matchSetupEntries.length === 0}
+              className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+            >
+              {isSavingMatchSetup ? 'Salvando...' : 'Salvar confrontos'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

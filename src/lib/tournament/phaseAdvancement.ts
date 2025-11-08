@@ -7,6 +7,7 @@ import {
 import { getMatchConfigFromFormat } from '@/utils/matchConfig';
 import { isMatchCompleted } from '@/utils/matchStatus';
 import { buildGroupAssignments, computeStandingsByGroup } from '@/utils/tournamentStandings';
+import { phaseSequences } from './phaseConfig';
 
 type Match = Tables<'matches'>;
 type Team = Tables<'teams'>;
