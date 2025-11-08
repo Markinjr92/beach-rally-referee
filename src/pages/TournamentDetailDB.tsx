@@ -538,8 +538,13 @@ export default function TournamentDetailDB() {
       if (!tournamentId) return
       const phases = await getTournamentPhases(tournamentId)
       setAvailablePhases(phases)
-      if (phases.length > 0 && !currentPhaseFilter) {
-        setCurrentPhaseFilter(phases[0])
+      if (phases.length > 0) {
+        const latestPhase = phases[phases.length - 1]
+        if (currentPhaseFilter !== latestPhase) {
+          setCurrentPhaseFilter(latestPhase)
+        }
+      } else if (currentPhaseFilter) {
+        setCurrentPhaseFilter('')
       }
     }
     loadPhases()
