@@ -1,6 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, MapPin, Check, ChevronsUpDown, Upload, Image as ImageIcon, Edit2, Save, X, Play, AlertCircle } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
+  CalendarClock,
+  Check,
+  ChevronsUpDown,
+  ClipboardList,
+  Clock,
+  Edit2,
+  Image as ImageIcon,
+  ListOrdered,
+  Loader2,
+  MapPin,
+  Megaphone,
+  Play,
+  Plus,
+  Save,
+  Settings,
+  Trash2,
+  Tv,
+  Upload,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -913,10 +938,11 @@ export default function TournamentDetailDB() {
               <Link to="/tournaments" className="w-fit">
                 <Button
                   variant="ghost"
+                  aria-label="Voltar para torneios"
                   className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
                 >
-                  <ArrowLeft className="mr-2" size={18} />
-                  Voltar
+                  <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Voltar</span>
                 </Button>
               </Link>
               <div>
@@ -946,32 +972,40 @@ export default function TournamentDetailDB() {
           </div>
         </div>
 
-        <Tabs defaultValue="teams" className="space-y-6">
+        <Tabs defaultValue="matches" className="space-y-6">
           <div className="flex justify-center">
             <TabsList className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 text-white backdrop-blur-md">
               <TabsTrigger
-                value="teams"
-                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+                value="matches"
+                aria-label="Jogos"
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
               >
-                Duplas
+                <CalendarClock className="h-4 w-4" />
+                <span className="hidden sm:inline">Jogos</span>
               </TabsTrigger>
               <TabsTrigger
-                value="matches"
-                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+                value="teams"
+                aria-label="Duplas"
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
               >
-                Jogos
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Duplas</span>
               </TabsTrigger>
               <TabsTrigger
                 value="standings"
-                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+                aria-label="Tabela e classificação"
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
               >
-                Tabela/Classificação
+                <ListOrdered className="h-4 w-4" />
+                <span className="hidden sm:inline">Tabela/Classificação</span>
               </TabsTrigger>
               <TabsTrigger
                 value="config"
-                className="rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
+                aria-label="Configurações"
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
               >
-                Configurações
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Configurações</span>
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1009,11 +1043,24 @@ export default function TournamentDetailDB() {
                               />
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={handleSaveTeamEdit} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
-                                <Save size={16} className="mr-1" /> Salvar
+                              <Button
+                                size="sm"
+                                onClick={handleSaveTeamEdit}
+                                aria-label="Salvar edição da dupla"
+                                className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                              >
+                                <Save className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Salvar</span>
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => setEditingTeam(null)} className="border-white/30 text-white hover:bg-white/15">
-                                <X size={16} className="mr-1" /> Cancelar
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingTeam(null)}
+                                aria-label="Cancelar edição da dupla"
+                                className="border-white/30 text-white hover:bg-white/15"
+                              >
+                                <X className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Cancelar</span>
                               </Button>
                             </div>
                           </div>
@@ -1027,10 +1074,11 @@ export default function TournamentDetailDB() {
                               <Button
                                 size="sm"
                                 className="bg-blue-500/90 text-white hover:bg-blue-600"
+                                aria-label="Editar dupla"
                                 onClick={() => setEditingTeam({ id: team.id, name: team.name, player_a: team.player_a, player_b: team.player_b })}
                               >
-                                <Edit2 size={16} className="mr-1" />
-                                Editar
+                                <Edit2 className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Editar</span>
                               </Button>
                               <ConfirmDialog
                                 title="Excluir dupla"
@@ -1038,8 +1086,12 @@ export default function TournamentDetailDB() {
                                 confirmText="Excluir dupla"
                                 destructive
                                 trigger={
-                                  <Button size="sm" className="bg-red-500/90 text-white hover:bg-red-600">
-                                    Excluir
+                                  <Button
+                                    size="sm"
+                                    aria-label="Excluir dupla"
+                                    className="bg-red-500/90 text-white hover:bg-red-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 }
                                 onConfirm={async () => {
@@ -1082,6 +1134,7 @@ export default function TournamentDetailDB() {
                     />
                     <Button
                       className="bg-yellow-400/90 text-slate-900 hover:bg-yellow-300"
+                      aria-label="Adicionar nova dupla"
                       onClick={async () => {
                         if (!teamForm.name || !teamForm.player_a || !teamForm.player_b) { toast({ title: 'Preencha a dupla' }); return }
                         const { data: team, error: terr } = await supabase.from('teams').insert({ name: teamForm.name, player_a: teamForm.player_a, player_b: teamForm.player_b }).select('*').single()
@@ -1093,7 +1146,8 @@ export default function TournamentDetailDB() {
                         toast({ title: 'Dupla adicionada' })
                       }}
                     >
-                      Adicionar
+                      <UserPlus className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Adicionar</span>
                     </Button>
                   </div>
                 </div>
@@ -1130,9 +1184,10 @@ export default function TournamentDetailDB() {
                       onClick={() => handleCheckPhase(currentPhaseFilter)}
                       className="bg-emerald-500/90 text-white hover:bg-emerald-600"
                       size="sm"
+                      aria-label={`Finalizar "${currentPhaseFilter}"`}
                     >
-                      <Play className="mr-2 h-4 w-4" />
-                      Finalizar "{currentPhaseFilter}"
+                      <Play className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Finalizar "{currentPhaseFilter}"</span>
                     </Button>
                   </div>
                 )}
@@ -1179,11 +1234,24 @@ export default function TournamentDetailDB() {
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={handleSaveMatchEdit} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
-                                <Save size={16} className="mr-1" /> Salvar
+                              <Button
+                                size="sm"
+                                onClick={handleSaveMatchEdit}
+                                aria-label="Salvar edição do jogo"
+                                className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                              >
+                                <Save className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Salvar</span>
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => setEditingMatch(null)} className="border-white/30 text-white hover:bg-white/15">
-                                <X size={16} className="mr-1" /> Cancelar
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingMatch(null)}
+                                aria-label="Cancelar edição do jogo"
+                                className="border-white/30 text-white hover:bg-white/15"
+                              >
+                                <X className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Cancelar</span>
                               </Button>
                             </div>
                           </div>
@@ -1230,30 +1298,46 @@ export default function TournamentDetailDB() {
                                 <Button
                                   size="sm"
                                   className="bg-amber-500/90 text-white hover:bg-amber-600"
-                                  onClick={() => setEditingMatch({ 
-                                    id: m.id, 
-                                    scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '', 
+                                  aria-label="Editar jogo"
+                                  onClick={() => setEditingMatch({
+                                    id: m.id,
+                                    scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '',
                                     court: m.court || '',
                                     phase: m.phase || '',
                                   })}
                                 >
-                                  <Edit2 size={16} className="mr-1" />
-                                  Editar
+                                  <Edit2 className="h-4 w-4 sm:mr-2" />
+                                  <span className="hidden sm:inline">Editar</span>
                                 </Button>
                               )}
                               <Link to={`/referee/${m.id}`}>
-                                <Button size="sm" className="bg-blue-500/90 text-white hover:bg-blue-600">
-                                  Mesa
+                                <Button
+                                  size="sm"
+                                  className="bg-blue-500/90 text-white hover:bg-blue-600"
+                                  aria-label="Abrir mesa do jogo"
+                                >
+                                  <ClipboardList className="h-4 w-4 sm:mr-2" />
+                                  <span className="hidden sm:inline">Mesa</span>
                                 </Button>
                               </Link>
                               <Link to={`/scoreboard/${m.id}`}>
-                                <Button size="sm" className="bg-emerald-500/90 text-white hover:bg-emerald-600">
-                                  Placar
+                                <Button
+                                  size="sm"
+                                  className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+                                  aria-label="Abrir placar do jogo"
+                                >
+                                  <Tv className="h-4 w-4 sm:mr-2" />
+                                  <span className="hidden sm:inline">Placar</span>
                                 </Button>
                               </Link>
                               <Link to={`/spectator/${m.id}`}>
-                                <Button size="sm" className="bg-purple-500/90 text-white hover:bg-purple-600">
-                                  Torcida
+                                <Button
+                                  size="sm"
+                                  className="bg-purple-500/90 text-white hover:bg-purple-600"
+                                  aria-label="Abrir visão da torcida"
+                                >
+                                  <Megaphone className="h-4 w-4 sm:mr-2" />
+                                  <span className="hidden sm:inline">Torcida</span>
                                 </Button>
                               </Link>
                               <ConfirmDialog
@@ -1262,8 +1346,12 @@ export default function TournamentDetailDB() {
                                 confirmText="Excluir jogo"
                                 destructive
                                 trigger={
-                                  <Button size="sm" className="bg-red-500/90 text-white hover:bg-red-600">
-                                    Excluir
+                                  <Button
+                                    size="sm"
+                                    aria-label="Excluir jogo"
+                                    className="bg-red-500/90 text-white hover:bg-red-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 }
                                 onConfirm={async () => {
@@ -1327,6 +1415,7 @@ export default function TournamentDetailDB() {
                     </Select>
                     <Button
                       className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                      aria-label="Criar jogo"
                       onClick={async () => {
                         if (!matchForm.teamA || !matchForm.teamB || matchForm.teamA === matchForm.teamB) { toast({ title: 'Selecione equipes diferentes' }); return }
                         const selectedMode = MATCH_MODES.find((mode) => mode.value === matchForm.mode) ?? MATCH_MODES[0]
@@ -1348,7 +1437,8 @@ export default function TournamentDetailDB() {
                         toast({ title: 'Jogo criado' })
                       }}
                     >
-                      Criar jogo
+                      <Plus className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Criar jogo</span>
                     </Button>
                   </div>
                 </div>
@@ -1506,9 +1596,13 @@ export default function TournamentDetailDB() {
                       placeholder="URL da logo do torneio"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                     />
-                    <Button onClick={handleSaveLogo} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
-                      <Upload size={16} className="mr-2" />
-                      Salvar
+                    <Button
+                      onClick={handleSaveLogo}
+                      aria-label="Salvar logo do torneio"
+                      className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                    >
+                      <Upload className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Salvar</span>
                     </Button>
                   </div>
                 </div>
@@ -1543,9 +1637,13 @@ export default function TournamentDetailDB() {
                       placeholder="URL da logo do patrocinador"
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                     />
-                    <Button onClick={handleAddSponsor} className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300">
-                      <Upload size={16} className="mr-2" />
-                      Adicionar
+                    <Button
+                      onClick={handleAddSponsor}
+                      aria-label="Adicionar patrocinador"
+                      className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                    >
+                      <Upload className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Adicionar</span>
                     </Button>
                   </div>
                 </div>
@@ -1717,15 +1815,19 @@ export default function TournamentDetailDB() {
               variant="outline"
               onClick={() => setShowAdvancePhaseDialog(false)}
               className="border-white/20 text-white hover:bg-white/10"
+              aria-label="Cancelar finalização da fase"
             >
-              Cancelar
+              <X className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Cancelar</span>
             </Button>
             {phaseCheckResult?.canAdvance && (
               <Button
                 onClick={handlePrepareMatchSetup}
                 className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+                aria-label="Definir confrontos"
               >
-                Definir confrontos
+                <ClipboardList className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Definir confrontos</span>
               </Button>
             )}
           </DialogFooter>
@@ -1849,15 +1951,25 @@ export default function TournamentDetailDB() {
               variant="outline"
               className="border-white/20 text-white hover:bg-white/10"
               onClick={() => setShowMatchSetupDialog(false)}
+              aria-label="Cancelar configuração"
             >
-              Cancelar
+              <X className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Cancelar</span>
             </Button>
             <Button
               onClick={handleSaveMatchSetup}
               disabled={isSavingMatchSetup || matchSetupEntries.length === 0}
               className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+              aria-label={isSavingMatchSetup ? 'Salvando confrontos' : 'Salvar confrontos'}
             >
-              {isSavingMatchSetup ? 'Salvando...' : 'Salvar confrontos'}
+              {isSavingMatchSetup ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 sm:mr-2" />
+              )}
+              <span className="hidden sm:inline">
+                {isSavingMatchSetup ? 'Salvando...' : 'Salvar confrontos'}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>
