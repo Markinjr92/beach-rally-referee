@@ -386,27 +386,47 @@ export default function SpectatorView() {
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
       {/* Header */}
-      <div className="text-center py-5 md:py-6 border-b border-white/20">
-        {tournamentLogo && (
-          <div className="flex justify-center mb-4">
-            <img
-              src={tournamentLogo}
-              alt="Logo do torneio"
-              className="h-12 md:h-16 object-contain"
-            />
+      <div className="border-b border-white/20 bg-white/5">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-6 px-6 py-6 text-left">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold md:text-3xl">{game.title}</h1>
+            <p className="text-base font-semibold uppercase tracking-[0.26em] text-white/70 md:text-lg">
+              {game.category}
+            </p>
           </div>
-        )}
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">{game.title}</h1>
-        <p className="text-lg md:text-xl opacity-90">{game.category} • Set {gameState.currentSet}</p>
+          <div className="flex flex-col items-end gap-2 text-right">
+            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60 md:text-sm">
+              Set atual
+            </span>
+            <span className="rounded-2xl border border-white/25 bg-white/10 px-5 py-2 text-lg font-extrabold shadow-lg md:text-xl">
+              {gameState.currentSet}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-6 md:py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8">
+      <div className="mx-auto max-w-[1800px] px-4 py-6 sm:px-6 md:py-10 lg:px-8">
+        <div className="grid grid-cols-1 gap-6 md:gap-8 2xl:grid-cols-[7fr_3fr]">
           {/* Scoreboard - Always Visible */}
           <div className="lg:col-span-3">
-            <Card className="bg-white/10 border-white/20 text-white">
-              <CardContent className="p-4 md:p-8">
+            <Card className="border-white/20 bg-white/10 text-white">
+              <CardContent className="relative space-y-6 p-4 md:p-8">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.26em] text-white/70 md:text-base">
+                    <Trophy className="h-6 w-6 text-yellow-300 md:h-8 md:w-8" />
+                    {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
+                  </div>
+                  {tournamentLogo && (
+                    <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-2 shadow-lg backdrop-blur-sm">
+                      <img
+                        src={tournamentLogo}
+                        alt="Logo do torneio"
+                        className="h-10 max-h-16 w-auto object-contain md:h-14"
+                      />
+                    </div>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-6 items-stretch">
                   {/* Left Team */}
                   <div
@@ -441,10 +461,12 @@ export default function SpectatorView() {
                   </div>
 
                   {/* Center */}
-                  <div className="text-center flex flex-col items-center justify-center gap-4">
-                    <Trophy className="mx-auto mb-4 text-yellow-300 h-12 w-12 md:h-16 md:w-16" />
-                    <div className="text-base md:text-lg font-semibold">
-                      Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}
+                  <div className="flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/30 bg-white/10 shadow-inner md:h-24 md:w-24">
+                      <Trophy className="h-10 w-10 text-yellow-300 md:h-14 md:w-14" />
+                    </div>
+                    <div className="text-lg font-semibold md:text-xl">
+                      Melhor de {game.pointsPerSet.length}
                     </div>
                     <div className="mt-2 flex items-center justify-center gap-2 text-sm md:text-base text-amber-200">
                       <ArrowLeftRight className="h-4 w-4 md:h-5 md:w-5" />
@@ -495,7 +517,7 @@ export default function SpectatorView() {
               </CardContent>
             </Card>
 
-            <div className="mt-4 md:mt-6">
+            <div className="mt-6 md:mt-8">
               <MatchLineChart
                 teamAName={game.teamA.name}
                 teamBName={game.teamB.name}
@@ -507,7 +529,7 @@ export default function SpectatorView() {
 
             {/* Statistics Panel - Shows intermittently */}
             {showStats && game.hasStatistics && (
-              <Card className="mt-6 bg-white/10 border-white/20 text-white animate-bounce-in">
+              <Card className="mt-6 border-white/20 bg-white/10 text-white animate-bounce-in">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-center justify-center text-lg md:text-xl">
                     <TrendingUp className="h-6 w-6 md:h-7 md:w-7" />
@@ -554,7 +576,7 @@ export default function SpectatorView() {
           {/* Sidebar - Sponsors / Momentum */}
           <div className="space-y-4 md:space-y-6">
             {sponsorLogos.length > 0 && (
-              <Card className="bg-white/10 border-white/20 text-white">
+              <Card className="border-white/20 bg-white/10 text-white">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                     <Target className="h-5 w-5 md:h-6 md:w-6" />
@@ -573,7 +595,7 @@ export default function SpectatorView() {
               </Card>
             )}
 
-            <Card className="bg-white/10 border-white/20 text-white">
+            <Card className="border-white/20 bg-white/10 text-white">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                   <TrendingUp className="h-5 w-5 md:h-6 md:w-6" />
