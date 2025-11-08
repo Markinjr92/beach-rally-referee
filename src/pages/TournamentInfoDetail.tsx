@@ -24,6 +24,8 @@ import {
 import { getTournamentPhases } from '@/lib/tournament'
 import { isMatchCompleted, isMatchInProgress, normalizeMatchStatus } from '@/utils/matchStatus'
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
+import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
+import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -63,6 +65,7 @@ const TournamentInfoDetail = () => {
   const [availablePhases, setAvailablePhases] = useState<string[]>([])
   const [currentPhaseFilter, setCurrentPhaseFilter] = useState<string>('')
   const [tournamentFormatId, setTournamentFormatId] = useState<TournamentFormatId | null>(null)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => setTimerTick(Date.now()), 1000)
@@ -452,6 +455,14 @@ const TournamentInfoDetail = () => {
       }),
     [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
   )
+
+  const teamMatchSummaries = useMemo(
+    () => buildTeamMatchSummaryMap(matches, scoresByMatch, teamNameMap),
+    [matches, scoresByMatch, teamNameMap],
+  )
+
+  const selectedTeamSummaries = selectedTeamId ? teamMatchSummaries.get(selectedTeamId) ?? [] : []
+  const selectedTeamName = selectedTeamId ? teamNameMap.get(selectedTeamId) ?? 'Equipe' : ''
 
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -937,7 +948,15 @@ const TournamentInfoDetail = () => {
                                   return (
                                     <tr key={entry.teamId} className="transition hover:bg-white/5">
                                       <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
-                                      <td className="px-3 py-2 font-medium text-white">{entry.teamName}</td>
+                                      <td className="px-3 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedTeamId(entry.teamId)}
+                                          className="w-full text-left font-medium text-white transition-colors hover:text-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded"
+                                        >
+                                          {entry.teamName}
+                                        </button>
+                                      </td>
                                       <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
                                       <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
                                       <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
@@ -978,6 +997,16 @@ const TournamentInfoDetail = () => {
           )}
         </div>
       </div>
+      <TeamMatchSummaryDialog
+        open={selectedTeamId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedTeamId(null)
+          }
+        }}
+        teamName={selectedTeamName}
+        summaries={selectedTeamSummaries}
+      />
     </div>
   )
 }
