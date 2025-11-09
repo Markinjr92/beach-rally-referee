@@ -66,11 +66,24 @@ const TournamentInfoDetail = () => {
   const [currentPhaseFilter, setCurrentPhaseFilter] = useState<string>('')
   const [tournamentFormatId, setTournamentFormatId] = useState<TournamentFormatId | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
+  const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
+  const [currentSponsor, setCurrentSponsor] = useState(0)
 
   useEffect(() => {
     const interval = setInterval(() => setTimerTick(Date.now()), 1000)
     return () => clearInterval(interval)
   }, [])
+
+  // Rotate sponsors every 10 seconds
+  useEffect(() => {
+    if (sponsorLogos.length <= 1) return
+    
+    const interval = setInterval(() => {
+      setCurrentSponsor(prev => (prev + 1) % sponsorLogos.length)
+    }, 10000)
+    
+    return () => clearInterval(interval)
+  }, [sponsorLogos.length])
 
   const loadTournamentData = useCallback(
     async (withSpinner = false) => {
@@ -103,6 +116,11 @@ const TournamentInfoDetail = () => {
 
         setTournament(tournamentData)
         const hasStatistics = tournamentData?.has_statistics ?? true
+        
+        // Load sponsor logos
+        if (tournamentData.sponsor_logos && Array.isArray(tournamentData.sponsor_logos)) {
+          setSponsorLogos(tournamentData.sponsor_logos as string[])
+        }
 
         const { data: matchData, error: matchError } = await supabase
           .from('matches')

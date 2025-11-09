@@ -672,6 +672,55 @@ export default function RefereeDesk() {
     [gameState, logMatchEvent, persistState, showOfflineSyncNotice, snapshotState]
   );
 
+  // Function to refresh team names from database
+  const refreshTeamNames = useCallback(async () => {
+    if (!gameId || !game) return;
+    
+    try {
+      const { data: match } = await supabase
+        .from('matches')
+        .select('team_a_id, team_b_id')
+        .eq('id', gameId)
+        .single();
+      
+      if (!match) return;
+      
+      const { data: teams } = await supabase
+        .from('teams')
+        .select('*')
+        .in('id', [match.team_a_id, match.team_b_id]);
+      
+      const teamA = teams?.find(t => t.id === match.team_a_id);
+      const teamB = teams?.find(t => t.id === match.team_b_id);
+      
+      if (teamA || teamB) {
+        setGame(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            title: `${teamA?.name ?? prev.teamA.name} vs ${teamB?.name ?? prev.teamB.name}`,
+            teamA: teamA ? {
+              name: teamA.name,
+              players: [
+                { name: teamA.player_a, number: 1 },
+                { name: teamA.player_b, number: 2 }
+              ]
+            } : prev.teamA,
+            teamB: teamB ? {
+              name: teamB.name,
+              players: [
+                { name: teamB.player_a, number: 1 },
+                { name: teamB.player_b, number: 2 }
+              ]
+            } : prev.teamB,
+          };
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh team names', error);
+    }
+  }, [gameId, game]);
+
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
     if (foundGame) {
@@ -2145,7 +2194,10 @@ export default function RefereeDesk() {
                   'w-fit border-transparent bg-white/15 text-white font-semibold hover:bg-white/25 md:bg-amber-400 md:text-slate-900 md:hover:bg-amber-300',
                   !isCurrentSetConfigured && 'animate-pulse'
                 )}
-                onClick={() => setSetConfigDialogOpen(true)}
+                onClick={async () => {
+                  await refreshTeamNames();
+                  setSetConfigDialogOpen(true);
+                }}
                 disabled={gameIsEnded}
               >
                 {setConfigButtonLabel}

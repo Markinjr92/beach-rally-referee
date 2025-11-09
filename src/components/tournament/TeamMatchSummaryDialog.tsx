@@ -44,9 +44,7 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
               const outcomeClass = outcomeStyles[entry.outcome]
               const outcomeLabel = outcomeLabels[entry.outcome]
               const setsLabel = entry.sets.length > 0 ? entry.sets.map((set) => set.label).join(' • ') : null
-              const phaseParts = [entry.phase, entry.round].filter(Boolean)
-              const phaseLabel = phaseParts.join(' • ')
-              const matchLabel = entry.label ?? phaseLabel ?? 'Partida'
+              const phaseLabel = entry.phase ?? 'Partida'
               const scheduledLabel = entry.scheduledAt
                 ? formatDateTimePtBr(entry.scheduledAt, { fallback: 'A definir' })
                 : 'Horário a definir'
@@ -65,7 +63,7 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1">
-                      <div className="text-xs uppercase tracking-[0.2em] text-white/60">{matchLabel}</div>
+                      <div className="text-xs uppercase tracking-[0.2em] text-white/60">{phaseLabel}</div>
                       <div className="text-sm font-semibold text-white">vs {entry.opponentName}</div>
                       <div className="text-xs text-white/60">
                         {scheduledLabel}

@@ -340,6 +340,12 @@ export default function TournamentDetailDB() {
   })
   const [editingTeam, setEditingTeam] = useState<EditingTeam>(null)
   const [editingMatch, setEditingMatch] = useState<EditingMatch>(null)
+  const [editingMatchFormat, setEditingMatchFormat] = useState<{
+    id: string
+    best_of: number
+    points_per_set: number[]
+    side_switch_sum: number[]
+  } | null>(null)
   const [logoUrl, setLogoUrl] = useState('')
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
   const [newSponsorUrl, setNewSponsorUrl] = useState('')
@@ -942,6 +948,32 @@ export default function TournamentDetailDB() {
     } : m))
     setEditingMatch(null)
     toast({ title: 'Jogo atualizado com sucesso' })
+  }
+
+  const handleSaveMatchFormatEdit = async () => {
+    if (!editingMatchFormat) return
+    const { error } = await supabase
+      .from('matches')
+      .update({
+        best_of: editingMatchFormat.best_of,
+        points_per_set: editingMatchFormat.points_per_set,
+        side_switch_sum: editingMatchFormat.side_switch_sum,
+      })
+      .eq('id', editingMatchFormat.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao atualizar formato', description: error.message })
+      return
+    }
+    
+    setMatches(prev => prev.map(m => m.id === editingMatchFormat.id ? { 
+      ...m, 
+      best_of: editingMatchFormat.best_of,
+      points_per_set: editingMatchFormat.points_per_set,
+      side_switch_sum: editingMatchFormat.side_switch_sum,
+    } : m))
+    setEditingMatchFormat(null)
+    toast({ title: 'Formato atualizado com sucesso' })
   }
 
   // Calculate standings

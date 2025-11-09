@@ -27,7 +27,6 @@ export const phaseFormatKeyMap: Record<string, 'groups' | 'quarterfinals' | 'sem
   'fase de grupos': 'groups',
   'quartas de final': 'quarterfinals',
   'semifinal': 'semifinals',
-  semifinal: 'semifinals',
   'semifinais': 'semifinals',
   final: 'final',
   'final ouro': 'final',

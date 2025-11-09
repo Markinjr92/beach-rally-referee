@@ -384,84 +384,95 @@ export default function SpectatorView() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-ocean text-white">
+    <div className="h-screen overflow-hidden bg-gradient-ocean text-white flex flex-col">
       {/* Header */}
-      <div className="border-b border-white/20 bg-white/5">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-6 px-6 py-6 text-left">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold md:text-3xl">{game.title}</h1>
-            <p className="text-base font-semibold uppercase tracking-[0.26em] text-white/70 md:text-lg">
+      <div className="border-b border-white/20 bg-white/5 flex-shrink-0">
+        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold truncate">{game.title}</h1>
+            <p className="text-sm font-semibold uppercase tracking-wide text-white/70 truncate">
               {game.category}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2 text-right">
-            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60 md:text-sm">
-              Set atual
-            </span>
-            <span className="rounded-2xl border border-white/25 bg-white/10 px-5 py-2 text-lg font-extrabold shadow-lg md:text-xl">
-              {gameState.currentSet}
-            </span>
+          <div className="flex items-center gap-3">
+            {tournamentLogo && (
+              <div className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 shadow-lg backdrop-blur-sm">
+                <img
+                  src={tournamentLogo}
+                  alt="Logo"
+                  className="h-8 w-auto object-contain"
+                />
+              </div>
+            )}
+            <div className="flex flex-col items-end">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/60">
+                Set
+              </span>
+              <span className="rounded-xl border border-white/25 bg-white/10 px-3 py-1 text-base font-extrabold shadow-lg">
+                {gameState.currentSet}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="mx-auto max-w-[1800px] px-4 py-6 sm:px-6 md:py-10 lg:px-8">
-        <div className="grid grid-cols-1 gap-6 md:gap-8 2xl:grid-cols-[7fr_3fr]">
+      <div className="flex-1 overflow-hidden px-3 py-3">
+        <div className="h-full grid grid-rows-[auto_1fr] gap-3">
           {/* Scoreboard - Always Visible */}
-          <div className="lg:col-span-3">
+          <div>
             <Card className="border-white/20 bg-white/10 text-white">
-              <CardContent className="relative space-y-6 p-4 md:p-8">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.26em] text-white/70 md:text-base">
-                    <Trophy className="h-6 w-6 text-yellow-300 md:h-8 md:w-8" />
+              <CardContent className="relative space-y-4 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
+                    <Trophy className="h-5 w-5 text-yellow-300" />
                     {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
                   </div>
-                  {tournamentLogo && (
-                    <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-2 shadow-lg backdrop-blur-sm">
+                  {sponsorLogos.length > 0 && (
+                    <div className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 shadow-lg backdrop-blur-sm">
                       <img
-                        src={tournamentLogo}
-                        alt="Logo do torneio"
-                        className="h-10 max-h-16 w-auto object-contain md:h-14"
+                        src={sponsorLogos[currentSponsor]}
+                        alt="Patrocinador"
+                        className="h-8 w-auto object-contain"
                       />
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-6 items-stretch">
+                <div className="grid grid-cols-5 gap-3 items-stretch">
                   {/* Left Team */}
                   <div
                     className={cn(
-                      'col-span-2 rounded-2xl p-4 md:p-6 text-center md:text-left border border-white/15 backdrop-blur-sm shadow-[0_20px_45px_rgba(0,0,0,0.35)] transition-all duration-300',
+                      'col-span-2 rounded-xl p-3 text-center border border-white/15 backdrop-blur-sm shadow-lg transition-all duration-300',
                       teamCardClasses[leftTeam],
                       leftHasPossession && possessionGlow
                     )}
                   >
-                    <div className="flex flex-col items-center text-center gap-3 md:flex-row md:items-start md:justify-between md:text-left md:gap-4">
-                      <h2 className="text-xl md:text-2xl font-bold leading-tight drop-shadow-md">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="text-lg font-bold leading-tight drop-shadow-md truncate flex-1">
                         {leftTeamName}
                       </h2>
-                      <div className="bg-white/20 text-white rounded-xl px-3 py-2 shadow-lg backdrop-blur-sm min-w-[96px] text-right">
-                        <span className="block text-[10px] font-semibold uppercase tracking-[0.26em] text-white/75">
+                      <div className="bg-white/20 text-white rounded-lg px-2 py-1 shadow-lg backdrop-blur-sm">
+                        <span className="block text-[8px] font-semibold uppercase tracking-wide text-white/75">
                           % VENC
                         </span>
-                        <span className="text-lg md:text-xl font-bold leading-none">{wpaLeft.toFixed(1)}%</span>
+                        <span className="text-sm font-bold leading-none">{wpaLeft.toFixed(1)}%</span>
                       </div>
                     </div>
-                    <div className="mt-6 flex flex-col items-center gap-4">
-                      <div className="text-5xl md:text-7xl font-black drop-shadow-lg animate-bounce-in">
+                    <div className="mt-3 flex flex-col items-center gap-2">
+                      <div className="text-5xl font-black drop-shadow-lg">
                         {leftTeam === 'A' ? scoreA : scoreB}
                       </div>
                       {gameState.currentServerTeam === leftTeam && (
-                        <Badge className="bg-serving text-white text-sm md:text-base px-3 md:px-4 py-2 shadow-lg">
-                          <Zap className="mr-2" size={18} />
-                          SACANDO #{gameState.currentServerPlayer}
+                        <Badge className="bg-serving text-white text-xs px-2 py-1 shadow-lg">
+                          <Zap className="mr-1" size={14} />
+                          SAQUE #{gameState.currentServerPlayer}
                         </Badge>
                       )}
                     </div>
                   </div>
 
                   {/* Center */}
-                  <div className="flex flex-col items-center justify-center gap-4 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2 text-center">
                     <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/30 bg-white/10 shadow-inner md:h-24 md:w-24">
                       <Trophy className="h-10 w-10 text-yellow-300 md:h-14 md:w-14" />
                     </div>

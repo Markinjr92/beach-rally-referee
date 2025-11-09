@@ -6,8 +6,6 @@ export type TeamMatchSummaryEntry = {
   opponentId: string | null
   opponentName: string
   phase: string | null
-  round: string | null
-  label: string | null
   scheduledAt: string | null
   court: string | null
   status: NormalizedMatchStatus | null
@@ -127,8 +125,6 @@ export const buildTeamMatchSummaryMap = (
         opponentId,
         opponentName,
         phase: match.phase ?? null,
-        round: match.round ?? null,
-        label: match.label ?? null,
         scheduledAt: match.scheduled_at ?? null,
         court: match.court ?? null,
         status: normalizedStatus,
