@@ -12,6 +12,7 @@ import { normalizeMatchStatus } from "@/utils/matchStatus";
 import { cn } from "@/lib/utils";
 import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import { MatchLineChart } from "@/components/MatchLineChart";
+import { SponsorLogoGrid } from "@/components/SponsorLogoGrid";
 import { calculateWinProbability } from "@/lib/wpa";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
@@ -125,6 +126,7 @@ export default function SpectatorView() {
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([]);
   const [tournamentLogo, setTournamentLogo] = useState<string | null>(null);
   const [scoreHistory, setScoreHistory] = useState<ScoreHistoryEntry[]>([]);
+  const [showTimeline, setShowTimeline] = useState(true);
 
   const fetchScoreTimeline = useCallback(async () => {
     if (!gameId) return;
@@ -275,6 +277,14 @@ export default function SpectatorView() {
   }, [game?.hasStatistics, sponsorLogos.length]);
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      setShowTimeline(prev => !prev);
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     if (game && !game.hasStatistics) {
       setShowStats(true);
     }
@@ -420,7 +430,19 @@ export default function SpectatorView() {
       <div className="flex-1 overflow-hidden px-3 py-3">
         <div className="h-full grid grid-rows-[auto_1fr] gap-3">
           {/* Scoreboard - Always Visible */}
-          <div>
+          <div className="space-y-4">
+            {sponsorLogos.length > 0 && (
+              <div className="rounded-2xl border border-white/20 bg-white/5 p-3 shadow-lg shadow-black/10">
+                <SponsorLogoGrid
+                  logos={sponsorLogos}
+                  title="Patrocinadores do evento"
+                  layout="row"
+                  className="gap-3 md:gap-6"
+                  logoWrapperClassName="h-12 md:h-16 bg-white/10"
+                  logoClassName="h-10"
+                />
+              </div>
+            )}
             <Card className="border-white/20 bg-white/10 text-white">
               <CardContent className="relative space-y-4 p-4">
                 <div className="flex items-center justify-between gap-4">
@@ -525,17 +547,104 @@ export default function SpectatorView() {
                     </div>
                   </div>
                 </div>
+                {sponsorLogos.length > 0 && (
+                  <div className="border-t border-white/10 pt-4">
+                    <SponsorLogoGrid
+                      logos={sponsorLogos}
+                      layout="row"
+                      className="gap-2 md:gap-4"
+                      logoWrapperClassName="h-10 md:h-12 bg-white/10"
+                      logoClassName="h-8"
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            <div className="mt-6 md:mt-8">
-              <MatchLineChart
-                teamAName={game.teamA.name}
-                teamBName={game.teamB.name}
-                pointsPerSet={game.pointsPerSet}
-                currentSet={gameState.currentSet}
-                scoresHistory={currentSetHistory}
-              />
+            <div className="mt-6 md:mt-8 space-y-4">
+              {showTimeline ? (
+                <MatchLineChart
+                  key="timeline"
+                  teamAName={game.teamA.name}
+                  teamBName={game.teamB.name}
+                  pointsPerSet={game.pointsPerSet}
+                  currentSet={gameState.currentSet}
+                  scoresHistory={currentSetHistory}
+                />
+              ) : (
+                <Card key="momentum" className="border-white/20 bg-white/10 text-white animate-bounce-in">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-center justify-center text-lg md:text-xl">
+                      <TrendingUp className="h-6 w-6 md:h-7 md:w-7" />
+                      Momento do Jogo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4 md:space-y-5">
+                      <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs uppercase tracking-wide text-white/70">
+                        <span className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full bg-team-a shadow-glow" />
+                          {game.teamA.name}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full bg-team-b shadow-glow" />
+                          {game.teamB.name}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h4 className="text-xs md:text-sm font-semibold uppercase tracking-wide text-white/70">
+                          Últimos 7 pontos
+                        </h4>
+                        <div className="mt-3 grid grid-cols-4 sm:grid-cols-7 gap-2">
+                          {recentMomentum.map((point, index) => (
+                            <div
+                              key={index}
+                              title={
+                                point === 'A'
+                                  ? `Ponto de ${game.teamA.name}`
+                                  : point === 'B'
+                                    ? `Ponto de ${game.teamB.name}`
+                                    : 'Sem registro'
+                              }
+                              className={cn(
+                                'flex h-14 items-center justify-center rounded-xl border bg-white/5 text-xs font-semibold shadow-lg backdrop-blur-sm',
+                                point === 'A'
+                                  ? 'border-team-a/60 text-team-a'
+                                  : point === 'B'
+                                    ? 'border-team-b/60 text-team-b'
+                                    : 'border-white/10 text-white/50'
+                              )}
+                            >
+                              {point ?? '—'}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 text-xs md:text-sm text-white/80 md:grid-cols-2">
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                          <p className="font-semibold text-white/90">Sequência atual</p>
+                          <p className="text-lg font-bold text-white">
+                            {momentumSequence[momentumSequence.length - 1] === 'A'
+                              ? game.teamA.name
+                              : momentumSequence[momentumSequence.length - 1] === 'B'
+                                ? game.teamB.name
+                                : 'Equilibrado'}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                          <p className="font-semibold text-white/90">Vantagem recente</p>
+                          <p className="text-lg font-bold text-white">
+                            {recentMomentum.filter(point => point === 'A').length} x
+                            {recentMomentum.filter(point => point === 'B').length}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Statistics Panel - Shows intermittently */}
@@ -584,7 +693,7 @@ export default function SpectatorView() {
             )}
           </div>
 
-          {/* Sidebar - Sponsors / Momentum */}
+          {/* Sidebar - Sponsors */}
           <div className="space-y-4 md:space-y-6">
             {sponsorLogos.length > 0 && (
               <Card className="border-white/20 bg-white/10 text-white">
@@ -595,69 +704,27 @@ export default function SpectatorView() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="w-full h-24 md:h-32 flex items-center justify-center rounded-lg bg-white/5 p-4">
-                    <img
-                      src={sponsorLogos[currentSponsor]}
-                      alt={`Patrocinador ${currentSponsor + 1}`}
-                      className="max-w-full max-h-full object-contain"
-                    />
+                  <div className="space-y-4">
+                    <div className="flex h-24 w-full items-center justify-center rounded-lg border border-white/10 bg-white/10 p-4">
+                      <img
+                        src={sponsorLogos[currentSponsor]}
+                        alt={`Patrocinador ${currentSponsor + 1}`}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    {sponsorLogos.length > 1 && (
+                      <SponsorLogoGrid
+                        logos={sponsorLogos}
+                        layout="grid"
+                        className="gap-2"
+                        logoWrapperClassName="h-14 bg-white/5"
+                        logoClassName="h-12"
+                      />
+                    )}
                   </div>
                 </CardContent>
               </Card>
             )}
-
-            <Card className="border-white/20 bg-white/10 text-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <TrendingUp className="h-5 w-5 md:h-6 md:w-6" />
-                  Momento do Jogo
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4 md:space-y-5">
-                  <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs uppercase tracking-wide text-white/70">
-                    <span className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-team-a shadow-glow" />
-                      {game.teamA.name}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-team-b shadow-glow" />
-                      {game.teamB.name}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs md:text-sm font-semibold uppercase tracking-wide text-white/70">
-                      Últimos 7 pontos
-                    </h4>
-                    <div className="mt-3 grid grid-cols-4 sm:grid-cols-7 gap-2">
-                      {recentMomentum.map((point, index) => (
-                        <div
-                          key={index}
-                          title={
-                            point === 'A'
-                              ? `Ponto de ${game.teamA.name}`
-                              : point === 'B'
-                                ? `Ponto de ${game.teamB.name}`
-                                : 'Sem registro'
-                          }
-                          className={cn(
-                            'h-7 md:h-8 rounded-lg border border-white/15 flex items-center justify-center text-[10px] md:text-xs font-bold tracking-widest transition-all',
-                            point === 'A'
-                              ? 'bg-team-a text-white shadow-[0_12px_24px_rgba(0,0,0,0.35)]'
-                              : point === 'B'
-                                ? 'bg-team-b text-white shadow-[0_12px_24px_rgba(0,0,0,0.35)]'
-                                : 'bg-white/10 text-white/40'
-                          )}
-                        >
-                          {point ?? '—'}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

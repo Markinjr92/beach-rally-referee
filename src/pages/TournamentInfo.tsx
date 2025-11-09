@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SponsorLogoGrid } from '@/components/SponsorLogoGrid'
 import { formatDateMediumPtBr } from '@/utils/date'
 
 const formatDate = (value: string | null) => formatDateMediumPtBr(value)
@@ -131,7 +132,7 @@ const TournamentInfo = () => {
                     {tournament.location || 'Local a definir'}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4 text-sm text-white/80">
+                <CardContent className="space-y-5 text-sm text-white/80">
                   <div className="flex items-center gap-2">
                     <Calendar size={16} className="text-white/60" />
                     {formatDate(tournament.start_date)}
@@ -150,6 +151,18 @@ const TournamentInfo = () => {
                       </Badge>
                     )}
                   </div>
+                  {Array.isArray(tournament.sponsor_logos) && tournament.sponsor_logos.length > 0 && (
+                    <div className="rounded-2xl border border-white/15 bg-white/5 p-3">
+                      <SponsorLogoGrid
+                        logos={tournament.sponsor_logos as string[]}
+                        title="Patrocinadores"
+                        layout="row"
+                        className="justify-start gap-2 sm:justify-center"
+                        logoWrapperClassName="h-12 sm:h-14"
+                        logoClassName="h-10"
+                      />
+                    </div>
+                  )}
                   <div className="pt-4">
                     <Button
                       asChild
