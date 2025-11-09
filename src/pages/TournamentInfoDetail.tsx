@@ -26,6 +26,7 @@ import { isMatchCompleted, isMatchInProgress, normalizeMatchStatus } from '@/uti
 import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteria'
 import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
 import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
+import { SponsorLogoGrid } from '@/components/SponsorLogoGrid'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -554,6 +555,19 @@ const TournamentInfoDetail = () => {
         </div>
 
         <div className="space-y-6">
+          {sponsorLogos.length > 0 && (
+            <div className="rounded-3xl border border-white/15 bg-white/5 p-4 md:p-6 shadow-lg shadow-black/10">
+              <SponsorLogoGrid
+                logos={sponsorLogos}
+                title="Patrocinadores oficiais"
+                layout="row"
+                className="justify-center gap-3 md:gap-6"
+                logoWrapperClassName="h-14 md:h-16 bg-white/10"
+                logoClassName="h-12"
+              />
+            </div>
+          )}
+
           <nav className="flex justify-center">
             <div className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
               <button
@@ -638,6 +652,17 @@ const TournamentInfoDetail = () => {
                 <p className="text-sm text-white/70">
                   Explore todos os confrontos programados e finalizados do torneio em um único painel.
                 </p>
+                {sponsorLogos.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <SponsorLogoGrid
+                      logos={sponsorLogos}
+                      layout="row"
+                      className="justify-start gap-2 sm:justify-center"
+                      logoWrapperClassName="h-12 sm:h-14 bg-white/10"
+                      logoClassName="h-10"
+                    />
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="space-y-2">
                 {usingMatchStateFallback && (
@@ -868,6 +893,17 @@ const TournamentInfoDetail = () => {
                       } finalizado${completedMatchesCount === 1 ? '' : 's'}.`
                     : 'Aguardando jogos finalizados para montar a classificação.'}
                 </CardDescription>
+                {sponsorLogos.length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <SponsorLogoGrid
+                      logos={sponsorLogos}
+                      layout="row"
+                      className="justify-start gap-2 sm:justify-center"
+                      logoWrapperClassName="h-12 sm:h-14 bg-white/10"
+                      logoClassName="h-10"
+                    />
+                  </div>
+                )}
                 <div className="rounded-xl border border-white/20 bg-white/5 p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Trophy className="text-yellow-300" size={18} />
