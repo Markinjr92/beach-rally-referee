@@ -18,7 +18,8 @@ import {
   Coins,
   UserCheck,
   Stethoscope,
-  Square
+  Square,
+  Eye
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
@@ -2649,6 +2650,21 @@ export default function RefereeDesk() {
                 <span>Modo da moeda:</span>
                 <span className="font-medium text-white">{game.coinTossMode === 'initialThenAlternate' ? 'Inicial e alternado' : game.coinTossMode}</span>
               </div>
+              
+              {!gameIsEnded && (
+                <>
+                  <div className="border-t border-white/20 my-2"></div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20"
+                    onClick={() => window.open(`/spectator/${gameId}`, '_blank')}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Abrir Visualização do Espectador
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
 

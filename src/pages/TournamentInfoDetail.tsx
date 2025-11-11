@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, MapPin, Trophy, Activity, UserCheck } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, MapPin, Trophy, Activity, UserCheck, Eye } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -873,6 +873,15 @@ const TournamentInfoDetail = () => {
                           </span>
                         )}
                       </div>
+                      <Link to={`/spectator/${match.id}`}>
+                        <Button
+                          size="sm"
+                          className="w-full h-7 bg-purple-500/90 text-white hover:bg-purple-600 text-[11px] font-medium"
+                        >
+                          <Eye size={13} className="mr-1.5" />
+                          Ver como Espectador
+                        </Button>
+                      </Link>
                     </div>
                   )
                 })}
