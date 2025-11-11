@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Calendar, Clock, MapPin, Trophy, Activity, UserCheck, Share2 } from 'lucide-react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Calendar, Clock, MapPin, Trophy, Activity, UserCheck, Share2, Eye } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -48,6 +48,7 @@ type MatchWithTeams = Match & {
 const PublicTournamentView = () => {
   const { tournamentId } = useParams()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
   const [scoresByMatch, setScoresByMatch] = useState<Map<string, MatchScore[]>>(new Map())
@@ -882,6 +883,16 @@ const PublicTournamentView = () => {
                           </span>
                         )}
                       </div>
+                      {isLive && (
+                        <Button
+                          onClick={() => navigate(`/spectator/${match.id}`)}
+                          size="sm"
+                          className="w-full bg-emerald-500/90 hover:bg-emerald-500 text-white border-emerald-400/40 shadow-lg mt-2"
+                        >
+                          <Eye size={14} className="mr-1.5" />
+                          Ver como Espectador
+                        </Button>
+                      )}
                     </div>
                   )
                 })}

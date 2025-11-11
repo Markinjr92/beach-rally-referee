@@ -98,6 +98,12 @@ export const loadMatchState = async (matchId: string, game: Game) => {
     if (isTableMissingError(upsertError)) {
       return loadFromMatchScores(matchId, game);
     }
+    // If it's a permission error (RLS), return default state without saving
+    // This allows read-only users (spectators) to view matches
+    if (upsertError.code === '42501') {
+      markSupport(true);
+      return { state: defaultState, usedFallback: false } as const;
+    }
     throw upsertError;
   }
 

@@ -41,11 +41,6 @@ drop policy if exists "public can read match_timeouts" on public.match_timeouts;
 create policy "public can read match_timeouts" on public.match_timeouts
   for select using (true);
 
--- Public read access for tournament_configurations
-drop policy if exists "public can read tournament_configurations" on public.tournament_configurations;
-create policy "public can read tournament_configurations" on public.tournament_configurations
-  for select using (true);
-
 -- Public read access for users table (only id, name, email for referee display)
 -- Note: sensitive fields like password hashes are not exposed through the API
 drop policy if exists "public can read users basic info" on public.users;
