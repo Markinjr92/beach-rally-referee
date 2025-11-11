@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Clock,
+  Copy,
   Edit2,
   Image as ImageIcon,
   ListOrdered,
@@ -19,6 +20,7 @@ import {
   Plus,
   Save,
   Settings,
+  Share2,
   Trash2,
   Tv,
   Upload,
@@ -373,6 +375,7 @@ export default function TournamentDetailDB() {
   const [isSavingMatchSetup, setIsSavingMatchSetup] = useState(false)
   const [matchSetupError, setMatchSetupError] = useState<string | null>(null)
   const [nextPhaseSection, setNextPhaseSection] = useState<BracketSection | null>(null)
+  const [showShareDialog, setShowShareDialog] = useState(false)
 
   const loadTournamentTeams = useCallback(async () => {
     if (!tournamentId) return
@@ -982,40 +985,49 @@ export default function TournamentDetailDB() {
       <div className="container mx-auto px-4 py-10 space-y-8">
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-              <Link to="/tournaments" className="w-fit">
-                <Button
-                  variant="ghost"
-                  aria-label="Voltar para torneios"
-                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
-                >
-                  <ArrowLeft className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Voltar</span>
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-3xl font-bold text-white">{tournament.name}</h1>
-                <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-white/80">
-                  <span className="flex items-center gap-2">
-                    <MapPin size={16} />
-                    {tournament.location || '-'}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <Calendar size={16} />
-                    {formattedStartDate} — {formattedEndDate}
-                  </span>
-                  {tournament.category && (
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <Link to="/tournaments" className="w-fit">
+                  <Button
+                    variant="ghost"
+                    aria-label="Voltar para torneios"
+                    className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
+                  >
+                    <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Voltar</span>
+                  </Button>
+                </Link>
+                <div>
+                  <h1 className="text-3xl font-bold text-white">{tournament.name}</h1>
+                  <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-white/80">
                     <span className="flex items-center gap-2">
-                      Categoria: {tournament.category}
+                      <MapPin size={16} />
+                      {tournament.location || '-'}
                     </span>
-                  )}
-                  {tournament.modality && (
                     <span className="flex items-center gap-2">
-                      Modalidade: {tournament.modality}
+                      <Calendar size={16} />
+                      {formattedStartDate} — {formattedEndDate}
                     </span>
-                  )}
+                    {tournament.category && (
+                      <span className="flex items-center gap-2">
+                        Categoria: {tournament.category}
+                      </span>
+                    )}
+                    {tournament.modality && (
+                      <span className="flex items-center gap-2">
+                        Modalidade: {tournament.modality}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
+              <Button
+                onClick={() => setShowShareDialog(true)}
+                className="bg-emerald-500/90 text-white hover:bg-emerald-600 border-0 w-fit"
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Compartilhar Torneio
+              </Button>
             </div>
           </div>
         </div>
@@ -1378,16 +1390,18 @@ export default function TournamentDetailDB() {
                                   <span className="hidden sm:inline">Placar</span>
                                 </Button>
                               </Link>
-                              <Link to={`/spectator/${m.id}`}>
-                                <Button
-                                  size="sm"
-                                  className="bg-purple-500/90 text-white hover:bg-purple-600"
-                                  aria-label="Abrir visão da torcida"
-                                >
-                                  <Megaphone className="h-4 w-4 sm:mr-2" />
-                                  <span className="hidden sm:inline">Torcida</span>
-                                </Button>
-                              </Link>
+                              {m.status === 'in_progress' && (
+                                <Link to={`/spectator/${m.id}`}>
+                                  <Button
+                                    size="sm"
+                                    className="bg-purple-500/90 text-white hover:bg-purple-600"
+                                    aria-label="Abrir visão da torcida"
+                                  >
+                                    <Megaphone className="h-4 w-4 sm:mr-2" />
+                                    <span className="hidden sm:inline">Torcida</span>
+                                  </Button>
+                                </Link>
+                              )}
                               <ConfirmDialog
                                 title="Excluir jogo"
                                 description="Confirme para remover este jogo da tabela. Esta ação não pode ser desfeita."
@@ -2030,6 +2044,57 @@ export default function TournamentDetailDB() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Share Dialog */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="sm:max-w-md bg-gradient-to-br from-[#0a6fd8] via-[#0bb5ff] to-[#0580c9] border-white/20 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Compartilhar Torneio</DialogTitle>
+            <DialogDescription className="text-white/80">
+              Compartilhe este link com os atletas para que eles possam acompanhar o torneio sem precisar fazer login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2">
+            <div className="grid flex-1 gap-2">
+              <Label htmlFor="link" className="sr-only">
+                Link
+              </Label>
+              <Input
+                id="link"
+                defaultValue={`${window.location.origin}/public/tournament/${tournament?.id}`}
+                readOnly
+                className="bg-white/10 border-white/30 text-white"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="px-3 bg-white/20 hover:bg-white/30 border-white/30"
+              onClick={() => {
+                const publicUrl = `${window.location.origin}/public/tournament/${tournament?.id}`
+                navigator.clipboard.writeText(publicUrl)
+                toast({
+                  title: 'Link copiado!',
+                  description: 'O link público foi copiado para a área de transferência.',
+                })
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowShareDialog(false)}
+              className="bg-white/10 border-white/30 text-white hover:bg-white/20"
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       <TeamMatchSummaryDialog
         open={selectedTeamId !== null}
         onOpenChange={(open) => {

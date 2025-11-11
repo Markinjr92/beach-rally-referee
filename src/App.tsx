@@ -15,6 +15,7 @@ import RefereeTournaments from "./pages/RefereeTournaments";
 import RefereeTournamentMatches from "./pages/RefereeTournamentMatches";
 import PublicScoreboard from "./pages/PublicScoreboard";
 import SpectatorView from "./pages/SpectatorView";
+import PublicTournamentView from "./pages/PublicTournamentView";
 import NotFound from "./pages/NotFound";
 import LiveMatches from "./pages/LiveMatches";
 import AdminUserManagementPage from "./pages/AdminUserManagementPage";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/referee/:gameId" element={<RefereeDesk />} />
             <Route path="/scoreboard/:gameId" element={<PublicScoreboard />} />
             <Route path="/spectator/:gameId" element={<SpectatorView />} />
+            <Route path="/public/tournament/:tournamentId" element={<PublicTournamentView />} />
             <Route path="/live" element={<LiveMatches />} />
             <Route path="/admin/users" element={<AdminUserManagementPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
