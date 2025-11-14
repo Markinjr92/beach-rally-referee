@@ -19,6 +19,8 @@ import PublicTournamentView from "./pages/PublicTournamentView";
 import NotFound from "./pages/NotFound";
 import LiveMatches from "./pages/LiveMatches";
 import AdminUserManagementPage from "./pages/AdminUserManagementPage";
+import UnitDashboard from "./pages/unit/UnitDashboard";
+import PatientDetail from "./pages/unit/patient/PatientDetail";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +45,8 @@ const App = () => (
             <Route path="/public/tournament/:tournamentId" element={<PublicTournamentView />} />
             <Route path="/live" element={<LiveMatches />} />
             <Route path="/admin/users" element={<AdminUserManagementPage />} />
+            <Route path="/unit" element={<UnitDashboard />} />
+            <Route path="/unit/patient/:patientId" element={<PatientDetail />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
