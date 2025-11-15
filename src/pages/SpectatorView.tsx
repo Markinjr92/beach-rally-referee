@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import { MatchLineChart } from "@/components/MatchLineChart";
 import { SponsorLogoGrid } from "@/components/SponsorLogoGrid";
+import { calculateWinProbability } from "@/lib/wpa";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
   if (!activeTimer) {
@@ -183,12 +184,23 @@ export default function SpectatorView() {
       const format = inferMatchFormat(match.best_of, pointsPerSet);
 
       const normalizedStatus = normalizeMatchStatus(match.status);
+      
+      // Load tournament to get category and modality
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('category, modality')
+        .eq('id', match.tournament_id)
+        .single();
+      
+      const tournamentCategory = tournament?.category || 'Misto';
+      const tournamentModality = tournament?.modality || match.modality;
+      
       const newGame: Game = {
         id: match.id,
         tournamentId: match.tournament_id,
         title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
-        category: 'Misto',
-        modality: parseGameModality(match.modality),
+        category: tournamentCategory as 'M' | 'F' | 'Misto',
+        modality: parseGameModality(tournamentModality || match.modality),
         format,
         teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
         teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
@@ -217,16 +229,16 @@ export default function SpectatorView() {
       setUsingMatchStateFallback(usedFallback);
 
       // Load tournament logos
-      const { data: tournament } = await supabase
+      const { data: tournamentLogos } = await supabase
         .from('tournaments')
         .select('logo_url, sponsor_logos')
         .eq('id', match.tournament_id)
         .single();
       
-      if (tournament) {
-        if (tournament.logo_url) setTournamentLogo(tournament.logo_url);
-        if (tournament.sponsor_logos && Array.isArray(tournament.sponsor_logos)) {
-          setSponsorLogos(tournament.sponsor_logos as string[]);
+      if (tournamentLogos) {
+        if (tournamentLogos.logo_url) setTournamentLogo(tournamentLogos.logo_url);
+        if (tournamentLogos.sponsor_logos && Array.isArray(tournamentLogos.sponsor_logos)) {
+          setSponsorLogos(tournamentLogos.sponsor_logos as string[]);
         }
       }
       
@@ -386,17 +398,47 @@ export default function SpectatorView() {
     return labels[category];
   };
 
+  const formatModalityCategory = (modality: Game['modality'], category: string): string => {
+    const modalityLabels: Record<Game['modality'], string> = {
+      'dupla': 'Dupla',
+      'quarteto': 'Quarteto'
+    };
+    
+    const categoryLabels: Record<string, string> = {
+      'M': 'Masculino',
+      'F': 'Feminino',
+      'Misto': 'Misto'
+    };
+    
+    const modalityLabel = modalityLabels[modality] || modality;
+    const categoryLabel = categoryLabels[category] || category;
+    
+    return `${modalityLabel} - ${categoryLabel}`;
+  };
+
   return (
     <div className="h-screen md:overflow-hidden overflow-y-auto overflow-x-hidden bg-gradient-ocean text-white flex flex-col">
       {/* Header */}
       <div className="border-b border-white/20 bg-white/5 flex-shrink-0">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 py-2 sm:py-3">
+          {/* Patrocinador - Lado Esquerdo (Desktop) */}
+          {sponsorLogos.length > 0 && (
+            <div className="hidden md:flex items-center justify-center rounded-lg border border-white/20 bg-white/10 px-3 py-2 shadow-lg backdrop-blur-sm flex-shrink-0">
+              <img
+                src={sponsorLogos[currentSponsor]}
+                alt="Patrocinador"
+                className="h-8 w-auto object-contain max-w-[120px]"
+              />
+            </div>
+          )}
+          
           <div className="flex-1 min-w-0">
             <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">{game.title}</h1>
             <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-white/70 truncate">
-              {game.category}
+              {formatModalityCategory(game.modality, game.category)}
             </p>
           </div>
+          
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {tournamentLogo && (
               <div className="rounded-lg sm:rounded-xl border border-white/20 bg-white/10 px-2 sm:px-3 py-1 sm:py-1.5 shadow-lg backdrop-blur-sm hidden sm:block">
@@ -415,27 +457,27 @@ export default function SpectatorView() {
                 {gameState.currentSet}
               </span>
             </div>
+            
+            {/* Patrocinador - Lado Direito (Desktop) */}
+            {sponsorLogos.length > 0 && (
+              <div className="hidden md:flex items-center justify-center rounded-lg border border-white/20 bg-white/10 px-3 py-2 shadow-lg backdrop-blur-sm flex-shrink-0">
+                <img
+                  src={sponsorLogos[(currentSponsor + 1) % sponsorLogos.length]}
+                  alt="Patrocinador"
+                  className="h-8 w-auto object-contain max-w-[120px]"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 md:overflow-hidden overflow-x-hidden px-2 sm:px-3 py-2 sm:py-3">
-        <div className="min-h-full md:h-full grid grid-rows-[auto_1fr] gap-3">
-          {/* Scoreboard - Always Visible */}
+        {/* Desktop Layout: 80% main content + 20% sidebar */}
+        <div className="min-h-full md:h-full md:grid md:grid-cols-[80%_20%] md:gap-4">
+          {/* Main Content Area (80%) */}
           <div className="space-y-4">
-            {sponsorLogos.length > 0 && (
-              <div className="rounded-2xl border border-white/20 bg-white/5 p-3 shadow-lg shadow-black/10">
-                <SponsorLogoGrid
-                  logos={sponsorLogos}
-                  title="Patrocinadores do evento"
-                  layout="row"
-                  className="gap-3 md:gap-6"
-                  logoWrapperClassName="h-12 md:h-16 bg-white/10"
-                  logoClassName="h-10"
-                />
-              </div>
-            )}
             <Card className="border-white/20 bg-white/10 text-white">
               <CardContent className="relative space-y-3 sm:space-y-4 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -443,15 +485,6 @@ export default function SpectatorView() {
                     <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-300" />
                     {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
                   </div>
-                  {sponsorLogos.length > 0 && (
-                    <div className="rounded-lg sm:rounded-xl border border-white/20 bg-white/10 px-2 sm:px-3 py-1 sm:py-1.5 shadow-lg backdrop-blur-sm hidden sm:block">
-                      <img
-                        src={sponsorLogos[currentSponsor]}
-                        alt="Patrocinador"
-                        className="h-6 sm:h-8 w-auto object-contain"
-                      />
-                    </div>
-                  )}
                 </div>
                 {/* Mobile Layout - Grid 2 colunas sem centro */}
                 <div className="grid grid-cols-2 gap-4 md:hidden w-full max-w-full overflow-x-hidden">
@@ -502,51 +535,26 @@ export default function SpectatorView() {
 
                 {/* Mobile - Informações abaixo do placar */}
                 <div className="space-y-3 md:hidden pt-4 border-t border-white/10">
-                  <div className="flex items-center justify-between gap-3">
-                    {/* Logo patrocinador esquerdo */}
-                    {sponsorLogos.length > 0 && (
-                      <div className="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-lg border border-white/20 bg-white/10 p-2">
-                        <img
-                          src={sponsorLogos[currentSponsor]}
-                          alt="Patrocinador"
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                    )}
-                    
-                    {/* Informações centrais */}
-                    <div className="flex-1 space-y-2 text-center">
-                      <div className="text-sm font-semibold text-white/90">
-                        Melhor de {game.pointsPerSet.length}
-                      </div>
-                      <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
-                        <Trophy className="h-4 w-4 text-yellow-300" />
-                        {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
-                      </div>
-                      <div className="flex items-center justify-center gap-2 text-xs text-amber-200">
-                        <ArrowLeftRight className="h-3 w-3" />
-                        <span>Posse: {possessionTeamName}</span>
-                      </div>
-                      {gameState.activeTimer && (
-                        <div className="flex justify-center">
-                          <Badge className="bg-timeout text-white text-xs px-3 py-1.5">
-                            <Clock className="mr-2 h-3 w-3" />
-                            <span className="truncate max-w-[200px]">
-                              {(timerDescriptor ?? 'Tempo Oficial')} • {formatTime(timer ?? calculateRemainingSeconds(gameState.activeTimer))}
-                            </span>
-                          </Badge>
-                        </div>
-                      )}
+                  <div className="space-y-2 text-center">
+                    <div className="text-sm font-semibold text-white/90">
+                      Melhor de {game.pointsPerSet.length}
                     </div>
-
-                    {/* Logo patrocinador direito */}
-                    {sponsorLogos.length > 0 && (
-                      <div className="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-lg border border-white/20 bg-white/10 p-2">
-                        <img
-                          src={sponsorLogos[currentSponsor]}
-                          alt="Patrocinador"
-                          className="max-h-full max-w-full object-contain"
-                        />
+                    <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
+                      <Trophy className="h-4 w-4 text-yellow-300" />
+                      {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
+                    </div>
+                    <div className="flex items-center justify-center gap-2 text-xs text-amber-200">
+                      <ArrowLeftRight className="h-3 w-3" />
+                      <span>Posse: {possessionTeamName}</span>
+                    </div>
+                    {gameState.activeTimer && (
+                      <div className="flex justify-center">
+                        <Badge className="bg-timeout text-white text-xs px-3 py-1.5">
+                          <Clock className="mr-2 h-3 w-3" />
+                          <span className="truncate max-w-[200px]">
+                            {(timerDescriptor ?? 'Tempo Oficial')} • {formatTime(timer ?? calculateRemainingSeconds(gameState.activeTimer))}
+                          </span>
+                        </Badge>
                       </div>
                     )}
                   </div>
@@ -630,21 +638,11 @@ export default function SpectatorView() {
                     </div>
                   </div>
                 </div>
-                {sponsorLogos.length > 0 && (
-                  <div className="border-t border-white/10 pt-4">
-                    <SponsorLogoGrid
-                      logos={sponsorLogos}
-                      layout="row"
-                      className="gap-2 md:gap-4"
-                      logoWrapperClassName="h-10 md:h-12 bg-white/10"
-                      logoClassName="h-8"
-                    />
-                  </div>
-                )}
               </CardContent>
             </Card>
 
-            <div className="mt-6 md:mt-8 space-y-4">
+            {/* Gráfico do jogo */}
+            <div className="mt-6 md:mt-8">
               {showTimeline ? (
                 <MatchLineChart
                   key="timeline"
@@ -776,38 +774,121 @@ export default function SpectatorView() {
             )}
           </div>
 
-          {/* Sidebar - Sponsors */}
-          <div className="space-y-4 md:space-y-6">
+          {/* Sidebar (20%) - Desktop Only */}
+          <div className="hidden md:flex md:flex-col md:space-y-4 md:overflow-y-auto">
+            {/* Patrocinadores do Evento */}
             {sponsorLogos.length > 0 && (
               <Card className="border-white/20 bg-white/10 text-white">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                    <Target className="h-5 w-5 md:h-6 md:w-6" />
-                    Patrocinadores
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Target className="h-4 w-4" />
+                    Patrocinadores do Evento
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex h-24 w-full items-center justify-center rounded-lg border border-white/10 bg-white/10 p-4">
-                      <img
-                        src={sponsorLogos[currentSponsor]}
-                        alt={`Patrocinador ${currentSponsor + 1}`}
-                        className="max-h-full max-w-full object-contain"
-                      />
-                    </div>
-                    {sponsorLogos.length > 1 && (
-                      <SponsorLogoGrid
-                        logos={sponsorLogos}
-                        layout="grid"
-                        className="gap-2"
-                        logoWrapperClassName="h-14 bg-white/5"
-                        logoClassName="h-12"
-                      />
-                    )}
-                  </div>
+                  <SponsorLogoGrid
+                    logos={sponsorLogos}
+                    layout="grid"
+                    className="gap-2"
+                    logoWrapperClassName="h-16 bg-white/10"
+                    logoClassName="h-14"
+                  />
                 </CardContent>
               </Card>
             )}
+
+            {/* Probabilidade de Vitória */}
+            {(() => {
+              const maxPoints = game.pointsPerSet[currentSetIndex] || 21;
+              const winProbA = calculateWinProbability(scoreA, scoreB, maxPoints);
+              const winProbB = calculateWinProbability(scoreB, scoreA, maxPoints);
+              return (
+                <Card className="border-white/20 bg-white/10 text-white">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Probabilidade de Vitória</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-semibold truncate">{game.teamA.name}</span>
+                        <span className="text-xs font-bold">{Math.round(winProbA)}%</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-2">
+                        <div
+                          className="bg-team-a h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${winProbA}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-semibold truncate">{game.teamB.name}</span>
+                        <span className="text-xs font-bold">{Math.round(winProbB)}%</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-2">
+                        <div
+                          className="bg-team-b h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${winProbB}%` }}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Momento do Jogo Resumido */}
+            <Card className="border-white/20 bg-white/10 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <TrendingUp className="h-4 w-4" />
+                  Momento do Jogo
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-white/70 mb-2">
+                    Últimos 8 pontos
+                  </h4>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {recentMomentum.map((point, index) => (
+                      <div
+                        key={index}
+                        className={cn(
+                          'flex h-10 items-center justify-center rounded-lg border text-xs font-semibold',
+                          point === 'A'
+                            ? 'bg-gradient-to-br from-team-a to-team-a/60 border-team-a/60 text-white'
+                            : point === 'B'
+                              ? 'bg-gradient-to-br from-team-b to-team-b/60 border-team-b/60 text-white'
+                              : 'bg-white/5 border-white/10 text-white/50'
+                        )}
+                      >
+                        {point ?? '—'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2 pt-2 border-t border-white/10">
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                    <p className="text-xs font-semibold text-white/90 mb-1">Sequência atual</p>
+                    <p className="text-sm font-bold text-white truncate">
+                      {momentumSequence[momentumSequence.length - 1] === 'A'
+                        ? game.teamA.name
+                        : momentumSequence[momentumSequence.length - 1] === 'B'
+                          ? game.teamB.name
+                          : 'Equilibrado'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                    <p className="text-xs font-semibold text-white/90 mb-1">Vantagem recente</p>
+                    <p className="text-sm font-bold text-white">
+                      {recentMomentum.filter(point => point === 'A').length} x{' '}
+                      {recentMomentum.filter(point => point === 'B').length}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
