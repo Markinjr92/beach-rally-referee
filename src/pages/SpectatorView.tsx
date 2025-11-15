@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import { MatchLineChart } from "@/components/MatchLineChart";
 import { SponsorLogoGrid } from "@/components/SponsorLogoGrid";
-import { calculateWinProbability } from "@/lib/wpa";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
   if (!activeTimer) {
@@ -339,8 +338,8 @@ export default function SpectatorView() {
   }, [currentSetHistory]);
 
   const recentMomentum = useMemo(() => {
-    const lastSeven = momentumSequence.slice(-7);
-    return Array(Math.max(0, 7 - lastSeven.length)).fill(null).concat(lastSeven) as Array<'A' | 'B' | null>;
+    const lastEight = momentumSequence.slice(-8);
+    return Array(Math.max(0, 8 - lastEight.length)).fill(null).concat(lastEight) as Array<'A' | 'B' | null>;
   }, [momentumSequence]);
 
   if (loading) {
@@ -370,12 +369,6 @@ export default function SpectatorView() {
   const possessionTeamName = gameState.possession === 'A' ? game.teamA.name : game.teamB.name;
   const leftTeamName = leftTeam === 'A' ? game.teamA.name : game.teamB.name;
   const rightTeamName = rightTeam === 'A' ? game.teamA.name : game.teamB.name;
-  const maxPointsCurrentSet =
-    game.pointsPerSet[currentSetIndex] ?? game.pointsPerSet[game.pointsPerSet.length - 1] ?? 21;
-  const wpaTeamA = calculateWinProbability(scoreA, scoreB, maxPointsCurrentSet);
-  const wpaTeamB = 100 - wpaTeamA;
-  const wpaLeft = leftTeam === 'A' ? wpaTeamA : wpaTeamB;
-  const wpaRight = rightTeam === 'A' ? wpaTeamA : wpaTeamB;
   const teamCardClasses: Record<'A' | 'B', string> = {
     A: 'bg-gradient-to-br from-team-a to-team-a/60',
     B: 'bg-gradient-to-br from-team-b to-team-b/60'
@@ -394,31 +387,31 @@ export default function SpectatorView() {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-gradient-ocean text-white flex flex-col">
+    <div className="h-screen md:overflow-hidden overflow-y-auto overflow-x-hidden bg-gradient-ocean text-white flex flex-col">
       {/* Header */}
       <div className="border-b border-white/20 bg-white/5 flex-shrink-0">
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-2 sm:gap-4 px-2 sm:px-4 py-2 sm:py-3">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold truncate">{game.title}</h1>
-            <p className="text-sm font-semibold uppercase tracking-wide text-white/70 truncate">
+            <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold truncate">{game.title}</h1>
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-white/70 truncate">
               {game.category}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {tournamentLogo && (
-              <div className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 shadow-lg backdrop-blur-sm">
+              <div className="rounded-lg sm:rounded-xl border border-white/20 bg-white/10 px-2 sm:px-3 py-1 sm:py-1.5 shadow-lg backdrop-blur-sm hidden sm:block">
                 <img
                   src={tournamentLogo}
                   alt="Logo"
-                  className="h-8 w-auto object-contain"
+                  className="h-6 sm:h-8 w-auto object-contain"
                 />
               </div>
             )}
             <div className="flex flex-col items-end">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/60">
+              <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-white/60">
                 Set
               </span>
-              <span className="rounded-xl border border-white/25 bg-white/10 px-3 py-1 text-base font-extrabold shadow-lg">
+              <span className="rounded-lg sm:rounded-xl border border-white/25 bg-white/10 px-2 sm:px-3 py-0.5 sm:py-1 text-sm sm:text-base font-extrabold shadow-lg">
                 {gameState.currentSet}
               </span>
             </div>
@@ -427,8 +420,8 @@ export default function SpectatorView() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden px-3 py-3">
-        <div className="h-full grid grid-rows-[auto_1fr] gap-3">
+      <div className="flex-1 md:overflow-hidden overflow-x-hidden px-2 sm:px-3 py-2 sm:py-3">
+        <div className="min-h-full md:h-full grid grid-rows-[auto_1fr] gap-3">
           {/* Scoreboard - Always Visible */}
           <div className="space-y-4">
             {sponsorLogos.length > 0 && (
@@ -444,23 +437,123 @@ export default function SpectatorView() {
               </div>
             )}
             <Card className="border-white/20 bg-white/10 text-white">
-              <CardContent className="relative space-y-4 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
-                    <Trophy className="h-5 w-5 text-yellow-300" />
+              <CardContent className="relative space-y-3 sm:space-y-4 p-3 sm:p-4">
+                <div className="flex items-center justify-between gap-2 sm:gap-4">
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wide text-white/70">
+                    <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-300" />
                     {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
                   </div>
                   {sponsorLogos.length > 0 && (
-                    <div className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 shadow-lg backdrop-blur-sm">
+                    <div className="rounded-lg sm:rounded-xl border border-white/20 bg-white/10 px-2 sm:px-3 py-1 sm:py-1.5 shadow-lg backdrop-blur-sm hidden sm:block">
                       <img
                         src={sponsorLogos[currentSponsor]}
                         alt="Patrocinador"
-                        className="h-8 w-auto object-contain"
+                        className="h-6 sm:h-8 w-auto object-contain"
                       />
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-5 gap-3 items-stretch">
+                {/* Mobile Layout - Grid 2 colunas sem centro */}
+                <div className="grid grid-cols-2 gap-4 md:hidden w-full max-w-full overflow-x-hidden">
+                  {/* Left Team - Mobile */}
+                  <div
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-5 p-6 text-center rounded-xl border border-white/15 backdrop-blur-sm shadow-lg transition-all duration-300',
+                      teamCardClasses[leftTeam],
+                      leftHasPossession && possessionGlow
+                    )}
+                  >
+                    <h2 className="text-base font-semibold uppercase tracking-wide text-white/90 w-full line-clamp-2 text-center leading-tight">
+                      {leftTeamName}
+                    </h2>
+                    <div className="text-7xl font-black drop-shadow-lg">
+                      {leftTeam === 'A' ? scoreA : scoreB}
+                    </div>
+                    {gameState.currentServerTeam === leftTeam && (
+                      <Badge className="bg-green-500 hover:bg-green-600 border-green-400 text-white font-semibold text-sm px-4 py-2 shadow-lg">
+                        <Zap className="mr-2 h-5 w-5" />
+                        SAQUE #{gameState.currentServerPlayer}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Right Team - Mobile */}
+                  <div
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-5 p-6 text-center rounded-xl border border-white/15 backdrop-blur-sm shadow-lg transition-all duration-300',
+                      teamCardClasses[rightTeam],
+                      rightHasPossession && possessionGlow
+                    )}
+                  >
+                    <h2 className="text-base font-semibold uppercase tracking-wide text-white/90 w-full line-clamp-2 text-center leading-tight">
+                      {rightTeamName}
+                    </h2>
+                    <div className="text-7xl font-black drop-shadow-lg">
+                      {rightTeam === 'A' ? scoreA : scoreB}
+                    </div>
+                    {gameState.currentServerTeam === rightTeam && (
+                      <Badge className="bg-green-500 hover:bg-green-600 border-green-400 text-white font-semibold text-sm px-4 py-2 shadow-lg">
+                        <Zap className="mr-2 h-5 w-5" />
+                        SAQUE #{gameState.currentServerPlayer}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mobile - Informações abaixo do placar */}
+                <div className="space-y-3 md:hidden pt-4 border-t border-white/10">
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Logo patrocinador esquerdo */}
+                    {sponsorLogos.length > 0 && (
+                      <div className="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-lg border border-white/20 bg-white/10 p-2">
+                        <img
+                          src={sponsorLogos[currentSponsor]}
+                          alt="Patrocinador"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Informações centrais */}
+                    <div className="flex-1 space-y-2 text-center">
+                      <div className="text-sm font-semibold text-white/90">
+                        Melhor de {game.pointsPerSet.length}
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
+                        <Trophy className="h-4 w-4 text-yellow-300" />
+                        {gameState.setsWon.teamA} x {gameState.setsWon.teamB} Sets
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-xs text-amber-200">
+                        <ArrowLeftRight className="h-3 w-3" />
+                        <span>Posse: {possessionTeamName}</span>
+                      </div>
+                      {gameState.activeTimer && (
+                        <div className="flex justify-center">
+                          <Badge className="bg-timeout text-white text-xs px-3 py-1.5">
+                            <Clock className="mr-2 h-3 w-3" />
+                            <span className="truncate max-w-[200px]">
+                              {(timerDescriptor ?? 'Tempo Oficial')} • {formatTime(timer ?? calculateRemainingSeconds(gameState.activeTimer))}
+                            </span>
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Logo patrocinador direito */}
+                    {sponsorLogos.length > 0 && (
+                      <div className="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-lg border border-white/20 bg-white/10 p-2">
+                        <img
+                          src={sponsorLogos[currentSponsor]}
+                          alt="Patrocinador"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Desktop Layout - Grid 5 colunas com centro */}
+                <div className="hidden md:grid grid-cols-5 gap-3 items-stretch">
                   {/* Left Team */}
                   <div
                     className={cn(
@@ -469,24 +562,18 @@ export default function SpectatorView() {
                       leftHasPossession && possessionGlow
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="text-lg font-bold leading-tight drop-shadow-md truncate flex-1">
+                    <div className="flex items-center justify-center">
+                      <h2 className="text-base md:text-lg font-bold leading-tight drop-shadow-md truncate">
                         {leftTeamName}
                       </h2>
-                      <div className="bg-white/20 text-white rounded-lg px-2 py-1 shadow-lg backdrop-blur-sm">
-                        <span className="block text-[8px] font-semibold uppercase tracking-wide text-white/75">
-                          % VENC
-                        </span>
-                        <span className="text-sm font-bold leading-none">{wpaLeft.toFixed(1)}%</span>
-                      </div>
                     </div>
                     <div className="mt-3 flex flex-col items-center gap-2">
-                      <div className="text-5xl font-black drop-shadow-lg">
+                      <div className="text-5xl md:text-6xl font-black drop-shadow-lg">
                         {leftTeam === 'A' ? scoreA : scoreB}
                       </div>
                       {gameState.currentServerTeam === leftTeam && (
                         <Badge className="bg-serving text-white text-xs px-2 py-1 shadow-lg">
-                          <Zap className="mr-1" size={14} />
+                          <Zap className="mr-1" size={12} />
                           SAQUE #{gameState.currentServerPlayer}
                         </Badge>
                       )}
@@ -494,22 +581,24 @@ export default function SpectatorView() {
                   </div>
 
                   {/* Center */}
-                  <div className="flex flex-col items-center justify-center gap-2 text-center">
-                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/30 bg-white/10 shadow-inner md:h-24 md:w-24">
-                      <Trophy className="h-10 w-10 text-yellow-300 md:h-14 md:w-14" />
+                  <div className="flex flex-col items-center justify-center gap-2 text-center px-1">
+                    <div className="mx-auto flex h-20 md:h-24 items-center justify-center rounded-full border border-white/30 bg-white/10 shadow-inner">
+                      <Trophy className="h-10 md:h-14 text-yellow-300" />
                     </div>
-                    <div className="text-lg font-semibold md:text-xl">
+                    <div className="text-sm md:text-lg font-semibold">
                       Melhor de {game.pointsPerSet.length}
                     </div>
-                    <div className="mt-2 flex items-center justify-center gap-2 text-sm md:text-base text-amber-200">
-                      <ArrowLeftRight className="h-4 w-4 md:h-5 md:w-5" />
-                      Posse: {possessionTeamName}
+                    <div className="mt-2 flex items-center justify-center gap-2 text-xs md:text-sm text-amber-200">
+                      <ArrowLeftRight className="h-4 md:h-5" />
+                      <span className="truncate">Posse: {possessionTeamName}</span>
                     </div>
                     {gameState.activeTimer && (
                       <div className="mt-3 md:mt-4 flex flex-col items-center gap-2">
-                        <Badge className="bg-timeout text-white text-sm md:text-base px-3 md:px-4 py-2">
-                          <Clock className="mr-2 h-4 w-4 md:h-5 md:w-5" />
-                          {(timerDescriptor ?? 'Tempo Oficial')} • {formatTime(timer ?? calculateRemainingSeconds(gameState.activeTimer))}
+                        <Badge className="bg-timeout text-white text-xs md:text-sm px-3 md:px-4 py-1.5 md:py-2">
+                          <Clock className="mr-2 h-4 md:h-5" />
+                          <span className="truncate max-w-none">
+                            {(timerDescriptor ?? 'Tempo Oficial')} • {formatTime(timer ?? calculateRemainingSeconds(gameState.activeTimer))}
+                          </span>
                         </Badge>
                       </div>
                     )}
@@ -518,29 +607,23 @@ export default function SpectatorView() {
                   {/* Right Team */}
                   <div
                     className={cn(
-                      'col-span-2 rounded-2xl p-4 md:p-6 text-center md:text-right border border-white/15 backdrop-blur-sm shadow-[0_20px_45px_rgba(0,0,0,0.35)] transition-all duration-300',
+                      'col-span-2 rounded-2xl p-4 md:p-6 text-center border border-white/15 backdrop-blur-sm shadow-[0_20px_45px_rgba(0,0,0,0.35)] transition-all duration-300',
                       teamCardClasses[rightTeam],
                       rightHasPossession && possessionGlow
                     )}
                   >
-                    <div className="flex flex-col-reverse items-center text-center gap-3 md:flex-row md:items-start md:justify-between md:text-right md:gap-4">
-                      <div className="bg-white/20 text-white rounded-xl px-3 py-2 shadow-lg backdrop-blur-sm min-w-[96px] text-left md:text-left">
-                        <span className="block text-[10px] font-semibold uppercase tracking-[0.26em] text-white/75">
-                          % VENC
-                        </span>
-                        <span className="text-lg md:text-xl font-bold leading-none">{wpaRight.toFixed(1)}%</span>
-                      </div>
-                      <h2 className="text-xl md:text-2xl font-bold leading-tight drop-shadow-md">
+                    <div className="flex items-center justify-center">
+                      <h2 className="text-xl md:text-2xl font-bold leading-tight drop-shadow-md truncate">
                         {rightTeamName}
                       </h2>
                     </div>
-                    <div className="mt-6 flex flex-col items-center gap-4">
-                      <div className="text-5xl md:text-7xl font-black drop-shadow-lg animate-bounce-in">
+                    <div className="mt-4 md:mt-6 flex flex-col items-center gap-2 md:gap-4">
+                      <div className="text-6xl md:text-7xl font-black drop-shadow-lg animate-bounce-in">
                         {rightTeam === 'A' ? scoreA : scoreB}
                       </div>
                       {gameState.currentServerTeam === rightTeam && (
                         <Badge className="bg-serving text-white text-sm md:text-base px-3 md:px-4 py-2 shadow-lg">
-                          <Zap className="mr-2" size={18} />
+                          <Zap className="mr-2" size={14} />
                           SACANDO #{gameState.currentServerPlayer}
                         </Badge>
                       )}
@@ -594,9 +677,9 @@ export default function SpectatorView() {
 
                       <div>
                         <h4 className="text-xs md:text-sm font-semibold uppercase tracking-wide text-white/70">
-                          Últimos 7 pontos
+                          Últimos 8 pontos
                         </h4>
-                        <div className="mt-3 grid grid-cols-4 sm:grid-cols-7 gap-2">
+                        <div className="mt-3 grid grid-cols-4 sm:grid-cols-8 gap-2">
                           {recentMomentum.map((point, index) => (
                             <div
                               key={index}
@@ -608,12 +691,12 @@ export default function SpectatorView() {
                                     : 'Sem registro'
                               }
                               className={cn(
-                                'flex h-14 items-center justify-center rounded-xl border bg-white/5 text-xs font-semibold shadow-lg backdrop-blur-sm',
+                                'flex h-14 items-center justify-center rounded-xl border text-xs font-semibold shadow-lg backdrop-blur-sm',
                                 point === 'A'
-                                  ? 'border-team-a/60 text-team-a'
+                                  ? 'bg-gradient-to-br from-team-a to-team-a/60 border-team-a/60 text-white'
                                   : point === 'B'
-                                    ? 'border-team-b/60 text-team-b'
-                                    : 'border-white/10 text-white/50'
+                                    ? 'bg-gradient-to-br from-team-b to-team-b/60 border-team-b/60 text-white'
+                                    : 'bg-white/5 border-white/10 text-white/50'
                               )}
                             >
                               {point ?? '—'}

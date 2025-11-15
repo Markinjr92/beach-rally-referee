@@ -511,42 +511,66 @@ const TournamentInfoDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-ocean text-white">
-      <div className="container mx-auto px-4 py-10 space-y-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="min-h-screen bg-gradient-ocean text-white overflow-x-hidden">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 md:py-10 space-y-5 sm:space-y-6 md:space-y-8 max-w-full">
+        {/* Header com botão voltar */}
+        <div className="flex items-center justify-between w-full mb-4 sm:mb-0">
           <Link to="/tournament-info" className="w-fit">
             <Button
               variant="ghost"
-              className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
+              size="sm"
+              className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md h-9 px-3"
             >
-              <ArrowLeft size={18} className="mr-2" />
-              Voltar
+              <ArrowLeft size={16} className="mr-1.5" />
+              <span className="text-sm">Voltar</span>
             </Button>
           </Link>
-          <div className="text-right md:text-left md:flex-1">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-4 py-2 mb-3">
-              <Trophy className="text-yellow-300" size={18} />
-              <span className="uppercase tracking-[0.2em] text-xs text-white/70">Informações do torneio</span>
+        </div>
+
+        {/* Informações do Torneio - Mobile First */}
+        <div className="space-y-3 sm:space-y-4 md:space-y-6">
+          {/* Badge de Informações */}
+          <div className="flex items-center justify-center sm:justify-start">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/10 border border-white/20 px-3 sm:px-4 py-1.5 sm:py-2">
+              <Trophy className="text-yellow-300" size={14} />
+              <span className="uppercase tracking-[0.2em] text-[10px] sm:text-xs text-white/70">Informações do torneio</span>
             </div>
-            <h1 className="text-3xl font-bold text-white">{tournament.name}</h1>
-            <div className="mt-3 flex flex-wrap justify-end md:justify-start gap-3 text-sm text-white/80">
-              <span className="flex items-center gap-2">
-                <MapPin size={16} className="text-white/60" />
-                {tournament.location || 'Local a definir'}
-              </span>
-              <span className="flex items-center gap-2">
-                <Calendar size={16} className="text-white/60" />
+          </div>
+
+          {/* Título do Torneio */}
+          <div className="text-center sm:text-left px-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white break-words leading-tight">
+              {tournament.name}
+            </h1>
+          </div>
+
+          {/* Informações Detalhadas */}
+          <div className="space-y-2.5 sm:space-y-2">
+            {/* Localização */}
+            <div className="flex items-center justify-center sm:justify-start gap-2 text-sm sm:text-base text-white/90">
+              <MapPin size={16} className="text-white/60 flex-shrink-0" />
+              <span className="text-center sm:text-left">{tournament.location || 'Local a definir'}</span>
+            </div>
+
+            {/* Data */}
+            <div className="flex items-center justify-center sm:justify-start gap-2 text-sm sm:text-base text-white/90">
+              <Calendar size={16} className="text-white/60 flex-shrink-0" />
+              <span className="text-center sm:text-left">
                 {formatDatePtBr(tournament.start_date)}
-                <span className="text-white/50">até</span>
+                <span className="text-white/50 mx-1">até</span>
                 {formatDatePtBr(tournament.end_date)}
               </span>
+            </div>
+
+            {/* Badges de Categoria e Modalidade */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5">
               {tournament.category && (
-                <Badge variant="outline" className="border-white/30 text-white">
+                <Badge variant="outline" className="border-white/30 text-white text-xs px-3 py-1">
                   Categoria: {tournament.category}
                 </Badge>
               )}
               {tournament.modality && (
-                <Badge variant="outline" className="border-white/30 text-white">
+                <Badge variant="outline" className="border-white/30 text-white text-xs px-3 py-1">
                   Modalidade: {tournament.modality}
                 </Badge>
               )}
@@ -554,26 +578,28 @@ const TournamentInfoDetail = () => {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
+          {/* Patrocinadores */}
           {sponsorLogos.length > 0 && (
-            <div className="rounded-3xl border border-white/15 bg-white/5 p-4 md:p-6 shadow-lg shadow-black/10">
+            <div className="rounded-2xl sm:rounded-3xl border border-white/15 bg-white/5 p-3 sm:p-4 md:p-6 shadow-lg shadow-black/10">
               <SponsorLogoGrid
                 logos={sponsorLogos}
                 title="Patrocinadores oficiais"
                 layout="row"
-                className="justify-center gap-3 md:gap-6"
-                logoWrapperClassName="h-14 md:h-16 bg-white/10"
-                logoClassName="h-12"
+                className="justify-center gap-2 sm:gap-3 md:gap-6"
+                logoWrapperClassName="h-12 sm:h-14 md:h-16 bg-white/10"
+                logoClassName="h-10 sm:h-12"
               />
             </div>
           )}
 
-          <nav className="flex justify-center">
-            <div className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
+          {/* Navegação entre seções */}
+          <nav className="flex justify-center w-full">
+            <div className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setActiveSection('matches')}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition flex-1 sm:flex-initial ${
                   activeSection === 'matches'
                     ? 'bg-white text-slate-900 shadow-lg shadow-white/20'
                     : 'text-white/70 hover:text-white'
@@ -584,7 +610,7 @@ const TournamentInfoDetail = () => {
               <button
                 type="button"
                 onClick={() => setActiveSection('standings')}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition flex-1 sm:flex-initial ${
                   activeSection === 'standings'
                     ? 'bg-white text-slate-900 shadow-lg shadow-white/20'
                     : 'text-white/70 hover:text-white'
@@ -599,11 +625,11 @@ const TournamentInfoDetail = () => {
             <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
               <CardHeader className="space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                    <CardTitle className="text-lg font-semibold">Jogos do torneio</CardTitle>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 w-full sm:w-auto">
+                    <CardTitle className="text-base sm:text-lg font-semibold">Jogos do torneio</CardTitle>
                     {availablePhases.length > 1 && (
                       <Select value={currentPhaseFilter} onValueChange={setCurrentPhaseFilter}>
-                        <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white">
+                        <SelectTrigger className="w-full sm:w-[200px] bg-white/10 border-white/20 text-white">
                           <SelectValue placeholder="Todas as fases" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-950/95 text-white border-white/20">
@@ -616,15 +642,15 @@ const TournamentInfoDetail = () => {
                       </Select>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center w-full sm:w-auto">
                     <Input
                       value={searchTerm}
                       onChange={(event) => setSearchTerm(event.target.value)}
                       placeholder="Buscar por equipe, fase, quadra ou status"
-                      className="h-9 bg-white/5 border-white/20 text-white placeholder:text-white/60"
+                      className="h-9 w-full sm:w-auto bg-white/5 border-white/20 text-white placeholder:text-white/60 text-sm"
                     />
                     <Select value={sortOption} onValueChange={(value) => setSortOption(value as typeof sortOption)}>
-                      <SelectTrigger className="h-9 bg-white/5 border-white/20 text-white">
+                      <SelectTrigger className="h-9 w-full sm:w-auto bg-white/5 border-white/20 text-white">
                         <SelectValue placeholder="Ordenar jogos" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-900/95 text-white">
@@ -638,7 +664,7 @@ const TournamentInfoDetail = () => {
                       type="button"
                       variant="outline"
                       onClick={() => setShowLiveOnly((prev) => !prev)}
-                      className={`h-9 border-white/20 px-4 font-semibold text-white transition ${
+                      className={`h-9 w-full sm:w-auto border-white/20 px-4 font-semibold text-white transition ${
                         showLiveOnly
                           ? 'border-emerald-300/50 bg-emerald-500/80 text-emerald-950 hover:bg-emerald-500'
                           : 'bg-white/5 hover:bg-white/10'
@@ -674,7 +700,7 @@ const TournamentInfoDetail = () => {
                 {filteredAndSortedMatches.length === 0 ? (
                   <p className="text-sm text-white/70">Nenhum jogo encontrado com os critérios atuais.</p>
                 ) : (
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 w-full max-w-full">
                     {filteredAndSortedMatches.map((match) => {
                       const scores = scoresByMatch.get(match.id) ?? []
                       const liveState = matchStates[match.id]
@@ -774,21 +800,21 @@ const TournamentInfoDetail = () => {
                   return (
                     <div
                       key={match.id}
-                      className={`rounded-md border p-2.5 space-y-2 text-[13px] transition sm:text-xs ${
+                      className={`rounded-md border p-2.5 sm:p-2.5 space-y-2 text-[13px] transition sm:text-xs w-full max-w-full overflow-hidden ${
                         isLive
                           ? 'border-emerald-400/40 bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
                           : 'border-white/10 bg-white/5'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2 text-[11px] text-white/70">
-                        <div className="flex items-center gap-1.5">
-                          <Clock size={13} className="text-white/60" />
-                          <span className="font-medium">{formatDateTimePtBr(match.scheduled_at)}</span>
+                      <div className="flex items-start justify-between gap-2 text-[11px] text-white/70 min-w-0 w-full">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                          <Clock size={13} className="text-white/60 flex-shrink-0" />
+                          <span className="font-medium truncate min-w-0">{formatDateTimePtBr(match.scheduled_at)}</span>
                         </div>
                         {match.status && (
                           <Badge
                             variant="outline"
-                            className={`border-white/25 uppercase tracking-[0.2em] ${
+                            className={`border-white/25 uppercase tracking-[0.2em] flex-shrink-0 ${
                               isLive ? 'border-emerald-300/40 bg-emerald-500/20 text-emerald-50' : 'text-white'
                             }`}
                           >
@@ -796,18 +822,18 @@ const TournamentInfoDetail = () => {
                           </Badge>
                         )}
                       </div>
-                      <div className="space-y-1 text-white">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold truncate">{match.teamA?.name || 'Equipe A'}</span>
+                      <div className="space-y-1 text-white min-w-0">
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="font-semibold truncate min-w-0 flex-1">{match.teamA?.name || 'Equipe A'}</span>
                           {(normalizedStatus === 'completed' || liveState) && (
-                            <span className="text-[11px] font-semibold text-white/80">{setTotals.teamA}</span>
+                            <span className="text-[11px] font-semibold text-white/80 flex-shrink-0">{setTotals.teamA}</span>
                           )}
                         </div>
                         <div className="text-[9px] uppercase tracking-[0.35em] text-white/40 text-center">vs</div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold truncate">{match.teamB?.name || 'Equipe B'}</span>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="font-semibold truncate min-w-0 flex-1">{match.teamB?.name || 'Equipe B'}</span>
                           {(normalizedStatus === 'completed' || liveState) && (
-                            <span className="text-[11px] font-semibold text-white/80">{setTotals.teamB}</span>
+                            <span className="text-[11px] font-semibold text-white/80 flex-shrink-0">{setTotals.teamB}</span>
                           )}
                         </div>
                       </div>
@@ -817,12 +843,12 @@ const TournamentInfoDetail = () => {
                             <span>Set {currentSetNumber}</span>
                             <span>Ao vivo</span>
                           </div>
-                          <div className="mt-2 flex items-center justify-between gap-2 text-base font-semibold sm:text-lg">
-                            <span className="truncate pr-2">{match.teamA?.name || 'Equipe A'}</span>
-                            <span className="text-2xl font-bold text-emerald-100 sm:text-3xl">
+                          <div className="mt-2 flex items-center justify-between gap-1 sm:gap-2 text-sm sm:text-base font-semibold sm:text-lg min-w-0">
+                            <span className="truncate pr-1 sm:pr-2 min-w-0 flex-1 text-left">{match.teamA?.name || 'Equipe A'}</span>
+                            <span className="text-xl sm:text-2xl font-bold text-emerald-100 sm:text-3xl flex-shrink-0 px-1">
                               {currentSetScoreA ?? 0} x {currentSetScoreB ?? 0}
                             </span>
-                            <span className="truncate pl-2 text-right">{match.teamB?.name || 'Equipe B'}</span>
+                            <span className="truncate pl-1 sm:pl-2 min-w-0 flex-1 text-right">{match.teamB?.name || 'Equipe B'}</span>
                           </div>
                           {previousSetScores.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-emerald-50/90">
@@ -859,29 +885,31 @@ const TournamentInfoDetail = () => {
                           ))}
                         </div>
                       ) : null}
-                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/65">
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/65 max-w-full">
                         {match.phase && (
-                          <span className="rounded-full border border-white/15 px-2 py-0.5">{match.phase}</span>
+                          <span className="rounded-full border border-white/15 px-2 py-0.5 truncate max-w-full">{match.phase}</span>
                         )}
                         {match.court && (
                           <span className="rounded-full border border-white/15 px-2 py-0.5">Quadra {match.court}</span>
                         )}
                         {referee?.name && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-white/80">
-                            <UserCheck size={12} className="text-white/60" />
-                            {referee.name}
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-white/80 truncate max-w-full">
+                            <UserCheck size={12} className="text-white/60 flex-shrink-0" />
+                            <span className="truncate">{referee.name}</span>
                           </span>
                         )}
                       </div>
-                      <Link to={`/spectator/${match.id}`}>
-                        <Button
-                          size="sm"
-                          className="w-full h-7 bg-purple-500/90 text-white hover:bg-purple-600 text-[11px] font-medium"
-                        >
-                          <Eye size={13} className="mr-1.5" />
-                          Ver como Espectador
-                        </Button>
-                      </Link>
+                      {isLive && (
+                        <Link to={`/spectator/${match.id}`} className="w-full block">
+                          <Button
+                            size="sm"
+                            className="w-full h-8 sm:h-7 bg-emerald-500/90 text-white hover:bg-emerald-600 text-[11px] sm:text-xs font-medium"
+                          >
+                            <Eye size={13} className="mr-1.5" />
+                            Ver como Espectador
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   )
                 })}
