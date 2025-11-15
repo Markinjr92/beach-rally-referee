@@ -219,13 +219,34 @@ export default function TournamentsDB() {
         { key: 'quarterfinals', label: 'Chave de Vencedores/Repescagem' },
         { key: 'final', label: 'Grande Final' },
       ],
+      '2_groups_5_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
     }
     return phasesByFormat[formatId] || []
   }
 
+  // Get required number of teams for each format
+  const getRequiredTeamCount = (formatId: TournamentFormatId): number => {
+    const teamCounts: Record<TournamentFormatId, number> = {
+      groups_and_knockout: 12,
+      double_elimination: 12,
+      global_semis: 12,
+      series_gold_silver: 12,
+      single_elimination: 12,
+      '3_groups_quarterfinals': 12,
+      '2_groups_5_quarterfinals': 10,
+    }
+    return teamCounts[formatId] || 12
+  }
+
   const initializeTournamentStructure = async (tournament: Tables<'tournaments'>) => {
     try {
-      const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: 12 }, (_, index) => ({
+      const requiredTeamCount = getRequiredTeamCount(form.formatId || 'groups_and_knockout')
+      const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: requiredTeamCount }, (_, index) => ({
         name: `Dupla Seed ${index + 1}`,
         player_a: `Atleta ${index + 1}A`,
         player_b: `Atleta ${index + 1}B`,
