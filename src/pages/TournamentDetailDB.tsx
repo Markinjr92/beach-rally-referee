@@ -387,6 +387,7 @@ export default function TournamentDetailDB() {
   // Phase advancement states
   const [availablePhases, setAvailablePhases] = useState<string[]>([])
   const [currentPhaseFilter, setCurrentPhaseFilter] = useState<string>('')
+  const [phaseFilterInitialized, setPhaseFilterInitialized] = useState(false)
   const [showAdvancePhaseDialog, setShowAdvancePhaseDialog] = useState(false)
   const [phaseCheckResult, setPhaseCheckResult] = useState<{
     canAdvance: boolean
@@ -579,15 +580,18 @@ export default function TournamentDetailDB() {
       setAvailablePhases(phases)
       if (phases.length > 0) {
         const latestPhase = phases[phases.length - 1]
-        if (currentPhaseFilter !== latestPhase) {
+        // Só define a última fase como padrão na primeira inicialização
+        if (!phaseFilterInitialized) {
           setCurrentPhaseFilter(latestPhase)
+          setPhaseFilterInitialized(true)
         }
       } else if (currentPhaseFilter) {
         setCurrentPhaseFilter('')
+        setPhaseFilterInitialized(false)
       }
     }
     loadPhases()
-  }, [tournamentId, matches, currentPhaseFilter])
+  }, [tournamentId, matches])
 
   const handleCheckPhase = async (phase: string) => {
     if (!tournamentId) return
@@ -839,8 +843,8 @@ export default function TournamentDetailDB() {
   )
 
   const teamMatchSummaries = useMemo(
-    () => buildTeamMatchSummaryMap(matches, scoresByMatch, teamNameMap),
-    [matches, scoresByMatch, teamNameMap],
+    () => buildTeamMatchSummaryMap(matches, scoresByMatch, teamNameMap, matchStates),
+    [matches, scoresByMatch, teamNameMap, matchStates],
   )
 
   const selectedTeamSummaries = selectedTeamId ? teamMatchSummaries.get(selectedTeamId) ?? [] : []
@@ -1296,14 +1300,15 @@ export default function TournamentDetailDB() {
               <CardHeader>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="text-xl">Jogos</CardTitle>
-                  {availablePhases.length > 1 && (
+                  {availablePhases.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-white/70">Fase:</span>
-                      <Select value={currentPhaseFilter} onValueChange={setCurrentPhaseFilter}>
+                      <Select value={currentPhaseFilter || 'all'} onValueChange={(value) => setCurrentPhaseFilter(value === 'all' ? '' : value)}>
                         <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white">
                           <SelectValue placeholder="Selecionar fase" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                          <SelectItem value="all">Todas as fases</SelectItem>
                           {availablePhases.map((phase) => (
                             <SelectItem key={phase} value={phase}>
                               {phase}

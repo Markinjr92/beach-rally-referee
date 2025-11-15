@@ -45,14 +45,20 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
               const outcomeLabel = outcomeLabels[entry.outcome]
               const setsLabel = entry.sets.length > 0 ? entry.sets.map((set) => set.label).join(' • ') : null
               const phaseLabel = entry.phase ?? 'Partida'
-              const scheduledLabel = entry.scheduledAt
-                ? formatDateTimePtBr(entry.scheduledAt, { fallback: 'A definir' })
-                : 'Horário a definir'
+              const isCompleted = entry.status === 'completed'
+              const isInProgress = entry.status === 'in_progress'
+              
+              // Para jogos finalizados, não mostrar horário
+              const scheduledLabel = isCompleted 
+                ? null 
+                : entry.scheduledAt
+                  ? formatDateTimePtBr(entry.scheduledAt, { fallback: 'A definir' })
+                  : 'Horário a definir'
 
               let resultSummary = entry.resultLabel
-              if (entry.outcome !== 'pending' && entry.status === 'completed') {
+              if (entry.outcome !== 'pending' && isCompleted) {
                 resultSummary = `${outcomeLabel} ${entry.resultLabel}`
-              } else if (entry.outcome === 'pending' && entry.status === 'in_progress') {
+              } else if (entry.outcome === 'pending' && isInProgress) {
                 resultSummary = `${outcomeLabel}: ${entry.resultLabel}`
               }
 
@@ -62,29 +68,56 @@ export const TeamMatchSummaryDialog = ({ open, onOpenChange, teamName, summaries
                   className="rounded-lg border border-white/10 bg-white/5 p-3 transition hover:border-white/20"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <div className="text-xs uppercase tracking-[0.2em] text-white/60">{phaseLabel}</div>
                       <div className="text-sm font-semibold text-white">vs {entry.opponentName}</div>
-                      <div className="text-xs text-white/60">
-                        {scheduledLabel}
-                        {entry.court ? ` • Quadra ${entry.court}` : ''}
-                      </div>
+                      {!isCompleted && scheduledLabel && (
+                        <div className="text-xs text-white/60">
+                          {scheduledLabel}
+                          {entry.court ? ` • Quadra ${entry.court}` : ''}
+                        </div>
+                      )}
+                      {isCompleted && entry.court && (
+                        <div className="text-xs text-white/60">
+                          Quadra {entry.court}
+                        </div>
+                      )}
                     </div>
-                    <Badge variant="outline" className={`border-white/20 bg-white/10 ${outcomeClass}`}>
-                      {entry.status === 'completed' || entry.status === 'in_progress'
+                    <Badge variant="outline" className={`border-white/20 bg-white/10 ${outcomeClass} flex-shrink-0`}>
+                      {isCompleted || isInProgress
                         ? resultSummary
                         : entry.statusLabel}
                     </Badge>
                   </div>
-                  <div className="mt-2 space-y-1 text-xs text-white/70">
-                    {phaseLabel && <div>Fase: {phaseLabel}</div>}
-                    {entry.status !== 'completed' && <div>Status: {entry.statusLabel}</div>}
-                    {setsLabel && (
-                      <div>
-                        Sets: <span className="font-medium text-white">{setsLabel}</span>
+                  {isCompleted && (
+                    <div className="mt-3 space-y-2">
+                      {/* Placar em sets */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-white/80">Placar em sets:</span>
+                        <span className="text-sm font-bold text-white">
+                          {entry.setsWonTeam} x {entry.setsWonOpponent}
+                        </span>
                       </div>
-                    )}
-                  </div>
+                      {/* Placar por set */}
+                      {setsLabel && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-white/80">Placar por set:</span>
+                          <span className="text-sm font-medium text-white">{setsLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!isCompleted && (
+                    <div className="mt-2 space-y-1 text-xs text-white/70">
+                      {phaseLabel && <div>Fase: {phaseLabel}</div>}
+                      {entry.status !== 'completed' && <div>Status: {entry.statusLabel}</div>}
+                      {setsLabel && isInProgress && (
+                        <div>
+                          Sets: <span className="font-medium text-white">{setsLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}

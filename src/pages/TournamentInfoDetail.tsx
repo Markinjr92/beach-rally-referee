@@ -476,8 +476,8 @@ const TournamentInfoDetail = () => {
   )
 
   const teamMatchSummaries = useMemo(
-    () => buildTeamMatchSummaryMap(matches, scoresByMatch, teamNameMap),
-    [matches, scoresByMatch, teamNameMap],
+    () => buildTeamMatchSummaryMap(matches, scoresByMatch, teamNameMap, matchStates),
+    [matches, scoresByMatch, teamNameMap, matchStates],
   )
 
   const selectedTeamSummaries = selectedTeamId ? teamMatchSummaries.get(selectedTeamId) ?? [] : []

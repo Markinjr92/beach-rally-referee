@@ -1,5 +1,6 @@
 import { Tables } from '@/integrations/supabase/types'
 import { normalizeMatchStatus, type NormalizedMatchStatus } from '@/utils/matchStatus'
+import type { GameState } from '@/types/volleyball'
 
 export type TeamMatchSummaryEntry = {
   matchId: string
@@ -54,6 +55,7 @@ export const buildTeamMatchSummaryMap = (
   matches: MatchLike[],
   scoresByMatch: Map<string, MatchScoreRecord[]>,
   teamNameMap: Map<string, string>,
+  matchStates?: Record<string, GameState>,
 ): Map<string, TeamMatchSummaryEntry[]> => {
   const map = new Map<string, TeamMatchSummaryEntry[]>()
 
@@ -72,14 +74,36 @@ export const buildTeamMatchSummaryMap = (
 
     let setsWonA = 0
     let setsWonB = 0
+    let sets: Array<{ teamPoints: number; opponentPoints: number; label: string }> = []
 
-    sortedScores.forEach((score) => {
-      if (score.team_a_points > score.team_b_points) {
-        setsWonA += 1
-      } else if (score.team_b_points > score.team_a_points) {
-        setsWonB += 1
-      }
-    })
+    // Usar matchStates se disponível e se não houver recordedScores
+    if (sortedScores.length > 0) {
+      sortedScores.forEach((score) => {
+        if (score.team_a_points > score.team_b_points) {
+          setsWonA += 1
+        } else if (score.team_b_points > score.team_a_points) {
+          setsWonB += 1
+        }
+      })
+      sets = sortedScores.map((score) => ({
+        teamPoints: score.team_a_points,
+        opponentPoints: score.team_b_points,
+        label: `${score.team_a_points}x${score.team_b_points}`,
+      }))
+    } else if (matchStates?.[match.id]) {
+      const state = matchStates[match.id]
+      setsWonA = state.setsWon.teamA
+      setsWonB = state.setsWon.teamB
+      
+      sets = state.scores.teamA.map((scoreA, index) => {
+        const scoreB = state.scores.teamB[index] ?? 0
+        return {
+          teamPoints: scoreA,
+          opponentPoints: scoreB,
+          label: `${scoreA}x${scoreB}`,
+        }
+      }).filter(set => set.teamPoints > 0 || set.opponentPoints > 0)
+    }
 
     const buildEntry = (isTeamA: boolean) => {
       const teamId = isTeamA ? teamAId : teamBId
@@ -96,9 +120,9 @@ export const buildTeamMatchSummaryMap = (
       const teamSetsWon = isTeamA ? setsWonA : setsWonB
       const opponentSetsWon = isTeamA ? setsWonB : setsWonA
 
-      const sets = sortedScores.map((score) => {
-        const teamPoints = isTeamA ? score.team_a_points : score.team_b_points
-        const opponentPoints = isTeamA ? score.team_b_points : score.team_a_points
+      const entrySets = sets.map((set) => {
+        const teamPoints = isTeamA ? set.teamPoints : set.opponentPoints
+        const opponentPoints = isTeamA ? set.opponentPoints : set.teamPoints
         return {
           teamPoints,
           opponentPoints,
@@ -109,14 +133,14 @@ export const buildTeamMatchSummaryMap = (
       let outcome: 'win' | 'loss' | 'pending' = 'pending'
       let resultLabel = statusLabel
 
-      if (normalizedStatus === 'completed' && sortedScores.length > 0) {
+      if (normalizedStatus === 'completed' && (entrySets.length > 0 || (teamSetsWon > 0 || opponentSetsWon > 0))) {
         if (teamSetsWon > opponentSetsWon) {
           outcome = 'win'
         } else if (teamSetsWon < opponentSetsWon) {
           outcome = 'loss'
         }
         resultLabel = `${teamSetsWon} x ${opponentSetsWon}`
-      } else if (normalizedStatus === 'in_progress' && sortedScores.length > 0) {
+      } else if (normalizedStatus === 'in_progress' && (entrySets.length > 0 || (teamSetsWon > 0 || opponentSetsWon > 0))) {
         resultLabel = `${teamSetsWon} x ${opponentSetsWon}`
       }
 
@@ -133,7 +157,7 @@ export const buildTeamMatchSummaryMap = (
         resultLabel,
         setsWonTeam: teamSetsWon,
         setsWonOpponent: opponentSetsWon,
-        sets,
+        sets: entrySets,
       })
 
       return null
