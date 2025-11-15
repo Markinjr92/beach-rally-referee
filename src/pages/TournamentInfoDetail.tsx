@@ -65,6 +65,7 @@ const TournamentInfoDetail = () => {
   const [activeSection, setActiveSection] = useState<'matches' | 'standings'>('matches')
   const [availablePhases, setAvailablePhases] = useState<string[]>([])
   const [currentPhaseFilter, setCurrentPhaseFilter] = useState<string>('')
+  const [phaseFilterInitialized, setPhaseFilterInitialized] = useState(false)
   const [tournamentFormatId, setTournamentFormatId] = useState<TournamentFormatId | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
@@ -357,12 +358,15 @@ const TournamentInfoDetail = () => {
       if (!tournamentId) return
       const phases = await getTournamentPhases(tournamentId)
       setAvailablePhases(phases)
-      if (phases.length > 0 && !currentPhaseFilter) {
-        setCurrentPhaseFilter(phases[0])
+      // Definir a última fase como padrão apenas na inicialização
+      if (phases.length > 0 && !phaseFilterInitialized) {
+        const lastPhase = phases[phases.length - 1]
+        setCurrentPhaseFilter(lastPhase)
+        setPhaseFilterInitialized(true)
       }
     }
     loadPhases()
-  }, [tournamentId, matches.length, currentPhaseFilter])
+  }, [tournamentId, matches.length, phaseFilterInitialized])
 
   useEffect(() => {
     if (Object.keys(gameConfigs).length === 0) return
