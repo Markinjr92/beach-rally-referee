@@ -78,6 +78,8 @@ export const formatToPreset = (format: string | null | undefined): MatchFormatPr
       return 'best3_15_15';
     case 'melhorDe3_15_10':
       return 'best3_15_10';
+    case 'melhorDe3_15_12':
+      return 'best3_15_12';
     case 'melhorDe1':
       return 'single_21';
     default:

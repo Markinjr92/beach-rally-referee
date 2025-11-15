@@ -59,7 +59,7 @@ import {
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
 import { formatDateShortPtBr, formatDateTimePtBr, toDatetimeLocalInputValue } from '@/utils/date'
-import { getMatchConfigFromFormat, MATCH_FORMAT_PRESETS, type MatchFormatPresetKey } from '@/utils/matchConfig'
+import { getMatchConfigFromFormat, MATCH_FORMAT_PRESETS, type MatchFormatPresetKey, calculateSideSwitchSum } from '@/utils/matchConfig'
 import {
   GroupAssignment,
   GroupStanding,
@@ -208,6 +208,10 @@ type EditingMatch = {
   scheduled_at: string
   court: string
   phase: string
+  best_of?: number
+  points_per_set?: number[]
+  side_switch_sum?: number[]
+  formatPreset?: MatchFormatPresetKey
 } | null
 
 type EditingTeam = {
@@ -800,6 +804,37 @@ export default function TournamentDetailDB() {
     })
   }, [updateMatchSetupEntry])
 
+  const detectFormatPresetFromMatch = useCallback((match: Match): MatchFormatPresetKey | undefined => {
+    const bestOf = match.best_of || 3
+    const pointsPerSet = toNumberArray(match.points_per_set) || [21, 21, 15]
+    const sideSwitchSum = toNumberArray(match.side_switch_sum) || [7, 7, 5]
+    
+    for (const [key, preset] of Object.entries(MATCH_FORMAT_PRESETS)) {
+      if (
+        preset.bestOf === bestOf &&
+        preset.pointsPerSet.length === pointsPerSet.length &&
+        preset.pointsPerSet.every((p, i) => p === pointsPerSet[i]) &&
+        preset.sideSwitchSum.length === sideSwitchSum.length &&
+        preset.sideSwitchSum.every((s, i) => s === sideSwitchSum[i])
+      ) {
+        return key as MatchFormatPresetKey
+      }
+    }
+    return undefined
+  }, [])
+
+  const handleMatchFormatPresetChange = useCallback((presetKey: MatchFormatPresetKey) => {
+    if (!editingMatch) return
+    const preset = MATCH_FORMAT_PRESETS[presetKey]
+    setEditingMatch({
+      ...editingMatch,
+      formatPreset: presetKey,
+      best_of: preset.bestOf,
+      points_per_set: preset.pointsPerSet,
+      side_switch_sum: preset.sideSwitchSum,
+    })
+  }, [editingMatch])
+
   const scoresByMatch = useMemo(() => {
     const grouped = new Map<string, MatchScore[]>()
 
@@ -1037,13 +1072,46 @@ export default function TournamentDetailDB() {
 
   const handleSaveMatchEdit = async () => {
     if (!editingMatch) return
+    
+    // Preparar dados de atualização
+    const updateData: {
+      scheduled_at?: string | null
+      court?: string | null
+      phase?: string | null
+      best_of?: number
+      points_per_set?: number[]
+      side_switch_sum?: number[]
+    } = {
+      scheduled_at: editingMatch.scheduled_at || null,
+      court: editingMatch.court || null,
+      phase: editingMatch.phase || null,
+    }
+    
+    // Se houver formato definido, incluir nos dados de atualização
+    if (editingMatch.formatPreset) {
+      const preset = MATCH_FORMAT_PRESETS[editingMatch.formatPreset]
+      updateData.best_of = preset.bestOf
+      updateData.points_per_set = preset.pointsPerSet
+      updateData.side_switch_sum = preset.sideSwitchSum
+    } else if (editingMatch.best_of !== undefined || editingMatch.points_per_set !== undefined) {
+      // Se os valores foram definidos diretamente (sem preset)
+      if (editingMatch.best_of !== undefined) {
+        updateData.best_of = editingMatch.best_of
+      }
+      if (editingMatch.points_per_set !== undefined) {
+        updateData.points_per_set = editingMatch.points_per_set
+        // Calcular side_switch_sum automaticamente se não fornecido
+        if (editingMatch.side_switch_sum === undefined) {
+          updateData.side_switch_sum = calculateSideSwitchSum(editingMatch.points_per_set)
+        } else {
+          updateData.side_switch_sum = editingMatch.side_switch_sum
+        }
+      }
+    }
+    
     const { error } = await supabase
       .from('matches')
-      .update({
-        scheduled_at: editingMatch.scheduled_at || null,
-        court: editingMatch.court || null,
-        phase: editingMatch.phase || null,
-      })
+      .update(updateData)
       .eq('id', editingMatch.id)
     
     if (error) {
@@ -1056,6 +1124,9 @@ export default function TournamentDetailDB() {
       scheduled_at: editingMatch.scheduled_at || null,
       court: editingMatch.court || null,
       phase: editingMatch.phase || null,
+      best_of: updateData.best_of ?? m.best_of,
+      points_per_set: updateData.points_per_set ?? m.points_per_set,
+      side_switch_sum: updateData.side_switch_sum ?? m.side_switch_sum,
     } : m))
     setEditingMatch(null)
     toast({ title: 'Jogo atualizado com sucesso' })
@@ -1470,6 +1541,40 @@ export default function TournamentDetailDB() {
                                 />
                               </div>
                             </div>
+                            <div className="space-y-3 border-t border-white/10 pt-3">
+                              <label className="text-sm font-medium text-white/90">Formato do Jogo</label>
+                              <Select
+                                value={editingMatch.formatPreset || ''}
+                                onValueChange={(value) => handleMatchFormatPresetChange(value as MatchFormatPresetKey)}
+                              >
+                                <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                                  <SelectValue placeholder="Selecione o formato" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                                  {MATCH_FORMAT_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      <div className="flex flex-col">
+                                        <span>{option.label}</span>
+                                        <span className="text-xs text-white/60">{option.description}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {editingMatch.formatPreset && (
+                                <div className="rounded-lg bg-white/5 p-3 space-y-1 text-sm">
+                                  <div className="text-white/70">
+                                    <span className="font-medium">Melhor de:</span> {MATCH_FORMAT_PRESETS[editingMatch.formatPreset].bestOf} set{MATCH_FORMAT_PRESETS[editingMatch.formatPreset].bestOf > 1 ? 's' : ''}
+                                  </div>
+                                  <div className="text-white/70">
+                                    <span className="font-medium">Pontos por set:</span> {MATCH_FORMAT_PRESETS[editingMatch.formatPreset].pointsPerSet.join(' / ')}
+                                  </div>
+                                  <div className="text-white/70">
+                                    <span className="font-medium">Troca de quadra:</span> A cada {MATCH_FORMAT_PRESETS[editingMatch.formatPreset].sideSwitchSum.join(', ')} ponto{MATCH_FORMAT_PRESETS[editingMatch.formatPreset].sideSwitchSum[0] > 1 ? 's' : ''}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
@@ -1536,12 +1641,19 @@ export default function TournamentDetailDB() {
                                   size="sm"
                                   className="bg-amber-500/90 text-white hover:bg-amber-600"
                                   aria-label="Editar jogo"
-                                  onClick={() => setEditingMatch({
-                                    id: m.id,
-                                    scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '',
-                                    court: m.court || '',
-                                    phase: m.phase || '',
-                                  })}
+                                  onClick={() => {
+                                    const detectedPreset = detectFormatPresetFromMatch(m)
+                                    setEditingMatch({
+                                      id: m.id,
+                                      scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '',
+                                      court: m.court || '',
+                                      phase: m.phase || '',
+                                      best_of: m.best_of || undefined,
+                                      points_per_set: toNumberArray(m.points_per_set) || undefined,
+                                      side_switch_sum: toNumberArray(m.side_switch_sum) || undefined,
+                                      formatPreset: detectedPreset,
+                                    })
+                                  }}
                                 >
                                   <Edit2 className="h-4 w-4 sm:mr-2" />
                                   <span className="hidden sm:inline">Editar</span>

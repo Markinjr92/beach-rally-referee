@@ -36,7 +36,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog"
 
 type Tournament = Tables<'tournaments'>
 
-type MatchFormatOption = 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10'
+type MatchFormatOption = 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10' | 'melhorDe3_15_12'
 
 interface CreateTournamentFormState {
   name: string
@@ -538,6 +538,11 @@ export default function TournamentsDB() {
       value: 'melhorDe3_15_10',
       title: 'Melhor de 3 sets (15/15/10)',
       description: 'Formato misto: sets de 15, 15 e 10 pontos.',
+    },
+    {
+      value: 'melhorDe3_15_12',
+      title: 'Melhor de 3 sets (15/15/12)',
+      description: 'Formato misto: sets de 15, 15 e 12 pontos.',
     },
     {
       value: 'melhorDe1',
