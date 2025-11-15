@@ -181,6 +181,11 @@ export default function TournamentsDB() {
           sideSwitchSum: [5, 5, 5],
           teamTimeoutsPerSet: 2,
         },
+        melhorDe3_15_12: {
+          pointsPerSet: [15, 15, 12],
+          sideSwitchSum: [5, 5, 6],
+          teamTimeoutsPerSet: 2,
+        },
       }) as const,
     [],
   )
@@ -294,7 +299,13 @@ export default function TournamentsDB() {
       // Get presets for each phase based on user configuration
       const getPreset = (formatOption: MatchFormatOption | undefined) => {
         const defaultFormat = 'melhorDe3'
-        return matchFormatPresets[formatOption || defaultFormat]
+        const key = formatOption || defaultFormat
+        const preset = matchFormatPresets[key as keyof typeof matchFormatPresets]
+        if (!preset) {
+          console.warn(`Preset não encontrado para "${key}", usando padrão`)
+          return matchFormatPresets.melhorDe3
+        }
+        return preset
       }
       
       const groupPreset = getPreset(form.matchFormats.groups)
