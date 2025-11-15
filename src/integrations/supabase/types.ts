@@ -390,6 +390,8 @@ export type Database = {
           name: string
           player_a: string
           player_b: string
+          player_c: string | null
+          player_d: string | null
         }
         Insert: {
           created_at?: string | null
@@ -397,6 +399,8 @@ export type Database = {
           name: string
           player_a: string
           player_b: string
+          player_c?: string | null
+          player_d?: string | null
         }
         Update: {
           created_at?: string | null
@@ -404,6 +408,8 @@ export type Database = {
           name?: string
           player_a?: string
           player_b?: string
+          player_c?: string | null
+          player_d?: string | null
         }
         Relationships: []
       }

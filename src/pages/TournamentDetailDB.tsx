@@ -215,6 +215,8 @@ type EditingTeam = {
   name: string
   player_a: string
   player_b: string
+  player_c?: string | null
+  player_d?: string | null
 } | null
 
 type MatchFormatOption = 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10'
@@ -359,7 +361,7 @@ export default function TournamentDetailDB() {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
-  const [teamForm, setTeamForm] = useState({ name: '', player_a: '', player_b: '' })
+  const [teamForm, setTeamForm] = useState({ name: '', player_a: '', player_b: '', player_c: '', player_d: '' })
   const [matchForm, setMatchForm] = useState<MatchFormState>({
     teamA: '',
     teamB: '',
@@ -942,23 +944,49 @@ export default function TournamentDetailDB() {
 
   const handleSaveTeamEdit = async () => {
     if (!editingTeam) return
+    
+    // Validar campos obrigatórios para quarteto
+    if (tournament?.modality === 'quarteto') {
+      if (!editingTeam.player_c || !editingTeam.player_d) {
+        toast({ 
+          title: 'Campos obrigatórios', 
+          description: 'Para modalidade quarteto, os jogadores 3 e 4 são obrigatórios',
+          variant: 'destructive'
+        })
+        return
+      }
+    }
+    
+    const updateData: {
+      name: string
+      player_a: string
+      player_b: string
+      player_c?: string | null
+      player_d?: string | null
+    } = {
+      name: editingTeam.name,
+      player_a: editingTeam.player_a,
+      player_b: editingTeam.player_b,
+    }
+    
+    if (tournament?.modality === 'quarteto') {
+      updateData.player_c = editingTeam.player_c || null
+      updateData.player_d = editingTeam.player_d || null
+    }
+    
     const { error } = await supabase
       .from('teams')
-      .update({
-        name: editingTeam.name,
-        player_a: editingTeam.player_a,
-        player_b: editingTeam.player_b,
-      })
+      .update(updateData)
       .eq('id', editingTeam.id)
     
     if (error) {
-      toast({ title: 'Erro ao atualizar dupla', description: error.message })
+      toast({ title: 'Erro ao atualizar equipe', description: error.message, variant: 'destructive' })
       return
     }
     
     setTeams(prev => prev.map(t => t.id === editingTeam.id ? { ...t, ...editingTeam } : t))
     setEditingTeam(null)
-    toast({ title: 'Dupla atualizada com sucesso' })
+    toast({ title: 'Equipe atualizada com sucesso' })
   }
 
   const handleSaveLogo = async () => {
@@ -1168,19 +1196,37 @@ export default function TournamentDetailDB() {
                               className="bg-white/10 border-white/20 text-white"
                               placeholder="Nome da dupla"
                             />
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className={`grid gap-2 ${tournament?.modality === 'quarteto' ? 'grid-cols-2' : 'grid-cols-2'}`}>
                               <Input
                                 value={editingTeam.player_a}
                                 onChange={(e) => setEditingTeam({ ...editingTeam, player_a: e.target.value })}
                                 className="bg-white/10 border-white/20 text-white"
-                                placeholder="Jogador A"
+                                placeholder="Jogador 1"
                               />
                               <Input
                                 value={editingTeam.player_b}
                                 onChange={(e) => setEditingTeam({ ...editingTeam, player_b: e.target.value })}
                                 className="bg-white/10 border-white/20 text-white"
-                                placeholder="Jogador B"
+                                placeholder="Jogador 2"
                               />
+                              {tournament?.modality === 'quarteto' && (
+                                <>
+                                  <Input
+                                    value={editingTeam.player_c || ''}
+                                    onChange={(e) => setEditingTeam({ ...editingTeam, player_c: e.target.value })}
+                                    className="bg-white/10 border-white/20 text-white"
+                                    placeholder="Jogador 3 *"
+                                    required
+                                  />
+                                  <Input
+                                    value={editingTeam.player_d || ''}
+                                    onChange={(e) => setEditingTeam({ ...editingTeam, player_d: e.target.value })}
+                                    className="bg-white/10 border-white/20 text-white"
+                                    placeholder="Jogador 4 *"
+                                    required
+                                  />
+                                </>
+                              )}
                             </div>
                             <div className="flex gap-2">
                               <Button
@@ -1208,14 +1254,26 @@ export default function TournamentDetailDB() {
                           <>
                             <div>
                               <div className="font-semibold">{team.name}</div>
-                              <div className="text-xs text-white/70">{team.player_a} / {team.player_b}</div>
+                              <div className="text-xs text-white/70">
+                                {team.player_a} / {team.player_b}
+                                {tournament?.modality === 'quarteto' && team.player_c && team.player_d && (
+                                  <> / {team.player_c} / {team.player_d}</>
+                                )}
+                              </div>
                             </div>
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
                                 className="bg-blue-500/90 text-white hover:bg-blue-600"
                                 aria-label="Editar dupla"
-                                onClick={() => setEditingTeam({ id: team.id, name: team.name, player_a: team.player_a, player_b: team.player_b })}
+                                onClick={() => setEditingTeam({ 
+                                  id: team.id, 
+                                  name: team.name, 
+                                  player_a: team.player_a, 
+                                  player_b: team.player_b,
+                                  player_c: team.player_c || null,
+                                  player_d: team.player_d || null
+                                })}
                               >
                                 <Edit2 className="h-4 w-4 sm:mr-2" />
                                 <span className="hidden sm:inline">Editar</span>
@@ -1253,37 +1311,75 @@ export default function TournamentDetailDB() {
                     ))}
                     {teams.length === 0 && <p className="text-sm text-white/70">Nenhuma equipe.</p>}
                   </div>
-                  <div className="grid gap-3 md:grid-cols-4">
+                  <div className={`grid gap-3 ${tournament?.modality === 'quarteto' ? 'md:grid-cols-6' : 'md:grid-cols-4'}`}>
                     <Input
-                      placeholder="Nome da dupla"
+                      placeholder="Nome da equipe"
                       value={teamForm.name}
                       onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })}
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                     />
                     <Input
-                      placeholder="Jogador A"
+                      placeholder="Jogador 1"
                       value={teamForm.player_a}
                       onChange={(e) => setTeamForm({ ...teamForm, player_a: e.target.value })}
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                     />
                     <Input
-                      placeholder="Jogador B"
+                      placeholder="Jogador 2"
                       value={teamForm.player_b}
                       onChange={(e) => setTeamForm({ ...teamForm, player_b: e.target.value })}
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                     />
+                    {tournament?.modality === 'quarteto' && (
+                      <>
+                        <Input
+                          placeholder="Jogador 3 *"
+                          value={teamForm.player_c}
+                          onChange={(e) => setTeamForm({ ...teamForm, player_c: e.target.value })}
+                          className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                          required
+                        />
+                        <Input
+                          placeholder="Jogador 4 *"
+                          value={teamForm.player_d}
+                          onChange={(e) => setTeamForm({ ...teamForm, player_d: e.target.value })}
+                          className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                          required
+                        />
+                      </>
+                    )}
                     <Button
                       className="bg-yellow-400/90 text-slate-900 hover:bg-yellow-300"
-                      aria-label="Adicionar nova dupla"
+                      aria-label="Adicionar nova equipe"
                       onClick={async () => {
-                        if (!teamForm.name || !teamForm.player_a || !teamForm.player_b) { toast({ title: 'Preencha a dupla' }); return }
-                        const { data: team, error: terr } = await supabase.from('teams').insert({ name: teamForm.name, player_a: teamForm.player_a, player_b: teamForm.player_b }).select('*').single()
-                        if (terr) { toast({ title: 'Erro ao criar', description: terr.message }); return }
+                        if (!teamForm.name || !teamForm.player_a || !teamForm.player_b) { 
+                          toast({ title: 'Preencha os campos obrigatórios' }); 
+                          return 
+                        }
+                        if (tournament?.modality === 'quarteto' && (!teamForm.player_c || !teamForm.player_d)) {
+                          toast({ 
+                            title: 'Campos obrigatórios', 
+                            description: 'Para modalidade quarteto, os jogadores 3 e 4 são obrigatórios',
+                            variant: 'destructive'
+                          }); 
+                          return 
+                        }
+                        const insertData: { name: string; player_a: string; player_b: string; player_c?: string; player_d?: string } = {
+                          name: teamForm.name,
+                          player_a: teamForm.player_a,
+                          player_b: teamForm.player_b,
+                        }
+                        if (tournament?.modality === 'quarteto') {
+                          insertData.player_c = teamForm.player_c
+                          insertData.player_d = teamForm.player_d
+                        }
+                        const { data: team, error: terr } = await supabase.from('teams').insert(insertData).select('*').single()
+                        if (terr) { toast({ title: 'Erro ao criar', description: terr.message, variant: 'destructive' }); return }
                         const { error: rerr } = await supabase.from('tournament_teams').insert({ tournament_id: tournament.id, team_id: team.id })
-                        if (rerr) { toast({ title: 'Erro ao vincular', description: rerr.message }); return }
+                        if (rerr) { toast({ title: 'Erro ao vincular', description: rerr.message, variant: 'destructive' }); return }
                         await loadTournamentTeams()
-                        setTeamForm({ name: '', player_a: '', player_b: '' })
-                        toast({ title: 'Dupla adicionada' })
+                        setTeamForm({ name: '', player_a: '', player_b: '', player_c: '', player_d: '' })
+                        toast({ title: 'Equipe adicionada' })
                       }}
                     >
                       <UserPlus className="h-4 w-4 sm:mr-2" />

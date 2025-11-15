@@ -14,6 +14,7 @@ import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/p
 import { MatchLineChart } from "@/components/MatchLineChart";
 import { SponsorLogoGrid } from "@/components/SponsorLogoGrid";
 import { calculateWinProbability } from "@/lib/wpa";
+import { buildPlayersFromTeam } from "@/utils/teamPlayers";
 
 const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined): string | null => {
   if (!activeTimer) {
@@ -202,8 +203,14 @@ export default function SpectatorView() {
         category: tournamentCategory as 'M' | 'F' | 'Misto',
         modality: parseGameModality(tournamentModality || match.modality),
         format,
-        teamA: { name: teamA?.name || 'Equipe A', players: [{ name: teamA?.player_a || 'A1', number: 1 }, { name: teamA?.player_b || 'A2', number: 2 }] },
-        teamB: { name: teamB?.name || 'Equipe B', players: [{ name: teamB?.player_a || 'B1', number: 1 }, { name: teamB?.player_b || 'B2', number: 2 }] },
+        teamA: { 
+          name: teamA?.name || 'Equipe A', 
+          players: teamA ? buildPlayersFromTeam(teamA, parseGameModality(tournamentModality || match.modality)) : [{ name: 'A1', number: 1 }, { name: 'A2', number: 2 }] 
+        },
+        teamB: { 
+          name: teamB?.name || 'Equipe B', 
+          players: teamB ? buildPlayersFromTeam(teamB, parseGameModality(tournamentModality || match.modality)) : [{ name: 'B1', number: 1 }, { name: 'B2', number: 2 }] 
+        },
         pointsPerSet,
         needTwoPointLead: true,
         sideSwitchSum,

@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { formatDateTimePtBr } from '@/utils/date'
 import { inferMatchFormat, parseGameModality, parseNumberArray } from '@/utils/parsers'
+import { buildPlayersFromTeam } from '@/utils/teamPlayers'
 
 type Match = Tables<'matches'>
 type Team = Tables<'teams'>
@@ -155,16 +156,16 @@ const LiveMatches = () => {
             format,
             teamA: {
               name: match.teamA?.name || 'Equipe A',
-              players: [
-                { name: match.teamA?.player_a || 'A1', number: 1 },
-                { name: match.teamA?.player_b || 'A2', number: 2 },
+              players: match.teamA ? buildPlayersFromTeam(match.teamA, parseGameModality(match.modality)) : [
+                { name: 'A1', number: 1 },
+                { name: 'A2', number: 2 },
               ],
             },
             teamB: {
               name: match.teamB?.name || 'Equipe B',
-              players: [
-                { name: match.teamB?.player_a || 'B1', number: 1 },
-                { name: match.teamB?.player_b || 'B2', number: 2 },
+              players: match.teamB ? buildPlayersFromTeam(match.teamB, parseGameModality(match.modality)) : [
+                { name: 'B1', number: 1 },
+                { name: 'B2', number: 2 },
               ],
             },
             pointsPerSet,

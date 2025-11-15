@@ -70,6 +70,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { inferMatchFormat, parseGameModality, parseNumberArray } from "@/utils/parsers";
 import { normalizeMatchStatus } from "@/utils/matchStatus";
+import { buildPlayersFromTeam } from "@/utils/teamPlayers";
 import nilsonBall from '@/assets/nilson.png';
 import miasaBall from '@/assets/miasa.png';
 
@@ -697,22 +698,17 @@ export default function RefereeDesk() {
       if (teamA || teamB) {
         setGame(prev => {
           if (!prev) return prev;
+          const modality = prev.modality;
           return {
             ...prev,
             title: `${teamA?.name ?? prev.teamA.name} vs ${teamB?.name ?? prev.teamB.name}`,
             teamA: teamA ? {
               name: teamA.name,
-              players: [
-                { name: teamA.player_a, number: 1 },
-                { name: teamA.player_b, number: 2 }
-              ]
+              players: buildPlayersFromTeam(teamA, modality)
             } : prev.teamA,
             teamB: teamB ? {
               name: teamB.name,
-              players: [
-                { name: teamB.player_a, number: 1 },
-                { name: teamB.player_b, number: 2 }
-              ]
+              players: buildPlayersFromTeam(teamB, modality)
             } : prev.teamB,
           };
         });
@@ -772,34 +768,36 @@ export default function RefereeDesk() {
         const teamB = teams?.find(t => t.id === match.team_b_id);
         const { data: tournament } = await supabase
           .from('tournaments')
-          .select('has_statistics')
+          .select('has_statistics, modality')
           .eq('id', match.tournament_id)
           .maybeSingle();
         const hasStatistics = tournament?.has_statistics ?? true;
+        const tournamentModality = tournament?.modality || match.modality || 'dupla';
         const pointsPerSet = parseNumberArray(match.points_per_set, [21, 21, 15]);
         const sideSwitchSum = parseNumberArray(match.side_switch_sum, [7, 7, 5]);
         const format = inferMatchFormat(match.best_of, pointsPerSet);
 
         const normalizedStatus = normalizeMatchStatus(match.status);
+        const gameModality = parseGameModality(tournamentModality);
         const newGame: Game = {
           id: match.id,
           tournamentId: match.tournament_id,
           title: `${teamA?.name ?? 'Equipe A'} vs ${teamB?.name ?? 'Equipe B'}`,
           category: 'Misto',
-          modality: parseGameModality(match.modality),
+          modality: gameModality,
           format,
           teamA: {
             name: teamA?.name || 'Equipe A',
-            players: [
-              { name: teamA?.player_a || 'A1', number: 1 },
-              { name: teamA?.player_b || 'A2', number: 2 },
+            players: teamA ? buildPlayersFromTeam(teamA, gameModality) : [
+              { name: 'A1', number: 1 },
+              { name: 'A2', number: 2 },
             ],
           },
           teamB: {
             name: teamB?.name || 'Equipe B',
-            players: [
-              { name: teamB?.player_a || 'B1', number: 1 },
-              { name: teamB?.player_b || 'B2', number: 2 },
+            players: teamB ? buildPlayersFromTeam(teamB, gameModality) : [
+              { name: 'B1', number: 1 },
+              { name: 'B2', number: 2 },
             ],
           },
           pointsPerSet,
@@ -1845,17 +1843,22 @@ export default function RefereeDesk() {
   const totalSteps = setConfigSteps.length;
   const safeStepIndex = totalSteps ? Math.min(setConfigStep, totalSteps - 1) : 0;
   const isLastStep = totalSteps ? safeStepIndex === totalSteps - 1 : true;
+  
+  // Helper para retornar o termo correto baseado na modalidade
+  const getTeamTerm = () => game.modality === 'quarteto' ? 'equipe' : 'dupla';
+  const getTeamTermCapitalized = () => game.modality === 'quarteto' ? 'Equipe' : 'Dupla';
+  
   const questionTitle = currentConfigStep
     ? (() => {
         switch (currentConfigStep) {
           case 'jersey':
-            return 'Numeração das duplas';
+            return `Numeração das ${getTeamTerm()}s`;
           case 'coin':
             return 'Quem venceu o cara ou coroa?';
           case 'firstChoice':
-            return 'Escolha da dupla vencedora';
+            return `Escolha da ${getTeamTerm()} vencedora`;
           case 'secondChoice':
-            return 'Escolha da dupla perdedora';
+            return `Escolha da ${getTeamTerm()} perdedora`;
           case 'serviceOrderA':
             return `Ordem de saque - ${game.teamA.name}`;
           case 'serviceOrderB':
@@ -1881,7 +1884,7 @@ export default function RefereeDesk() {
       return (
         <div className="space-y-4">
           <p className="text-sm font-semibold text-blue-50/90">
-            Escolha a sequência de sacadores para {teamName}. A ordem será utilizada sempre que a dupla recuperar o saque.
+            Escolha a sequência de sacadores para {teamName}. A ordem será utilizada sempre que a {getTeamTerm()} recuperar o saque.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {orderOptions.map((order, index) => {
@@ -1954,7 +1957,7 @@ export default function RefereeDesk() {
         return (
           <div className="space-y-4">
             <p className="text-sm font-semibold text-blue-50/90">
-              Defina a numeração dos jogadores de cada dupla para liberar os próximos passos do set.
+              Defina a numeração dos jogadores de cada {getTeamTerm()} para liberar os próximos passos do set.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               {(['A', 'B'] as const).map(teamKey => {
@@ -2006,7 +2009,7 @@ export default function RefereeDesk() {
                   onValueChange={val => handleCoinWinnerChange(val as 'A' | 'B')}
                 >
                   <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
-                    <SelectValue placeholder="Selecione a dupla vencedora" />
+                    <SelectValue placeholder={`Selecione a ${getTeamTerm()} vencedora`} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="A">{game.teamA.name}</SelectItem>
@@ -2016,7 +2019,7 @@ export default function RefereeDesk() {
               </div>
             ) : (
               <p className="rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-blue-50">
-                A dupla {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
+                A {getTeamTerm()} {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
               </p>
             )}
           </div>
@@ -2026,7 +2029,7 @@ export default function RefereeDesk() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-blue-50/90">
-                Escolha da dupla vencedora ({firstChoiceTeamName})
+                Escolha da {getTeamTerm()} vencedora ({firstChoiceTeamName})
               </Label>
               <Select value={firstChoiceOption} onValueChange={val => handleFirstChoiceOptionChange(val as CoinChoice)}>
                 <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
@@ -2064,7 +2067,7 @@ export default function RefereeDesk() {
         return firstChoiceOption === 'side' ? (
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-blue-50/90">
-              Escolha da dupla {secondChoiceTeamName}
+              Escolha da {getTeamTerm()} {secondChoiceTeamName}
             </Label>
             <Select
               value={secondChoiceServeDecision ?? undefined}
