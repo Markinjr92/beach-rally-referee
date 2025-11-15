@@ -13,12 +13,16 @@ export type MatchFormatPreset = {
  * Calcula o side_switch_sum correto baseado nos pontos por set
  * Sets de 21 pontos → múltiplo de 7
  * Sets de 15 pontos → múltiplo de 5
+ * Sets de 12 pontos → múltiplo de 6
  * Sets de 10 pontos ou menos → múltiplo de 5
  */
 export const calculateSideSwitchSum = (pointsPerSet: number[]): number[] => {
   return pointsPerSet.map((points) => {
     if (points >= 21) {
       return 7;
+    }
+    if (points === 12) {
+      return 6;
     }
     // Para sets de 15 pontos ou menos, usar múltiplo de 5
     return 5;
@@ -46,6 +50,12 @@ export const MATCH_FORMAT_PRESETS = {
     bestOf: 3,
     pointsPerSet: [15, 15, 10],
     sideSwitchSum: [5, 5, 5],
+  },
+  best3_15_12: {
+    label: 'Melhor de 3 sets (15/15/12)',
+    bestOf: 3,
+    pointsPerSet: [15, 15, 12],
+    sideSwitchSum: [5, 5, 6],
   },
   single_21: {
     label: 'Set único de 21 pontos',

@@ -251,6 +251,41 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '2_groups_5_quarterfinals': {
+    title: '2 Grupos de 5 + Quartas, Semi e Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 5 duplas cada'),
+          match('Formato', 'Todos contra todos em cada grupo (10 jogos por grupo)'),
+          match('Total', '20 jogos na fase de grupos'),
+        ],
+      },
+      {
+        phase: 'Quartas de final',
+        matches: [
+          match('QF1', '1º Grupo A × 4º Grupo B'),
+          match('QF2', '2º Grupo A × 3º Grupo B'),
+          match('QF3', '3º Grupo A × 2º Grupo B'),
+          match('QF4', '4º Grupo A × 1º Grupo B'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('SF1', 'Venc. QF1 × Venc. QF2'),
+          match('SF2', 'Venc. QF3 × Venc. QF4'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Venc. SF1 × Venc. SF2', 'Final'),
+        ],
+      },
+    ],
+  },
 }
 
 const singularize = (value: string) => {

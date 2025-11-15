@@ -3,6 +3,7 @@ import { TournamentFormatId } from '@/types/volleyball'
 export const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
   groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
   '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+  '2_groups_5_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
   global_semis: ['Fase de Grupos', 'Semifinal', 'Final'],
   series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
   single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],

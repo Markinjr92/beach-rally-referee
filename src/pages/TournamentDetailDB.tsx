@@ -95,6 +95,7 @@ type MatchSetupEntry = {
   bestOf: number
   pointsText: string
   sideSwitchText: string
+  formatPreset?: MatchFormatPresetKey
 }
 
 type TeamOption = { value: string; label: string }
@@ -105,6 +106,32 @@ const MATCH_MODES = Object.entries(MATCH_FORMAT_PRESETS).map(([value, preset]) =
   bestOf: preset.bestOf,
   pointsPerSet: preset.pointsPerSet,
   sideSwitchSum: preset.sideSwitchSum,
+}))
+
+const getFormatDescription = (preset: typeof MATCH_FORMAT_PRESETS[keyof typeof MATCH_FORMAT_PRESETS]): string => {
+  if (preset.bestOf === 1) {
+    return 'Partida rápida em apenas um set até 21 pontos.'
+  }
+  if (preset.pointsPerSet.every(p => p === 21)) {
+    return 'Formato tradicional: sets de 21, 21 e 15 pontos.'
+  }
+  if (preset.pointsPerSet.every(p => p === 15)) {
+    return 'Formato rápido: todos os sets com 15 pontos.'
+  }
+  if (preset.pointsPerSet.includes(12)) {
+    return 'Formato misto: sets de 15, 15 e 12 pontos.'
+  }
+  if (preset.pointsPerSet.includes(10)) {
+    return 'Formato misto: sets de 15, 15 e 10 pontos.'
+  }
+  return 'Formato misto: sets de 15, 15 e 10 pontos.'
+}
+
+const MATCH_FORMAT_OPTIONS = Object.entries(MATCH_FORMAT_PRESETS).map(([key, preset]) => ({
+  value: key as MatchFormatPresetKey,
+  label: preset.label,
+  description: getFormatDescription(preset),
+  preset,
 }))
 
 type MatchModeValue = MatchFormatPresetKey
@@ -594,30 +621,43 @@ export default function TournamentDetailDB() {
     }
 
     const section = getBracketSectionForPhase(tournamentConfig.formatId, nextPhaseLabel)
+    
+    // Se não houver seção automática, criar entradas vazias para definição manual
+    let entries: MatchSetupEntry[]
     if (!section || !section.matches.length) {
-      toast({
-        title: 'Critérios indisponíveis',
-        description: 'Defina os confrontos manualmente nas configurações do torneio.',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    const entries = section.matches.map((match, index) => {
-      const phaseLabel = match.phaseOverride ?? nextPhaseLabel
-      const defaults = getDefaultMatchSettings(phaseLabel)
-      return {
-        id: `${phaseLabel}-${match.label}-${index}`,
-        label: match.label,
-        description: match.description,
-        phase: match.phaseOverride ?? nextPhaseLabel,
+      // Criar entradas básicas para definição manual baseado na fase
+      const defaults = getDefaultMatchSettings(nextPhaseLabel)
+      const matchCount = getDefaultMatchCountForPhase(nextPhaseLabel)
+      entries = Array.from({ length: matchCount }, (_, index) => ({
+        id: `${nextPhaseLabel}-${index + 1}`,
+        label: `Jogo ${index + 1}`,
+        description: `Defina manualmente os confrontos para ${nextPhaseLabel}`,
+        phase: nextPhaseLabel,
         teamAId: '',
         teamBId: '',
         bestOf: defaults.bestOf,
         pointsText: defaults.pointsPerSet.join(', '),
         sideSwitchText: defaults.sideSwitchSum.join(', '),
-      }
-    })
+        formatPreset: undefined,
+      }))
+    } else {
+      entries = section.matches.map((match, index) => {
+        const phaseLabel = match.phaseOverride ?? nextPhaseLabel
+        const defaults = getDefaultMatchSettings(phaseLabel)
+        return {
+          id: `${phaseLabel}-${match.label}-${index}`,
+          label: match.label,
+          description: match.description,
+          phase: match.phaseOverride ?? nextPhaseLabel,
+          teamAId: '',
+          teamBId: '',
+          bestOf: defaults.bestOf,
+          pointsText: defaults.pointsPerSet.join(', '),
+          sideSwitchText: defaults.sideSwitchSum.join(', '),
+          formatPreset: undefined,
+        }
+      })
+    }
 
     setMatchSetupPhase(nextPhaseLabel)
     setNextPhaseSection(section)
@@ -717,6 +757,42 @@ export default function TournamentDetailDB() {
     },
     [tournamentConfig],
   )
+
+  const getDefaultMatchCountForPhase = useCallback((phaseLabel: string): number => {
+    const normalized = phaseLabel.trim().toLowerCase()
+    if (normalized.includes('quartas')) return 4
+    if (normalized.includes('semifinal')) return 2
+    if (normalized.includes('final')) return 1
+    return 1 // Default para outras fases
+  }, [])
+
+  const detectFormatPreset = useCallback((entry: MatchSetupEntry): MatchFormatPresetKey | undefined => {
+    const points = entry.pointsText.split(',').map(p => Number(p.trim())).filter(p => !isNaN(p))
+    const switches = entry.sideSwitchText.split(',').map(s => Number(s.trim())).filter(s => !isNaN(s))
+    
+    for (const [key, preset] of Object.entries(MATCH_FORMAT_PRESETS)) {
+      if (
+        preset.bestOf === entry.bestOf &&
+        preset.pointsPerSet.length === points.length &&
+        preset.pointsPerSet.every((p, i) => p === points[i]) &&
+        preset.sideSwitchSum.length === switches.length &&
+        preset.sideSwitchSum.every((s, i) => s === switches[i])
+      ) {
+        return key as MatchFormatPresetKey
+      }
+    }
+    return undefined
+  }, [])
+
+  const handleFormatPresetChange = useCallback((entryId: string, presetKey: MatchFormatPresetKey) => {
+    const preset = MATCH_FORMAT_PRESETS[presetKey]
+    updateMatchSetupEntry(entryId, {
+      formatPreset: presetKey,
+      bestOf: preset.bestOf,
+      pointsText: preset.pointsPerSet.join(', '),
+      sideSwitchText: preset.sideSwitchSum.join(', '),
+    })
+  }, [updateMatchSetupEntry])
 
   const scoresByMatch = useMemo(() => {
     const grouped = new Map<string, MatchScore[]>()
@@ -1045,11 +1121,11 @@ export default function TournamentDetailDB() {
               </TabsTrigger>
               <TabsTrigger
                 value="teams"
-                aria-label="Duplas"
+                aria-label="Equipes"
                 className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white/70 transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-lg data-[state=active]:shadow-white/20 hover:text-white"
               >
                 <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Duplas</span>
+                <span className="hidden sm:inline">Equipes</span>
               </TabsTrigger>
               <TabsTrigger
                 value="standings"
@@ -1974,39 +2050,38 @@ export default function TournamentDetailDB() {
                     </Select>
                   </div>
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-white/70">Melhor de</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={5}
-                      value={entry.bestOf}
-                      onChange={(event) =>
-                        updateMatchSetupEntry(entry.id, { bestOf: Number(event.target.value) || 0 })
-                      }
-                      className="bg-white/10 border-white/20 text-white"
-                    />
+                    <Label className="text-xs text-white/70">Padrão do jogo</Label>
+                    <Select
+                      value={entry.formatPreset || detectFormatPreset(entry) || ''}
+                      onValueChange={(value) => handleFormatPresetChange(entry.id, value as MatchFormatPresetKey)}
+                    >
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                        <SelectValue placeholder="Selecione o formato do jogo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                        {MATCH_FORMAT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value} className="py-3">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-semibold text-white">{option.label}</span>
+                              <span className="text-xs text-white/70">{option.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="space-y-1 md:col-span-1">
-                    <Label className="text-xs text-white/70">Pontos por set</Label>
-                    <Input
-                      value={entry.pointsText}
-                      onChange={(event) => updateMatchSetupEntry(entry.id, { pointsText: event.target.value })}
-                      placeholder="Ex.: 21, 21, 15"
-                      className="bg-white/10 border-white/20 text-white"
-                    />
-                    <p className="text-[10px] text-white/60">Separe por vírgulas.</p>
-                  </div>
-                  <div className="space-y-1 md:col-span-1">
-                    <Label className="text-xs text-white/70">Troca de quadra</Label>
-                    <Input
-                      value={entry.sideSwitchText}
-                      onChange={(event) => updateMatchSetupEntry(entry.id, { sideSwitchText: event.target.value })}
-                      placeholder="Ex.: 7, 7, 5"
-                      className="bg-white/10 border-white/20 text-white"
-                    />
-                    <p className="text-[10px] text-white/60">Valores acumulados por set.</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs text-white/60">
+                    <div>
+                      <span className="font-semibold">Melhor de:</span> {entry.bestOf}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Pontos:</span> {entry.pointsText}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Troca:</span> {entry.sideSwitchText}
+                    </div>
                   </div>
                 </div>
                 <p className="text-[11px] text-white/50">Fase: {entry.phase}</p>
