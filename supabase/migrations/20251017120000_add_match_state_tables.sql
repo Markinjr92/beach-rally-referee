@@ -62,17 +62,38 @@ create policy "authenticated can read match_timeouts" on public.match_timeouts
   for select using (auth.uid() is not null);
 
 -- Policies: admin manage
-drop policy if exists "admin manage match_states" on public.match_states;
-create policy "admin manage match_states" on public.match_states
-  for all using (public.user_has_permission(auth.uid(), 'tournament.manage'));
+drop policy if exists "officiate manage match_states" on public.match_states;
+create policy "officiate manage match_states" on public.match_states
+  for all using (
+    public.user_has_permission(auth.uid(), 'match.officiate')
+    or public.user_has_permission(auth.uid(), 'tournament.manage')
+  )
+  with check (
+    public.user_has_permission(auth.uid(), 'match.officiate')
+    or public.user_has_permission(auth.uid(), 'tournament.manage')
+  );
 
-drop policy if exists "admin manage match_events" on public.match_events;
-create policy "admin manage match_events" on public.match_events
-  for all using (public.user_has_permission(auth.uid(), 'tournament.manage'));
+drop policy if exists "officiate manage match_events" on public.match_events;
+create policy "officiate manage match_events" on public.match_events
+  for all using (
+    public.user_has_permission(auth.uid(), 'match.officiate')
+    or public.user_has_permission(auth.uid(), 'tournament.manage')
+  )
+  with check (
+    public.user_has_permission(auth.uid(), 'match.officiate')
+    or public.user_has_permission(auth.uid(), 'tournament.manage')
+  );
 
-drop policy if exists "admin manage match_timeouts" on public.match_timeouts;
-create policy "admin manage match_timeouts" on public.match_timeouts
-  for all using (public.user_has_permission(auth.uid(), 'tournament.manage'));
+drop policy if exists "officiate manage match_timeouts" on public.match_timeouts;
+create policy "officiate manage match_timeouts" on public.match_timeouts
+  for all using (
+    public.user_has_permission(auth.uid(), 'match.officiate')
+    or public.user_has_permission(auth.uid(), 'tournament.manage')
+  )
+  with check (
+    public.user_has_permission(auth.uid(), 'match.officiate')
+    or public.user_has_permission(auth.uid(), 'tournament.manage')
+  );
 
 -- Keep updated_at in sync
 create or replace function public.set_match_states_updated_at()
