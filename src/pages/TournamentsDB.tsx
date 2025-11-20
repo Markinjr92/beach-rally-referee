@@ -230,6 +230,12 @@ export default function TournamentsDB() {
         { key: 'semifinals', label: 'Semifinais' },
         { key: 'final', label: 'Final' },
       ],
+      '2_groups_6_cross_semis': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
     }
     return phasesByFormat[formatId] || []
   }
@@ -244,6 +250,7 @@ export default function TournamentsDB() {
       single_elimination: 12,
       '3_groups_quarterfinals': 12,
       '2_groups_5_quarterfinals': 10,
+      '2_groups_6_cross_semis': 12,
     }
     return teamCounts[formatId] || 12
   }
@@ -1163,9 +1170,9 @@ export default function TournamentsDB() {
                         destructive
                         trigger={
                           <Button
-                            variant="ghost"
+                            variant="destructive"
                             size="sm"
-                            className="flex items-center gap-1 bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                            className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white border-0"
                           >
                             Excluir
                           </Button>

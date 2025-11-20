@@ -5,7 +5,8 @@ export type TournamentFormatId =
   | 'series_gold_silver'
   | 'single_elimination'
   | '3_groups_quarterfinals'
-  | '2_groups_5_quarterfinals';
+  | '2_groups_5_quarterfinals'
+  | '2_groups_6_cross_semis';
 
 export type TieBreakerCriterion =
   | 'head_to_head'

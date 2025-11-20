@@ -286,6 +286,35 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '2_groups_6_cross_semis': {
+    title: '2 Grupos de 6 - Cruzado + Semi/Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 6 duplas cada'),
+          match('Formato', 'Cruzado: cada dupla de um grupo joga contra todas do outro grupo'),
+          match('Total', '36 jogos na fase de grupos (6 × 6)'),
+          match('Grupo A', 'Seeds: 1, 3, 5, 7, 9, 11'),
+          match('Grupo B', 'Seeds: 2, 4, 6, 8, 10, 12'),
+        ],
+      },
+      {
+        phase: 'Semifinais',
+        matches: [
+          match('SF1', 'A definir manualmente (escolha os 4 semi-finalistas)'),
+          match('SF2', 'A definir manualmente (escolha os 4 semi-finalistas)'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Venc. SF1 × Venc. SF2', 'Final'),
+          match('3º lugar', 'Perd. SF1 × Perd. SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
 }
 
 const singularize = (value: string) => {
