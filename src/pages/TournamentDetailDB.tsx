@@ -2173,7 +2173,7 @@ export default function TournamentDetailDB() {
             <Button
               variant="outline"
               onClick={() => setShowAdvancePhaseDialog(false)}
-              className="border-white/20 text-white hover:bg-white/10"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:border-white/40"
               aria-label="Cancelar finalização da fase"
             >
               <X className="h-4 w-4 sm:mr-2" />

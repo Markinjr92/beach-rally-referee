@@ -18,12 +18,12 @@ import {
   Coins,
   UserCheck,
   Stethoscope,
-  Square,
-  Eye
+  Square
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
+import { getCasualMatch, casualMatchToGame, updateCasualMatch } from "@/lib/casualMatches";
 import { TablesInsert, TablesUpdate, Database } from "@/integrations/supabase/types";
 import {
   CoinChoice,
@@ -98,7 +98,11 @@ const coinLabels: Record<CoinSide, string> = {
 };
 
 export default function RefereeDesk() {
-  const { gameId } = useParams();
+  const params = useParams();
+  const location = useLocation();
+  // Suporta tanto /referee/:gameId quanto /casual-matches/:id/referee
+  const gameId = params.gameId || params.id;
+  const isCasualMatch = location.pathname.includes('/casual-matches/');
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -546,7 +550,8 @@ export default function RefereeDesk() {
 
       setIsSyncing(true);
       try {
-        const { usedFallback } = await saveMatchState(newState);
+        const isCasualMatch = !game?.tournamentId || game.tournamentId === '';
+        const { usedFallback } = await saveMatchState(newState, isCasualMatch);
         if (usedFallback) {
           notifyFallbackActivated();
         } else {
@@ -595,15 +600,16 @@ export default function RefereeDesk() {
     }) => {
       if (!gameId) return;
       const { eventType, team, pointCategory, description, metadata, setNumber } = params;
-      const payload = {
-        match_id: gameId,
+      const payload: TablesInsert<'match_events'> = {
+        match_id: isCasualMatch ? null : gameId,
+        casual_match_id: isCasualMatch ? gameId : null,
         set_number: setNumber ?? gameState?.currentSet ?? null,
         event_type: eventType,
         team: team ?? null,
         point_category: pointCategory ?? null,
         description: description ?? null,
         metadata: (metadata ? JSON.parse(JSON.stringify(metadata)) : null) as Json,
-      } satisfies TablesInsert<'match_events'>;
+      };
 
       try {
         const { error } = await supabase.from('match_events').insert([payload]);
@@ -619,7 +625,7 @@ export default function RefereeDesk() {
         }
       }
     },
-    [gameId, gameState?.currentSet, showOfflineSyncNotice]
+    [gameId, gameState?.currentSet, showOfflineSyncNotice, isCasualMatch]
   );
 
   const finalizeTimeout = useCallback(
@@ -679,6 +685,11 @@ export default function RefereeDesk() {
     if (!gameId || !game) return;
     
     try {
+      // Para casual matches, não precisa buscar nomes (já estão no game)
+      if (isCasualMatch) {
+        return;
+      }
+      
       const { data: match } = await supabase
         .from('matches')
         .select('team_a_id, team_b_id')
@@ -729,7 +740,16 @@ export default function RefereeDesk() {
     }
 
     const loadFromDB = async () => {
-      if (!gameId) return;
+      if (!gameId) {
+        console.error('gameId não encontrado nos parâmetros da rota');
+        setIsLoading(false);
+        toast({
+          title: 'Erro',
+          description: 'ID do jogo não encontrado na URL.',
+          variant: 'destructive',
+        });
+        return;
+      }
       setIsLoading(true);
       setGameHistory([]);
 
@@ -746,6 +766,73 @@ export default function RefereeDesk() {
       };
 
       try {
+        // Primeiro, tentar carregar como casual match
+        let isCasualMatch = false;
+        if (user && gameId) {
+          try {
+            console.log('Tentando carregar como casual match:', gameId);
+            const casualMatch = await getCasualMatch(gameId, user.id);
+            if (casualMatch) {
+              console.log('Casual match encontrado:', casualMatch.id);
+              isCasualMatch = true;
+              const game = casualMatchToGame(casualMatch);
+              setGame(game);
+              saveLocalGameConfig(game);
+
+              try {
+                console.log('Carregando estado do jogo casual...');
+                const { state, usedFallback } = await loadMatchState(gameId, game, true);
+                console.log('Estado carregado com sucesso');
+                const storedState = loadLocalMatchState(gameId);
+                const hasPendingStateSync = hasPendingOfflineOperation('saveMatchState');
+                const resolvedState = hasPendingStateSync && storedState ? storedState.state : state;
+                setGameState(resolvedState);
+                saveLocalMatchState(resolvedState);
+                setUsingMatchStateFallback(usedFallback);
+                if (usedFallback) {
+                  notifyFallbackActivated();
+                } else {
+                  fallbackWarningDisplayed.current = false;
+                }
+              } catch (stateError) {
+                console.error('Erro ao carregar estado do jogo:', stateError);
+                // Criar estado padrão mesmo com erro
+                const defaultState = createDefaultGameState(game);
+                setGameState(defaultState);
+                saveLocalMatchState(defaultState);
+                setUsingMatchStateFallback(false);
+                toast({
+                  title: 'Aviso',
+                  description: 'Estado do jogo inicializado com valores padrão.',
+                  variant: 'default',
+                });
+              }
+
+              // Atualizar status se necessário
+              if (casualMatch.status === 'scheduled') {
+                try {
+                  await updateCasualMatch(gameId, user.id, { status: 'in_progress' });
+                } catch (error) {
+                  if (isLikelyOfflineError(error)) {
+                    enqueueOfflineOperation('updateCasualMatch', { matchId: gameId, values: { status: 'in_progress' } });
+                    showOfflineSyncNotice();
+                  } else {
+                    console.error('Failed to update casual match record', error);
+                  }
+                }
+              }
+
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            // Não é um casual match ou erro ao carregar, continuar para matches normais
+            console.log('Not a casual match or error loading casual match:', error);
+            // Não fazer setIsLoading(false) aqui, deixar o finally fazer
+          }
+        }
+
+        // Se não for casual match, tentar carregar como match normal
         const { data: match, error: matchError } = await supabase
           .from('matches')
           .select('*')
@@ -754,9 +841,16 @@ export default function RefereeDesk() {
         if (matchError || !match) {
           if (isLikelyOfflineError(matchError) && applyLocalFallback()) {
             showOfflineSyncNotice();
+            setIsLoading(false);
             return;
           }
           console.error('Match not found', matchError);
+          setIsLoading(false);
+          toast({
+            title: 'Jogo não encontrado',
+            description: 'O jogo solicitado não foi encontrado.',
+            variant: 'destructive',
+          });
           return;
         }
 
@@ -821,7 +915,7 @@ export default function RefereeDesk() {
         setGame(newGame);
         saveLocalGameConfig(newGame);
 
-        const { state, usedFallback } = await loadMatchState(match.id, newGame);
+        const { state, usedFallback } = await loadMatchState(match.id, newGame, false);
         const storedState = loadLocalMatchState(match.id);
         const hasPendingStateSync = hasPendingOfflineOperation('saveMatchState');
         const resolvedState = hasPendingStateSync && storedState ? storedState.state : state;
@@ -876,9 +970,12 @@ export default function RefereeDesk() {
   useEffect(() => {
     if (!gameId || !game) return;
 
+    // Determinar se é casual match (jogos avulsos não têm tournamentId)
+    const isCasualMatch = !game.tournamentId || game.tournamentId === '';
+
     const unsubscribe = subscribeToMatchState(gameId, game, newState => {
       setGameState(snapshotState(newState));
-    });
+    }, isCasualMatch);
 
     return () => {
       unsubscribe?.();
@@ -1246,19 +1343,27 @@ export default function RefereeDesk() {
 
       if (shouldUpdateMatchRecord) {
         try {
-          const { error: matchUpdateError } = await supabase
-            .from('matches')
-            .update({ status: 'completed' })
-            .eq('id', game.id);
-          if (matchUpdateError) {
-            throw matchUpdateError;
+          if (isCasualMatch && user) {
+            await updateCasualMatch(game.id, user.id, { status: 'completed' });
+          } else {
+            const { error: matchUpdateError } = await supabase
+              .from('matches')
+              .update({ status: 'completed' })
+              .eq('id', game.id);
+            if (matchUpdateError) {
+              throw matchUpdateError;
+            }
           }
         } catch (error) {
           if (isLikelyOfflineError(error)) {
-            enqueueOfflineOperation('updateMatch', {
-              matchId: game.id,
-              values: { status: 'completed' } as TablesUpdate<'matches'>,
-            });
+            if (isCasualMatch) {
+              enqueueOfflineOperation('updateCasualMatch', { matchId: game.id, values: { status: 'completed' } });
+            } else {
+              enqueueOfflineOperation('updateMatch', {
+                matchId: game.id,
+                values: { status: 'completed' } as TablesUpdate<'matches'>,
+              });
+            }
             showOfflineSyncNotice();
           } else {
             console.error('Failed to finalize match record', error);
@@ -1677,16 +1782,18 @@ export default function RefereeDesk() {
 
     let timeoutRecord: { id: string; started_at: string } | null = null;
     try {
+      const timeoutPayload: TablesInsert<'match_timeouts'> = {
+        match_id: isCasualMatch ? null : game.id,
+        casual_match_id: isCasualMatch ? game.id : null,
+        set_number: gameState.currentSet,
+        team: team ?? null,
+        timeout_type: type,
+        duration_seconds: duration,
+        started_at: startedAt,
+      };
       const { data, error } = await supabase
         .from('match_timeouts')
-        .insert({
-          match_id: game.id,
-          set_number: gameState.currentSet,
-          team: team ?? null,
-          timeout_type: type,
-          duration_seconds: duration,
-          started_at: startedAt,
-        })
+        .insert(timeoutPayload)
         .select('id, started_at')
         .single();
       if (error || !data) {
@@ -1699,15 +1806,16 @@ export default function RefereeDesk() {
           typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
             ? crypto.randomUUID()
             : `timeout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const queuedPayload = {
+        const queuedPayload: TablesInsert<'match_timeouts'> = {
           id: fallbackId,
-          match_id: game.id,
+          match_id: isCasualMatch ? null : game.id,
+          casual_match_id: isCasualMatch ? game.id : null,
           set_number: gameState.currentSet,
           team: team ?? null,
           timeout_type: type,
           duration_seconds: duration,
           started_at: startedAt,
-        } satisfies TablesInsert<'match_timeouts'>;
+        };
         timeoutRecord = { id: fallbackId, started_at: startedAt };
         enqueueOfflineOperation('createTimeout', queuedPayload);
         showOfflineSyncNotice();
@@ -1971,7 +2079,7 @@ export default function RefereeDesk() {
                       {jerseyNumbers.map(number => {
                         const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
                         return (
-                          <div key={number} className="space-y-1">
+                          <div key={`${teamKey}-jersey-${number}`} className="space-y-1">
                             <Label className="text-xs font-semibold text-blue-50/90">Jogador número {number}</Label>
                             <Select
                               value={typeof value === 'number' ? String(value) : undefined}
@@ -1982,7 +2090,7 @@ export default function RefereeDesk() {
                               </SelectTrigger>
                               <SelectContent>
                                 {players.map((player, index) => (
-                                  <SelectItem key={player.name} value={String(index)}>
+                                  <SelectItem key={`${teamKey}-player-${index}-${player.number}`} value={String(index)}>
                                     {player.name}
                                   </SelectItem>
                                 ))}
@@ -2653,21 +2761,6 @@ export default function RefereeDesk() {
                 <span>Modo da moeda:</span>
                 <span className="font-medium text-white">{game.coinTossMode === 'initialThenAlternate' ? 'Inicial e alternado' : game.coinTossMode}</span>
               </div>
-              
-              {!gameIsEnded && (
-                <>
-                  <div className="border-t border-white/20 my-2"></div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20"
-                    onClick={() => window.open(`/spectator/${gameId}`, '_blank')}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Abrir Visualização do Espectador
-                  </Button>
-                </>
-              )}
             </CardContent>
           </Card>
 

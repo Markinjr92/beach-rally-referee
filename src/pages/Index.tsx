@@ -2,13 +2,14 @@ import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Trophy, Users, Settings, Shield } from "lucide-react";
+import { Activity, Trophy, Users, Settings, Shield, Gamepad2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
+import vbJukinLogo from "@/assets/vb_jukin_logo.png";
 
 type Role = "atleta" | "publico" | "arbitro" | "admin_sistema" | "organizador";
 
@@ -68,6 +69,15 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     roles: ["admin_sistema"],
     iconClass: "text-rose-200",
   },
+  {
+    key: "casual-matches",
+    title: "Jogos Avulsos Arbitragem",
+    description: "Crie e gerencie jogos avulsos sem necessidade de torneio",
+    to: "/casual-matches",
+    icon: Gamepad2,
+    roles: ["atleta", "arbitro", "organizador", "admin_sistema", "publico"],
+    iconClass: "text-purple-300",
+  },
 ];
 
 const Index = () => {
@@ -107,57 +117,87 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-ocean">
-      <div className="container mx-auto px-4 py-12">
-        {/* Header with user menu */}
-        <div className="flex justify-end mb-8">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8 lg:mb-12">
+          {!user ? (
+            <div className="flex items-center gap-4">
+              <img 
+                src={vbJukinLogo} 
+                alt="VB Jukin" 
+                className="h-20 lg:h-28 w-auto object-contain"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <img 
+                src={vbJukinLogo} 
+                alt="VB Jukin" 
+                className="h-16 lg:h-24 w-auto object-contain"
+              />
+            </div>
+          )}
           {user && <UserMenu />}
         </div>
 
         {!user ? (
           /* Login Section */
-          <div className="max-w-md mx-auto mb-16">
-            <div className="text-center text-white mb-8">
-              <div className="flex items-center justify-center gap-4 mb-6">
-                <Trophy className="text-yellow-300" size={48} />
-                <h1 className="text-4xl font-bold">VP Jukin</h1>
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+              {/* Left: Login Card */}
+              <div>
+                <LoginForm />
               </div>
-              <p className="text-xl opacity-90">Plataforma completa para gestão e transmissão de jogos</p>
+              
+              {/* Right: Info Section */}
+              <div className="text-white space-y-6">
+                <div>
+                  <h2 className="text-3xl lg:text-4xl font-bold mb-4">
+                    Plataforma completa para gestão e transmissão de jogos
+                  </h2>
+                  <p className="text-lg lg:text-xl opacity-90">
+                    Sistema profissional de arbitragem e acompanhamento de vôlei de praia
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                  <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
+                    <div className="text-3xl mb-3">🏐</div>
+                    <h3 className="font-semibold text-lg mb-2">Controle Completo</h3>
+                    <p className="opacity-80 text-sm">
+                      Pontuação em tempo real, rotação automática e controle de timeouts
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
+                    <div className="text-3xl mb-3">📊</div>
+                    <h3 className="font-semibold text-lg mb-2">Estatísticas Avançadas</h3>
+                    <p className="opacity-80 text-sm">
+                      Histórico de eventos, relatórios detalhados e análise de desempenho
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
+                    <div className="text-3xl mb-3">📺</div>
+                    <h3 className="font-semibold text-lg mb-2">Múltiplas Visualizações</h3>
+                    <p className="opacity-80 text-sm">
+                      Placar para atletas, tela para torcida e mesa de arbitragem
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
+                    <div className="text-3xl mb-3">⚡</div>
+                    <h3 className="font-semibold text-lg mb-2">Tempo Real</h3>
+                    <p className="opacity-80 text-sm">
+                      Sincronização instantânea e atualizações em tempo real para todos os dispositivos
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <LoginForm />
           </div>
         ) : (
           <>
-            {/* Hero Section */}
-            <div className="text-center text-white mb-16">
-              <div className="flex items-center justify-center gap-4 mb-6">
-                <Trophy className="text-yellow-300" size={48} />
-                <h1 className="text-5xl font-bold">VP Jukin</h1>
-              </div>
-              {roles.length > 0 && (
-                <div className="flex flex-wrap gap-2 justify-center mb-6">
-                  {roles.map((role) => (
-                    <Badge
-                      key={role}
-                      variant="outline"
-                      className="bg-white/10 text-white border-white/20 uppercase tracking-wide"
-                    >
-                      {role.replace("_", " ").toUpperCase()}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <p className="text-2xl mb-8 opacity-90">
-                {isAdmin
-                  ? "Selecione um módulo ou acesse as ferramentas administrativas."
-                  : "Escolha um dos módulos disponíveis para o seu perfil."}
-              </p>
-              {accessibleModules.length === 0 && (
-                <div className="text-white/80 text-lg">
-                  Nenhum módulo disponível para o seu perfil no momento.
-                </div>
-              )}
-            </div>
-
             {/* Roles error */}
             {rolesError && (
               <div className="max-w-2xl mx-auto mb-10">
@@ -214,39 +254,6 @@ const Index = () => {
                 </div>
               )
             )}
-            {/* Features List */}
-            <div className="text-center text-white">
-              <h2 className="text-3xl font-bold mb-8">Funcionalidades Principais</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">🏐 Controle Completo</h3>
-                  <ul className="space-y-2 opacity-90">
-                    <li>• Pontuação em tempo real</li>
-                    <li>• Sistema de rotação automática</li>
-                    <li>• Controle de timeouts</li>
-                    <li>• Troca de quadra automática</li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">📊 Estatísticas Avançadas</h3>
-                  <ul className="space-y-2 opacity-90">
-                    <li>• Classificação de pontos</li>
-                    <li>• Histórico de eventos</li>
-                    <li>• Desfazer/Refazer ações</li>
-                    <li>• Relatórios detalhados</li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold mb-4">📺 Múltiplas Visualizações</h3>
-                  <ul className="space-y-2 opacity-90">
-                    <li>• Placar para atletas</li>
-                    <li>• Tela para torcida</li>
-                    <li>• Mesa de arbitragem</li>
-                    <li>• Integração de patrocinadores</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
           </>
         )}
       </div>

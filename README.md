@@ -1,4 +1,4 @@
-# VP Jukin
+# VB Jukin
 
 Painel administrativo construído com Vite + React + TypeScript + Tailwind CSS, integrado ao Supabase.
 

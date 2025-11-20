@@ -105,7 +105,7 @@ const PublicTournamentView = () => {
     const ogImage = tournament.logo_url || 'https://vp.markinjr92.com.br/placeholder.svg'
 
     // Update title
-    document.title = `${tournamentName} - VP Jukin`
+    document.title = `${tournamentName} - VB Jukin`
 
     // Update Open Graph tags
     updateMetaTag('og:title', tournamentName)
@@ -123,12 +123,12 @@ const PublicTournamentView = () => {
 
     // Cleanup function to restore defaults
     return () => {
-      document.title = 'VP Jukin - Sistema de Gestão de Torneios de Vôlei de Praia'
-      updateMetaTag('og:title', 'VP Jukin - Torneio de Vôlei de Praia')
+      document.title = 'VB Jukin - Sistema de Gestão de Torneios de Vôlei de Praia'
+      updateMetaTag('og:title', 'VB Jukin - Torneio de Vôlei de Praia')
       updateMetaTag('og:description', 'Acompanhe torneios de vôlei de praia em tempo real. Jogos ao vivo, classificação e resultados.')
       updateMetaTag('og:url', 'https://vp.markinjr92.com.br')
       updateMetaTag('og:image', 'https://vp.markinjr92.com.br/placeholder.svg')
-      updateMetaTag('twitter:title', 'VP Jukin - Torneio de Vôlei de Praia', false)
+      updateMetaTag('twitter:title', 'VB Jukin - Torneio de Vôlei de Praia', false)
       updateMetaTag('twitter:description', 'Acompanhe torneios de vôlei de praia em tempo real. Jogos ao vivo, classificação e resultados.', false)
       updateMetaTag('twitter:image', 'https://vp.markinjr92.com.br/placeholder.svg', false)
       updateMetaTag('description', 'Sistema completo para gestão e acompanhamento de torneios de vôlei de praia. Acompanhe jogos ao vivo, classificação e resultados em tempo real.', false)

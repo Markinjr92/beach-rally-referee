@@ -407,10 +407,12 @@ export const mapRowToGameState = (row: MatchStateRow, game: Game): GameState => 
   );
   const setsWon = parseTeamCountRecord(row.sets_won, defaultState.setsWon);
 
+  const gameId = row.casual_match_id || row.match_id || '';
+  
   return {
     ...defaultState,
-    id: `${row.match_id}-state`,
-    gameId: row.match_id,
+    id: `${gameId}-state`,
+    gameId,
     currentSet: row.current_set ?? defaultState.currentSet,
     setsWon,
     scores,
@@ -430,9 +432,8 @@ export const mapRowToGameState = (row: MatchStateRow, game: Game): GameState => 
   };
 };
 
-export const mapGameStateToRow = (state: GameState): TablesInsert<"match_states"> => {
-  return {
-    match_id: state.gameId,
+export const mapGameStateToRow = (state: GameState, casualMatchId?: string): TablesInsert<"match_states"> => {
+  const row: TablesInsert<"match_states"> = {
     current_set: state.currentSet,
     sets_won: { teamA: state.setsWon.teamA, teamB: state.setsWon.teamB },
     scores: {
@@ -470,6 +471,20 @@ export const mapGameStateToRow = (state: GameState): TablesInsert<"match_states"
       : null,
     is_game_ended: state.isGameEnded,
   };
+
+  if (casualMatchId) {
+    row.casual_match_id = casualMatchId;
+    // match_id será null para casual matches (permitido agora)
+    row.match_id = null;
+  } else {
+    row.match_id = state.gameId;
+    row.casual_match_id = null;
+  }
+
+  // id será gerado automaticamente pelo banco se não fornecido
+  // Não precisamos definir id aqui, o banco gera automaticamente
+
+  return row;
 };
 
 const getSetTargetPoints = (game: Game, setIndex: number) => {
@@ -527,7 +542,12 @@ export const mapScoreRowsToGameState = (rows: MatchScoreRow[] | null | undefined
   return state;
 };
 
-export const mapGameStateToScoreRows = (state: GameState): MatchScoreInsert[] => {
+export const mapGameStateToScoreRows = (state: GameState, isCasualMatch = false): MatchScoreInsert[] => {
+  // Casual matches não usam match_scores
+  if (isCasualMatch) {
+    return [];
+  }
+
   const rows: MatchScoreInsert[] = [];
   const totalSets = Math.max(state.scores.teamA.length, state.scores.teamB.length);
   for (let index = 0; index < totalSets; index += 1) {

@@ -26,19 +26,23 @@ const markSupport = (supported: boolean) => {
 
 const getClient = (): MatchStatesClient => supabase;
 
-const persistWithMatchScores = async (state: GameState) => {
+const persistWithMatchScores = async (state: GameState, isCasualMatch = false) => {
   const client = getClient();
-  const scoreRows = mapGameStateToScoreRows(state);
+  const scoreRows = mapGameStateToScoreRows(state, isCasualMatch);
 
-  const { error: deleteError } = await client.from("match_scores").delete().eq("match_id", state.gameId);
-  if (deleteError) {
-    throw deleteError;
-  }
+  // Note: match_scores não suporta casual_match_id, então não persistimos scores para casual matches
+  // quando usando fallback. Isso é uma limitação do sistema atual.
+  if (!isCasualMatch) {
+    const { error: deleteError } = await client.from("match_scores").delete().eq("match_id", state.gameId);
+    if (deleteError) {
+      throw deleteError;
+    }
 
-  if (scoreRows.length > 0) {
-    const { error: insertError } = await client.from("match_scores").insert(scoreRows);
-    if (insertError) {
-      throw insertError;
+    if (scoreRows.length > 0) {
+      const { error: insertError } = await client.from("match_scores").insert(scoreRows);
+      if (insertError) {
+        throw insertError;
+      }
     }
   }
 
@@ -46,7 +50,13 @@ const persistWithMatchScores = async (state: GameState) => {
   return { usedFallback: true } as const;
 };
 
-const loadFromMatchScores = async (matchId: string, game: Game) => {
+const loadFromMatchScores = async (matchId: string, game: Game, isCasualMatch = false) => {
+  // Casual matches não usam match_scores, então retornamos estado padrão
+  if (isCasualMatch) {
+    markSupport(false);
+    return { state: createDefaultGameState(game), usedFallback: true } as const;
+  }
+
   const client = getClient();
   const { data, error } = await client
     .from("match_scores")
@@ -64,21 +74,27 @@ const loadFromMatchScores = async (matchId: string, game: Game) => {
 
 export const isUsingMatchStateFallback = () => matchStatesSupported === false;
 
-export const loadMatchState = async (matchId: string, game: Game) => {
+export const loadMatchState = async (matchId: string, game: Game, isCasualMatch = false) => {
   if (matchStatesSupported === false) {
-    return loadFromMatchScores(matchId, game);
+    return loadFromMatchScores(matchId, game, isCasualMatch);
   }
 
   const client = getClient();
-  const { data, error } = await client
+  const query = client
     .from("match_states")
-    .select("*")
-    .eq("match_id", matchId)
-    .maybeSingle();
+    .select("*");
+  
+  if (isCasualMatch) {
+    query.eq("casual_match_id", matchId);
+  } else {
+    query.eq("match_id", matchId);
+  }
+  
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     if (isTableMissingError(error)) {
-      return loadFromMatchScores(matchId, game);
+      return loadFromMatchScores(matchId, game, isCasualMatch);
     }
     throw error;
   }
@@ -89,49 +105,248 @@ export const loadMatchState = async (matchId: string, game: Game) => {
   }
 
   const defaultState = createDefaultGameState(game);
-  const payload = mapGameStateToRow(defaultState);
-  const { error: upsertError } = await client
-    .from("match_states")
-    .upsert([payload], { onConflict: "match_id", ignoreDuplicates: false });
+  const payload = mapGameStateToRow(defaultState, isCasualMatch ? matchId : undefined);
+  
+  // Para casual matches, usar abordagem diferente (INSERT, já que data é null)
+  if (isCasualMatch) {
+    // Inserir novo registro (não existe ainda, pois data é null na linha 93)
+    const { error: insertError } = await client
+      .from("match_states")
+      .insert([payload]);
 
-  if (upsertError) {
-    if (isTableMissingError(upsertError)) {
-      return loadFromMatchScores(matchId, game);
-    }
-    // If it's a permission error (RLS), return default state without saving
-    // This allows read-only users (spectators) to view matches
-    if (upsertError.code === '42501') {
+    if (insertError) {
+      // Se for erro de constraint única (já existe - race condition), buscar novamente
+      if (insertError.code === '23505') {
+        const { data: retryData, error: retryError } = await client
+          .from("match_states")
+          .select("*")
+          .eq("casual_match_id", matchId)
+          .maybeSingle();
+        
+        if (!retryError && retryData) {
+          markSupport(true);
+          return { state: mapRowToGameState(retryData as MatchStateRow, game), usedFallback: false } as const;
+        }
+        // Se ainda der erro, continuar com o tratamento abaixo
+      }
+      
+      if (isTableMissingError(insertError)) {
+        return loadFromMatchScores(matchId, game, isCasualMatch);
+      }
+      // If it's a permission error (RLS), return default state without saving
+      if (insertError.code === '42501') {
+        markSupport(true);
+        return { state: defaultState, usedFallback: false } as const;
+      }
+      // Para outros erros, logar mas retornar estado padrão (não travar)
+      console.error('Erro ao inserir match_state para casual match:', insertError);
       markSupport(true);
       return { state: defaultState, usedFallback: false } as const;
     }
-    throw upsertError;
-  }
 
-  markSupport(true);
-  return { state: defaultState, usedFallback: false } as const;
+    markSupport(true);
+    return { state: defaultState, usedFallback: false } as const;
+  } else {
+    // Para matches normais, usar SELECT + INSERT/UPDATE (mesma abordagem de casual matches)
+    const { data: existingMatch, error: selectMatchError } = await client
+      .from("match_states")
+      .select("id")
+      .eq("match_id", matchId)
+      .maybeSingle();
+
+    if (selectMatchError && !isTableMissingError(selectMatchError)) {
+      if (selectMatchError.code === '42501') {
+        // Permission error (RLS), retornar estado padrão sem salvar
+        markSupport(true);
+        return { state: defaultState, usedFallback: false } as const;
+      }
+      throw selectMatchError;
+    }
+
+    if (existingMatch && 'id' in existingMatch) {
+      // Já existe, retornar estado padrão (será carregado na próxima vez)
+      markSupport(true);
+      return { state: defaultState, usedFallback: false } as const;
+    } else {
+      // Inserir novo registro
+      const { error: insertError } = await client
+        .from("match_states")
+        .insert([payload]);
+
+      if (!insertError) {
+        markSupport(true);
+        return { state: defaultState, usedFallback: false } as const;
+      }
+
+      if (isTableMissingError(insertError)) {
+        return loadFromMatchScores(matchId, game, isCasualMatch);
+      }
+
+      // If it's a permission error (RLS), return default state without saving
+      if (insertError.code === '42501') {
+        markSupport(true);
+        return { state: defaultState, usedFallback: false } as const;
+      }
+
+      // Se for erro de constraint única (race condition), buscar novamente
+      if (insertError.code === '23505') {
+        const { data: retryData, error: retryError } = await client
+          .from("match_states")
+          .select("*")
+          .eq("match_id", matchId)
+          .maybeSingle();
+        
+        if (!retryError && retryData && typeof retryData === 'object' && 'id' in retryData) {
+          markSupport(true);
+          return { state: mapRowToGameState(retryData as MatchStateRow, game), usedFallback: false } as const;
+        }
+      }
+
+      // Para outros erros, logar mas retornar estado padrão (não travar)
+      console.error('Erro ao inserir match_state para match normal:', insertError);
+      markSupport(true);
+      return { state: defaultState, usedFallback: false } as const;
+    }
+  }
 };
 
-export const saveMatchState = async (state: GameState) => {
+export const saveMatchState = async (state: GameState, isCasualMatch = false) => {
   if (matchStatesSupported === false) {
-    return persistWithMatchScores(state);
+    return persistWithMatchScores(state, isCasualMatch);
   }
 
   const client = getClient();
-  const payload = mapGameStateToRow(state);
-  const { error } = await client
-    .from("match_states")
-    .upsert([payload], { onConflict: "match_id", ignoreDuplicates: false });
+  const payload = mapGameStateToRow(state, isCasualMatch ? state.gameId : undefined);
+  
+  // Para casual matches, precisamos usar uma abordagem diferente porque
+  // o Supabase não suporta onConflict com índices únicos parciais
+  if (isCasualMatch) {
+    // Verificar se já existe usando casual_match_id
+    const { data: existing, error: selectError } = await client
+      .from("match_states")
+      .select("casual_match_id")
+      .eq("casual_match_id", state.gameId)
+      .maybeSingle();
 
-  if (!error) {
-    markSupport(true);
-    return { usedFallback: false } as const;
+    if (selectError && !isTableMissingError(selectError)) {
+      throw selectError;
+    }
+
+    if (existing) {
+      // Atualizar registro existente usando casual_match_id
+      const { error } = await client
+        .from("match_states")
+        .update(payload)
+        .eq("casual_match_id", state.gameId);
+
+      if (!error) {
+        markSupport(true);
+        return { usedFallback: false } as const;
+      }
+      throw error;
+    } else {
+      // Inserir novo registro
+      const { error } = await client
+        .from("match_states")
+        .insert([payload]);
+
+      if (!error) {
+        markSupport(true);
+        return { usedFallback: false } as const;
+      }
+      
+      // Se for erro de constraint única (race condition), tentar atualizar
+      if (error.code === '23505') {
+        const { error: updateError } = await client
+          .from("match_states")
+          .update(payload)
+          .eq("casual_match_id", state.gameId);
+        
+        if (!updateError) {
+          markSupport(true);
+          return { usedFallback: false } as const;
+        }
+      }
+      
+      throw error;
+    }
+  } else {
+    // Para matches normais, usar SELECT + UPDATE/INSERT (mesma abordagem de casual matches)
+    // Isso evita problemas com índices únicos parciais no Supabase PostgREST
+    const { data: existing, error: selectError } = await client
+      .from("match_states")
+      .select("id")
+      .eq("match_id", state.gameId)
+      .maybeSingle();
+
+    if (selectError && !isTableMissingError(selectError)) {
+      throw selectError;
+    }
+
+    if (existing && existing !== null) {
+      // Atualizar registro existente usando o id
+      const existingId = (existing as { id?: string }).id;
+      if (!existingId) {
+        throw new Error('Existing record found but missing id');
+      }
+      const { error } = await client
+        .from("match_states")
+        .update(payload)
+        .eq("id", existingId);
+
+      if (!error) {
+        markSupport(true);
+        return { usedFallback: false } as const;
+      }
+      
+      if (isTableMissingError(error)) {
+        return persistWithMatchScores(state, isCasualMatch);
+      }
+      
+      throw error;
+    } else {
+      // Inserir novo registro
+      const { error } = await client
+        .from("match_states")
+        .insert([payload]);
+
+      if (!error) {
+        markSupport(true);
+        return { usedFallback: false } as const;
+      }
+      
+      if (isTableMissingError(error)) {
+        return persistWithMatchScores(state, isCasualMatch);
+      }
+      
+      // Se for erro de constraint única (race condition), tentar atualizar
+      if (error.code === '23505') {
+        const { data: retryData, error: retryError } = await client
+          .from("match_states")
+          .select("id")
+          .eq("match_id", state.gameId)
+          .maybeSingle();
+        
+        if (!retryError && retryData && retryData !== null) {
+          const retryId = (retryData as { id?: string }).id;
+          if (!retryId) {
+            throw error; // Se não tem id, re-throw o erro original
+          }
+          const { error: updateError } = await client
+            .from("match_states")
+            .update(payload)
+            .eq("id", retryId);
+          
+          if (!updateError) {
+            markSupport(true);
+            return { usedFallback: false } as const;
+          }
+        }
+      }
+      
+      throw error;
+    }
   }
-
-  if (isTableMissingError(error)) {
-    return persistWithMatchScores(state);
-  }
-
-  throw error;
 };
 
 export const loadMatchStates = async (matchIds: string[], configs: Record<string, Game>) => {
@@ -207,10 +422,17 @@ export const subscribeToMatchState = (
   matchId: string,
   game: Game,
   callback: (state: GameState) => void,
+  isCasualMatch = false,
 ) => {
   const client = getClient();
 
   if (matchStatesSupported === false) {
+    // Casual matches não usam match_scores fallback
+    if (isCasualMatch) {
+      // Retornar função vazia, não há fallback para casual matches
+      return () => {};
+    }
+    
     const channel = client
       .channel(`match-state-fallback-${matchId}`)
       .on("postgres_changes", {
@@ -233,13 +455,14 @@ export const subscribeToMatchState = (
     };
   }
 
+  const filterField = isCasualMatch ? "casual_match_id" : "match_id";
   const channel = client
     .channel(`match-state-${matchId}`)
     .on<MatchStateRow>("postgres_changes", {
       event: "INSERT",
       schema: "public",
       table: "match_states",
-      filter: `match_id=eq.${matchId}`,
+      filter: `${filterField}=eq.${matchId}`,
     }, payload => {
       if (payload.new) {
         callback(mapRowToGameState(payload.new as MatchStateRow, game));
@@ -249,7 +472,7 @@ export const subscribeToMatchState = (
       event: "UPDATE",
       schema: "public",
       table: "match_states",
-      filter: `match_id=eq.${matchId}`,
+      filter: `${filterField}=eq.${matchId}`,
     }, payload => {
       if (payload.new) {
         callback(mapRowToGameState(payload.new as MatchStateRow, game));
