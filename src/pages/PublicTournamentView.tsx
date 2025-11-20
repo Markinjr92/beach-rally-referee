@@ -123,7 +123,7 @@ const PublicTournamentView = () => {
 
     // Cleanup function to restore defaults
     return () => {
-      document.title = 'VB Jukin - Sistema de Gestão de Torneios de Vôlei de Praia'
+      document.title = 'VB Jukin Vôlei de Praia'
       updateMetaTag('og:title', 'VB Jukin - Torneio de Vôlei de Praia')
       updateMetaTag('og:description', 'Acompanhe torneios de vôlei de praia em tempo real. Jogos ao vivo, classificação e resultados.')
       updateMetaTag('og:url', 'https://vp.markinjr92.com.br')
@@ -177,6 +177,11 @@ const PublicTournamentView = () => {
 
         setTournament(tournamentData)
         const hasStatistics = tournamentData?.has_statistics ?? true
+        
+        // Set tournament format ID
+        if (tournamentData.format_id) {
+          setTournamentFormatId(tournamentData.format_id as TournamentFormatId)
+        }
         
         // Load sponsor logos
         if (tournamentData.sponsor_logos && Array.isArray(tournamentData.sponsor_logos)) {
@@ -543,8 +548,9 @@ const PublicTournamentView = () => {
         matchStates,
         groupAssignments,
         teamNameMap,
+        isCrossGroupFormat: tournamentFormatId === '2_groups_6_cross_semis',
       }),
-    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
+    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentFormatId],
   )
 
   const teamMatchSummaries = useMemo(

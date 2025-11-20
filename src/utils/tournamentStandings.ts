@@ -129,6 +129,7 @@ type StandingsComputationParams = {
   matchStates?: Record<string, GameState>
   groupAssignments: GroupAssignment[]
   teamNameMap: Map<string, string>
+  isCrossGroupFormat?: boolean // Para formatos com jogos cruzados entre grupos
 }
 
 export const computeStandingsByGroup = ({
@@ -137,6 +138,7 @@ export const computeStandingsByGroup = ({
   matchStates,
   groupAssignments,
   teamNameMap,
+  isCrossGroupFormat = false,
 }: StandingsComputationParams): GroupStanding[] => {
   if (!groupAssignments.length) return []
 
@@ -156,7 +158,16 @@ export const computeStandingsByGroup = ({
       const teamBId = match.team_b_id
 
       if (!teamAId || !teamBId) return
-      if (!teamSet.has(teamAId) || !teamSet.has(teamBId)) return
+      
+      // Para jogos cruzados: considerar se pelo menos uma equipe está no grupo
+      // Para jogos normais: considerar apenas se ambas as equipes estão no grupo
+      if (isCrossGroupFormat) {
+        // Jogos cruzados: considerar se pelo menos uma equipe está no grupo
+        if (!teamSet.has(teamAId) && !teamSet.has(teamBId)) return
+      } else {
+        // Jogos normais: considerar apenas se ambas as equipes estão no grupo
+        if (!teamSet.has(teamAId) || !teamSet.has(teamBId)) return
+      }
 
       const entryA = ensureStandingsEntry(statsMap, teamAId, teamNameMap)
       const entryB = ensureStandingsEntry(statsMap, teamBId, teamNameMap)

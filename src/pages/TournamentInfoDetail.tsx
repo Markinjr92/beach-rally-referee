@@ -120,6 +120,11 @@ const TournamentInfoDetail = () => {
         setTournament(tournamentData)
         const hasStatistics = tournamentData?.has_statistics ?? true
         
+        // Set tournament format ID
+        if (tournamentData.format_id) {
+          setTournamentFormatId(tournamentData.format_id as TournamentFormatId)
+        }
+        
         // Load sponsor logos
         if (tournamentData.sponsor_logos && Array.isArray(tournamentData.sponsor_logos)) {
           setSponsorLogos(tournamentData.sponsor_logos as string[])
@@ -476,8 +481,9 @@ const TournamentInfoDetail = () => {
         matchStates,
         groupAssignments,
         teamNameMap,
+        isCrossGroupFormat: tournamentFormatId === '2_groups_6_cross_semis',
       }),
-    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
+    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentFormatId],
   )
 
   const teamMatchSummaries = useMemo(

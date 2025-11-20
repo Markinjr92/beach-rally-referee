@@ -875,8 +875,9 @@ export default function TournamentDetailDB() {
         matchStates,
         groupAssignments,
         teamNameMap,
+        isCrossGroupFormat: tournamentConfig?.formatId === '2_groups_6_cross_semis',
       }),
-    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap],
+    [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentConfig?.formatId],
   )
 
   const teamMatchSummaries = useMemo(
