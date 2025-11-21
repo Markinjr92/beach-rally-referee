@@ -75,6 +75,12 @@ const ensureTwelveTeamsForCross = (teams: TournamentTeam[]) => {
   }
 };
 
+const ensureSixTeams = (teams: TournamentTeam[]) => {
+  if (teams.length !== 6) {
+    throw new Error('Este formato suporta exatamente 6 duplas inscritas (2 grupos de 3).');
+  }
+};
+
 /**
  * Gera jogos cruzados entre dois grupos
  * Cada equipe de um grupo joga contra todas as equipes do outro grupo
@@ -1196,6 +1202,116 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
           title: 'Semifinal 2',
           teamA: placeholder('A definir'),
           teamB: placeholder('A definir'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = semifinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+        }),
+      );
+
+      // Disputa de 3º lugar
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 2,
+          title: 'Decisão 3º lugar',
+          teamA: placeholder('Perdedor Semifinal 1'),
+          teamB: placeholder('Perdedor Semifinal 2'),
+          configType: 'thirdPlace',
+        }),
+      );
+
+      // Final
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 3,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseKnockout],
+        groups,
+        matches: [...crossMatches, ...knockoutMatches],
+      };
+    },
+  },
+  '2_groups_3_cross_semis': {
+    id: '2_groups_3_cross_semis',
+    name: '2 Grupos de 3 - Cruzado + Semi/Final',
+    description:
+      'Dois grupos de três duplas cada. Cada dupla de um grupo joga contra todas as duplas do outro grupo. Passam 2 de cada grupo para semifinais, depois 3º lugar e final. Cruzamento: 1º A × 2º B e 1º B × 2º A.',
+    generate: (options) => {
+      ensureSixTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Eliminatórias',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      // Distribuir seeds: Grupo A (1, 3, 5) e Grupo B (2, 4, 6)
+      const groupASeeds = [1, 3, 5];
+      const groupBSeeds = [2, 4, 6];
+
+      groups[0].teamIds = groupASeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      groups[1].teamIds = groupBSeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      // Gerar jogos cruzados: cada dupla do grupo A joga contra todas do grupo B
+      const crossMatches = generateCrossGroupMatches(
+        options,
+        phaseGroup,
+        groups[0],
+        groups[1],
+        teamsBySeed,
+      );
+
+      // Criar placeholders para semifinais (serão definidos manualmente)
+      const placeholder = placeholderTeam;
+      const semifinals = [
+        {
+          title: 'Semifinal 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('2º Grupo B'),
+        },
+        {
+          title: 'Semifinal 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('2º Grupo A'),
         },
       ];
 

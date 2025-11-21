@@ -236,6 +236,12 @@ export default function TournamentsDB() {
         { key: 'final', label: 'Final' },
         { key: 'thirdPlace', label: 'Disputa 3º lugar' },
       ],
+      '2_groups_3_cross_semis': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
     }
     return phasesByFormat[formatId] || []
   }
@@ -251,6 +257,7 @@ export default function TournamentsDB() {
       '3_groups_quarterfinals': 12,
       '2_groups_5_quarterfinals': 10,
       '2_groups_6_cross_semis': 12,
+      '2_groups_3_cross_semis': 6,
     }
     return teamCounts[formatId] || 12
   }
@@ -720,20 +727,20 @@ export default function TournamentsDB() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-white text-base">Formato das Partidas por Fase</Label>
-              <Badge variant="outline" className="border-white/30 text-white">
+              <Badge variant="outline" className="border-slate-400/50 bg-slate-600/40 text-white">
                 {availableTournamentFormats[form.formatId]?.name}
               </Badge>
             </div>
-            <p className="text-xs text-blue-50/80">
+            <p className="text-xs text-slate-200/90">
               Configure o formato de cada fase do torneio de acordo com a estrutura selecionada.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {getFormatPhases(form.formatId).map((phase) => (
-              <div key={phase.key} className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+              <div key={phase.key} className="space-y-3 rounded-2xl border border-slate-400/40 bg-slate-700/40 p-4">
               <div>
-                  <Label className="text-white">{phase.label}</Label>
-                  <p className="text-xs text-blue-50/80">Selecione o formato das partidas desta fase.</p>
+                  <Label className="text-white font-semibold">{phase.label}</Label>
+                  <p className="text-xs text-slate-200/90">Selecione o formato das partidas desta fase.</p>
               </div>
               <Select
                   value={form.matchFormats[phase.key] || 'melhorDe3'}
@@ -744,19 +751,19 @@ export default function TournamentsDB() {
                   })
                 }
               >
-                <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                <SelectTrigger className="bg-slate-600/60 border-slate-400/50 text-white focus:ring-slate-300/70 focus:ring-offset-0 hover:bg-slate-600/80">
                     <SelectValue placeholder={`Formato - ${phase.label}`} />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
                   {matchFormatOptions.map((option) => (
                     <SelectItem
                       key={option.value}
                       value={option.value}
-                      className="focus:bg-white/10 focus:text-white"
+                      className="focus:bg-slate-600/60 focus:text-white"
                     >
                       <div className="flex flex-col text-left">
                         <span className="font-semibold">{option.title}</span>
-                        <span className="text-xs text-blue-50/80">{option.description}</span>
+                        <span className="text-xs text-slate-200/80">{option.description}</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -767,13 +774,13 @@ export default function TournamentsDB() {
           </div>
           <div
             className={cn(
-              'space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4',
+              'space-y-3 rounded-2xl border border-slate-400/40 bg-slate-700/40 p-4',
               !form.includeThirdPlace && 'opacity-70',
             )}
           >
             <div>
-              <Label className="text-white">Disputa de 3º lugar</Label>
-              <p className="text-xs text-blue-50/80">
+              <Label className="text-white font-semibold">Disputa de 3º lugar</Label>
+              <p className="text-xs text-slate-200/90">
                 Escolha um formato independente para a partida extra entre os semifinalistas.
               </p>
             </div>
@@ -787,66 +794,66 @@ export default function TournamentsDB() {
               }
               disabled={!form.includeThirdPlace}
             >
-              <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-70">
+              <SelectTrigger className="bg-slate-600/60 border-slate-400/50 text-white focus:ring-slate-300/70 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-70 hover:bg-slate-600/80">
                 <SelectValue placeholder="Formato da disputa de 3º lugar" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+              <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
                 {matchFormatOptions.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
-                    className="focus:bg-white/10 focus:text-white"
+                    className="focus:bg-slate-600/60 focus:text-white"
                   >
                     <div className="flex flex-col text-left">
                       <span className="font-semibold">{option.title}</span>
-                      <span className="text-xs text-blue-50/80">{option.description}</span>
+                      <span className="text-xs text-slate-200/80">{option.description}</span>
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {!form.includeThirdPlace && (
-              <p className="text-xs text-blue-50/70">
+              <p className="text-xs text-slate-200/70">
                 Ative a disputa de 3º lugar na etapa anterior para habilitar essa configuração.
               </p>
             )}
           </div>
-          <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+          <div className="space-y-3 rounded-2xl border border-slate-400/40 bg-slate-700/40 p-4">
             <div>
-              <Label className="text-white">Sistema de pontuação (padrão do sistema)</Label>
-              <p className="text-xs text-blue-50/80 mb-3">
+              <Label className="text-white font-semibold">Sistema de pontuação (padrão do sistema)</Label>
+              <p className="text-xs text-slate-200/90 mb-3">
                 Pontuação automática aplicada a todas as partidas do torneio.
               </p>
             </div>
-            <div className="space-y-3 text-xs text-blue-50/90">
-              <div className="rounded-lg bg-white/5 p-3 border border-white/20">
+            <div className="space-y-3 text-xs text-slate-200/90">
+              <div className="rounded-lg bg-slate-600/30 p-3 border border-slate-400/30">
                 <p className="font-semibold text-white mb-2">Partidas de melhor de 3 sets:</p>
                 <ul className="space-y-1 ml-4">
-                  <li>• <span className="font-semibold text-emerald-200">3 pontos</span> para vitória por 2 sets a 0</li>
-                  <li>• <span className="font-semibold text-blue-200">2 pontos</span> para vitória por 2 sets a 1</li>
-                  <li>• <span className="font-semibold text-amber-200">1 ponto</span> para derrota por 1 set a 2</li>
-                  <li>• <span className="font-semibold text-rose-200">0 pontos</span> para derrota por 0 set a 2</li>
+                  <li>• <span className="font-semibold text-emerald-300">3 pontos</span> para vitória por 2 sets a 0</li>
+                  <li>• <span className="font-semibold text-blue-300">2 pontos</span> para vitória por 2 sets a 1</li>
+                  <li>• <span className="font-semibold text-amber-300">1 ponto</span> para derrota por 1 set a 2</li>
+                  <li>• <span className="font-semibold text-rose-300">0 pontos</span> para derrota por 0 set a 2</li>
                 </ul>
               </div>
-              <div className="rounded-lg bg-white/5 p-3 border border-white/20">
+              <div className="rounded-lg bg-slate-600/30 p-3 border border-slate-400/30">
                 <p className="font-semibold text-white mb-2">Partidas de set único:</p>
                 <ul className="space-y-1 ml-4">
-                  <li>• <span className="font-semibold text-emerald-200">3 pontos</span> para vitória</li>
-                  <li>• <span className="font-semibold text-rose-200">0 pontos</span> para derrota</li>
+                  <li>• <span className="font-semibold text-emerald-300">3 pontos</span> para vitória</li>
+                  <li>• <span className="font-semibold text-rose-300">0 pontos</span> para derrota</li>
                 </ul>
               </div>
             </div>
           </div>
-          <div className="space-y-3 rounded-2xl border border-white/25 bg-white/10 p-4">
+          <div className="space-y-3 rounded-2xl border border-slate-400/40 bg-slate-700/40 p-4">
             <div>
-              <Label className="text-white">Ordem dos critérios de desempate</Label>
-              <p className="text-xs text-blue-50/80">
+              <Label className="text-white font-semibold">Ordem dos critérios de desempate</Label>
+              <p className="text-xs text-slate-200/90">
                 Ajuste a prioridade aplicada aos resultados da fase classificatória.
               </p>
             </div>
             <div className="space-y-2">
-              <p className="text-xs text-blue-50/70 mb-2 flex items-center gap-2">
-                <GripVertical size={14} className="text-blue-50/50" />
+              <p className="text-xs text-slate-200/80 mb-2 flex items-center gap-2">
+                <GripVertical size={14} className="text-slate-300/70" />
                 Arraste os itens para reordenar a prioridade
               </p>
               {form.tieBreakerOrder.map((criterion, index) => (
@@ -856,23 +863,23 @@ export default function TournamentsDB() {
                   onDragStart={(e) => handleTieBreakerDragStart(e, index)}
                   onDragOver={handleTieBreakerDragOver}
                   onDrop={(e) => handleTieBreakerDrop(e, index)}
-                  className="flex items-center gap-3 rounded-xl border border-white/25 bg-white/5 px-3 py-2 cursor-move hover:bg-white/10 hover:border-white/35 transition-all"
+                  className="flex items-center gap-3 rounded-xl border border-slate-400/40 bg-slate-600/30 px-3 py-2 cursor-move hover:bg-slate-600/50 hover:border-slate-400/60 transition-all"
                 >
-                  <GripVertical size={16} className="text-blue-50/50 flex-shrink-0" />
-                  <span className="w-10 text-xs font-semibold text-blue-50/80">{index + 1}º</span>
+                  <GripVertical size={16} className="text-slate-300/70 flex-shrink-0" />
+                  <span className="w-10 text-xs font-semibold text-slate-200/90">{index + 1}º</span>
                   <Select
                     value={criterion}
                     onValueChange={(value) => handleTieBreakerChange(index, value as TieBreakerCriterion)}
                   >
-                    <SelectTrigger className="bg-transparent border-white/25 text-white focus:ring-white/70 focus:ring-offset-0">
+                    <SelectTrigger className="bg-transparent border-slate-400/40 text-white focus:ring-slate-300/70 focus:ring-offset-0">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                    <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
                       {tieBreakerOptions.map((option) => (
                         <SelectItem
                           key={option.value}
                           value={option.value}
-                          className="focus:bg-white/10 focus:text-white"
+                          className="focus:bg-slate-600/60 focus:text-white"
                           disabled={form.tieBreakerOrder.includes(option.value) && option.value !== criterion}
                         >
                           {option.label}
@@ -954,7 +961,7 @@ export default function TournamentsDB() {
                   Criar Novo Torneio
                 </Button>
               </DialogTrigger>
-              <DialogContent className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#0b4f91]/70 bg-gradient-to-br from-[#0a6fd8] via-[#4cc9ff] to-[#0580c9] p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8">
+              <DialogContent className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-300/30 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8 backdrop-blur-xl">
                 <DialogHeader className="space-y-4">
                   <DialogTitle className="text-2xl font-extrabold text-white sm:text-3xl">
                     Criar novo torneio

@@ -72,6 +72,7 @@ import {
   checkPhaseCompletion,
   getTournamentPhases,
 } from '@/lib/tournament'
+import { suggestNextPhaseMatches } from '@/lib/tournament/phaseAdvancement'
 import { getBracketSectionForPhase, type BracketSection } from '@/lib/tournament/bracketCriteria'
 import { getNextPhaseLabel, phaseFormatKeyMap } from '@/lib/tournament/phaseConfig'
 import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
@@ -610,7 +611,7 @@ export default function TournamentDetailDB() {
     setMatchSetupEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
   }
 
-  const handlePrepareMatchSetup = () => {
+  const handlePrepareMatchSetup = async () => {
     if (!phaseCheckResult?.canAdvance || !tournamentConfig?.formatId) {
       toast({
         title: 'Fase não disponível',
@@ -632,35 +633,62 @@ export default function TournamentDetailDB() {
 
     const section = getBracketSectionForPhase(tournamentConfig.formatId, nextPhaseLabel)
     
+    // Buscar sugestões de confrontos baseado nos resultados
+    let suggestions: Array<{ teamAId: string | null; teamBId: string | null }> = []
+    try {
+      const suggestedMatches = await suggestNextPhaseMatches({
+        tournamentId: tournamentId!,
+        currentPhase: phaseCheckResult.currentPhase,
+        formatId: tournamentConfig.formatId,
+        includeThirdPlace: tournamentConfig.includeThirdPlace ?? false,
+        tieBreakerOrder: tournamentConfig.tieBreakerOrder,
+        pointsPerSet: tournament?.match_format_semifinals ? undefined : [21, 21, 15],
+        sideSwitchSum: tournament?.match_format_semifinals ? undefined : [7, 7, 5],
+        bestOf: tournament?.match_format_semifinals ? undefined : 3,
+        modality: tournament?.modality || 'dupla',
+      })
+      suggestions = suggestedMatches.map((m) => ({
+        teamAId: m.team_a_id || null,
+        teamBId: m.team_b_id || null,
+      }))
+    } catch (error) {
+      console.error('Erro ao buscar sugestões de confrontos:', error)
+      // Continuar sem sugestões se houver erro
+    }
+    
     // Se não houver seção automática, criar entradas vazias para definição manual
     let entries: MatchSetupEntry[]
     if (!section || !section.matches.length) {
       // Criar entradas básicas para definição manual baseado na fase
       const defaults = getDefaultMatchSettings(nextPhaseLabel)
       const matchCount = getDefaultMatchCountForPhase(nextPhaseLabel)
-      entries = Array.from({ length: matchCount }, (_, index) => ({
-        id: `${nextPhaseLabel}-${index + 1}`,
-        label: `Jogo ${index + 1}`,
-        description: `Defina manualmente os confrontos para ${nextPhaseLabel}`,
-        phase: nextPhaseLabel,
-        teamAId: '',
-        teamBId: '',
-        bestOf: defaults.bestOf,
-        pointsText: defaults.pointsPerSet.join(', '),
-        sideSwitchText: defaults.sideSwitchSum.join(', '),
-        formatPreset: undefined,
-      }))
+      entries = Array.from({ length: matchCount }, (_, index) => {
+        const suggestion = suggestions[index]
+        return {
+          id: `${nextPhaseLabel}-${index + 1}`,
+          label: `Jogo ${index + 1}`,
+          description: `Defina manualmente os confrontos para ${nextPhaseLabel}`,
+          phase: nextPhaseLabel,
+          teamAId: suggestion?.teamAId || '',
+          teamBId: suggestion?.teamBId || '',
+          bestOf: defaults.bestOf,
+          pointsText: defaults.pointsPerSet.join(', '),
+          sideSwitchText: defaults.sideSwitchSum.join(', '),
+          formatPreset: undefined,
+        }
+      })
     } else {
       entries = section.matches.map((match, index) => {
         const phaseLabel = match.phaseOverride ?? nextPhaseLabel
         const defaults = getDefaultMatchSettings(phaseLabel)
+        const suggestion = suggestions[index]
         return {
           id: `${phaseLabel}-${match.label}-${index}`,
           label: match.label,
           description: match.description,
           phase: match.phaseOverride ?? nextPhaseLabel,
-          teamAId: '',
-          teamBId: '',
+          teamAId: suggestion?.teamAId || '',
+          teamBId: suggestion?.teamBId || '',
           bestOf: defaults.bestOf,
           pointsText: defaults.pointsPerSet.join(', '),
           sideSwitchText: defaults.sideSwitchSum.join(', '),
@@ -875,7 +903,7 @@ export default function TournamentDetailDB() {
         matchStates,
         groupAssignments,
         teamNameMap,
-        isCrossGroupFormat: tournamentConfig?.formatId === '2_groups_6_cross_semis',
+        isCrossGroupFormat: tournamentConfig?.formatId === '2_groups_6_cross_semis' || tournamentConfig?.formatId === '2_groups_3_cross_semis',
       }),
     [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentConfig?.formatId],
   )

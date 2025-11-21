@@ -743,3 +743,326 @@ export const getTournamentPhases = async (
   });
 };
 
+/**
+ * Interface para sugestões de confrontos
+ */
+export interface MatchSuggestion {
+  teamAId: string | null;
+  teamBId: string | null;
+  teamALabel: string;
+  teamBLabel: string;
+}
+
+/**
+ * Sugere confrontos para a próxima fase sem criar os jogos
+ */
+export const suggestNextPhaseMatches = async (
+  options: AdvancePhaseOptions,
+): Promise<TablesInsert<'matches'>[]> => {
+  const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
+    groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+    '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+    '2_groups_5_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+    '2_groups_6_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
+    '2_groups_3_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
+    global_semis: ['Fase de Grupos', 'Semifinal', 'Final'],
+    series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
+    single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],
+    double_elimination: ['Chave de Vencedores - R1', 'Chave de Vencedores - R2', 'Semifinal', 'Final'],
+  };
+
+  const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
+    groups_and_knockout: {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createKnockoutMatches(context.options, qualifiers);
+      },
+      'Quartas de final': async (context) => {
+        const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+        return createSemifinalMatches(context.options, quarterfinalsMatches);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '3_groups_quarterfinals': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createThreeGroupQuarterfinalMatches(context.options, qualifiers);
+      },
+      'Quartas de final': async (context) => {
+        const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+        return createSemifinalMatches(context.options, quarterfinalsMatches);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_5_quarterfinals': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createKnockoutMatches(context.options, qualifiers);
+      },
+      'Quartas de final': async (context) => {
+        const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+        return createSemifinalMatches(context.options, quarterfinalsMatches);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_6_cross_semis': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createCrossGroupSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_3_cross_semis': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createCrossGroupSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    global_semis: {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createGlobalSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+  };
+
+  const formatPhases = phaseSequences[options.formatId];
+  if (!formatPhases) {
+    return [];
+  }
+
+  const currentPhaseIndex = formatPhases.indexOf(options.currentPhase);
+  if (currentPhaseIndex === -1 || currentPhaseIndex === formatPhases.length - 1) {
+    return [];
+  }
+
+  const handler = formatHandlers[options.formatId]?.[options.currentPhase];
+  if (!handler) {
+    return [];
+  }
+
+  // Buscar dados necessários
+  const { data: teams } = await supabase
+    .from('teams')
+    .select('*')
+    .in(
+      'id',
+      (
+        await supabase
+          .from('tournament_teams')
+          .select('team_id')
+          .eq('tournament_id', options.tournamentId)
+      ).data?.map((tt) => tt.team_id) || [],
+    );
+
+  const { data: matches } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('tournament_id', options.tournamentId);
+
+  const { data: matchScores } = await supabase
+    .from('match_scores')
+    .select('*')
+    .in(
+      'match_id',
+      matches?.map((m) => m.id) || [],
+    );
+
+  if (!teams || !matches || !matchScores) {
+    return [];
+  }
+
+  const handlerContext: PhaseHandlerContext = {
+    options,
+    teams,
+    matches,
+    matchScores,
+  };
+
+  return await handler(handlerContext);
+};
+
+/**
+ * Cria sugestões de confrontos para semifinais em formato cruzado (2 grupos)
+ */
+const createCrossGroupSemifinalMatches = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
+
+  if (sortedGroups.length !== 2) {
+    return [];
+  }
+
+  const [groupA, groupB] = sortedGroups.map(([, value]) => value);
+
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_semifinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_semifinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+
+  const newMatches: TablesInsert<'matches'>[] = [
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.first || null,
+      team_b_id: groupB.second || null,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupB.first || null,
+      team_b_id: groupA.second || null,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+  ];
+
+  return newMatches;
+};
+
+/**
+ * Cria sugestões de confrontos para semifinais globais (ranking geral)
+ */
+const createGlobalSemifinalMatches = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  // Para formato global, precisamos ordenar todos os classificados
+  const allQualifiers: Array<{ teamId: string; standing: EnrichedStanding }> = [];
+  
+  qualifiers.forEach((entry) => {
+    entry.standings.forEach((standing) => {
+      allQualifiers.push({ teamId: standing.teamId, standing });
+    });
+  });
+
+  // Ordenar por posição (matchPoints, wins, etc)
+  allQualifiers.sort((a, b) => {
+    if (a.standing.matchPoints !== b.standing.matchPoints) {
+      return b.standing.matchPoints - a.standing.matchPoints;
+    }
+    if (a.standing.wins !== b.standing.wins) {
+      return b.standing.wins - a.standing.wins;
+    }
+    return 0;
+  });
+
+  if (allQualifiers.length < 4) {
+    return [];
+  }
+
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_semifinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_semifinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+
+  const newMatches: TablesInsert<'matches'>[] = [
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: allQualifiers[0].teamId,
+      team_b_id: allQualifiers[3].teamId,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: allQualifiers[1].teamId,
+      team_b_id: allQualifiers[2].teamId,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+  ];
+
+  return newMatches;
+};
+

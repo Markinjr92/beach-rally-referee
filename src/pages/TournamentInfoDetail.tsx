@@ -481,7 +481,7 @@ const TournamentInfoDetail = () => {
         matchStates,
         groupAssignments,
         teamNameMap,
-        isCrossGroupFormat: tournamentFormatId === '2_groups_6_cross_semis',
+        isCrossGroupFormat: tournamentFormatId === '2_groups_6_cross_semis' || tournamentFormatId === '2_groups_3_cross_semis',
       }),
     [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentFormatId],
   )
