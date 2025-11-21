@@ -375,9 +375,13 @@ export default function RefereeDesk() {
     if (isFirstSet) {
       steps.push('jersey');
     }
-    steps.push('coin', 'firstChoice', 'secondChoice', 'serviceOrderA', 'serviceOrderB');
+    // Só adiciona 'coin' se for necessário fazer o sorteio
+    if (requiresCoinToss) {
+      steps.push('coin');
+    }
+    steps.push('firstChoice', 'secondChoice', 'serviceOrderA', 'serviceOrderB');
     return steps;
-  }, [isFirstSet]);
+  }, [isFirstSet, requiresCoinToss]);
 
   const currentConfigStep = useMemo<SetConfigStep | null>(() => {
     if (!setConfigSteps.length) {
@@ -1500,6 +1504,30 @@ export default function RefereeDesk() {
     }
   };
 
+  const switchCourtSides = async () => {
+    if (!gameState || isSyncing || gameState.isGameEnded) return;
+
+    const previousState = snapshotState(gameState);
+    setGameHistory(prev => [...prev, previousState]);
+
+    // Troca apenas o lado visual, sem afetar a contagem de trocas
+    const updatedState: GameState = {
+      ...previousState,
+      leftIsTeamA: !previousState.leftIsTeamA,
+      // Não modifica sidesSwitched - apenas troca visual
+    };
+
+    try {
+      await persistState(updatedState);
+      await logMatchEvent({
+        eventType: 'COURT_SIDE_SWAP',
+        description: 'Troca visual de lado da quadra (sem afetar contagem)',
+      });
+    } catch (error) {
+      setGameHistory(prev => prev.slice(0, -1));
+    }
+  };
+
   const applySetConfiguration = async () => {
     if (!gameState || !game || !isSetConfigurationValid || isApplyingSetConfig) {
       return;
@@ -2172,6 +2200,11 @@ export default function RefereeDesk() {
       case 'firstChoice':
         return (
           <div className="space-y-4">
+            {!requiresCoinToss && previousCoinLoser && (
+              <p className="rounded-xl bg-slate-700/40 border border-slate-400/40 px-4 py-3 text-sm font-semibold text-slate-200/90">
+                A {getTeamTerm()} {previousCoinLoser === 'A' ? game.teamA.name : game.teamB.name} inicia as escolhas por ter perdido o sorteio anterior.
+              </p>
+            )}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-slate-200/90">
                 Escolha da {getTeamTerm()} vencedora ({firstChoiceTeamName})
@@ -2262,6 +2295,11 @@ export default function RefereeDesk() {
     : isFirstSet
       ? 'Início da partida'
       : 'Configurar início do set';
+  
+  // Verificar se há pontos marcados no set atual
+  const currentSetScoreA = gameState.scores.teamA[currentSetIndex] ?? 0;
+  const currentSetScoreB = gameState.scores.teamB[currentSetIndex] ?? 0;
+  const hasPointsScored = currentSetScoreA > 0 || currentSetScoreB > 0;
   const timeoutLabelA = getTimeoutLabel('A');
   const timeoutLabelB = getTimeoutLabel('B');
   const mobileControlButtons = [
@@ -2319,6 +2357,12 @@ export default function RefereeDesk() {
         setCoinDialogOpen(true);
       },
       disabled: gameIsEnded,
+    },
+    {
+      icon: ArrowLeftRight,
+      label: 'Trocar Lado',
+      onClick: () => void switchCourtSides(),
+      disabled: gameIsEnded,
     }
   ];
 
@@ -2347,7 +2391,7 @@ export default function RefereeDesk() {
                   await refreshTeamNames();
                   setSetConfigDialogOpen(true);
                 }}
-                disabled={gameIsEnded}
+                disabled={gameIsEnded || (isCurrentSetConfigured && hasPointsScored)}
               >
                 {setConfigButtonLabel}
               </Button>
@@ -2764,6 +2808,16 @@ export default function RefereeDesk() {
                   {isCurrentSetConfigured
                     ? `Próximo Sacador (${gameState.currentServerTeam} - ${((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})`
                     : 'Próximo Sacador (definir início)'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
+                  onClick={() => void switchCourtSides()}
+                  disabled={gameIsEnded}
+                >
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  Trocar Lado da Quadra
                 </Button>
               </div>
             </CardContent>
