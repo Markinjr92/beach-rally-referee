@@ -1,6 +1,9 @@
 import { CasualMatch } from "./casualMatches";
 import { GameState } from "@/types/volleyball";
-import vbJukinLogo from "@/assets/vb_jukin_logo.png";
+
+// Logos VB Jukin
+const VB_JUKIN_LOGO = "https://i.postimg.cc/SQHJ2c0V/vb-jukin-logo.png"; // Logo com imagem e escrito
+const VB_JUKIN_LOGO_TEXT_ONLY = "https://i.postimg.cc/NFZYK85C/vb-jukin-logo-sem-imagem.png"; // Logo só com escrito
 
 /**
  * Gera uma imagem de compartilhamento do resultado do jogo
@@ -42,7 +45,7 @@ export const generateShareImage = async (
       ctx.fillText('VB Jukin', width / 2, 80);
       resolve();
     };
-    logoImg.src = vbJukinLogo;
+    logoImg.src = VB_JUKIN_LOGO;
   });
 
   // Desenhar logo se carregou com sucesso (maior e mais visível)

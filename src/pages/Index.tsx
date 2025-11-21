@@ -9,7 +9,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
-import vbJukinLogo from "@/assets/vb_jukin_logo.png";
+// Logos VB Jukin
+const VB_JUKIN_LOGO = "https://i.postimg.cc/SQHJ2c0V/vb-jukin-logo.png"; // Logo com imagem e escrito
+const VB_JUKIN_LOGO_TEXT_ONLY = "https://i.postimg.cc/NFZYK85C/vb-jukin-logo-sem-imagem.png"; // Logo só com escrito
 
 type Role = "atleta" | "publico" | "arbitro" | "admin_sistema" | "organizador";
 
@@ -123,7 +125,7 @@ const Index = () => {
           {!user ? (
             <div className="flex items-center gap-4">
               <img 
-                src={vbJukinLogo} 
+                src={VB_JUKIN_LOGO} 
                 alt="VB Jukin" 
                 className="h-20 lg:h-28 w-auto object-contain"
               />
@@ -131,7 +133,7 @@ const Index = () => {
           ) : (
             <div className="flex items-center gap-4">
               <img 
-                src={vbJukinLogo} 
+                src={VB_JUKIN_LOGO} 
                 alt="VB Jukin" 
                 className="h-16 lg:h-24 w-auto object-contain"
               />
