@@ -331,8 +331,8 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       {
         phase: 'Semifinais',
         matches: [
-          match('SF1', '1º Grupo A × 2º Grupo B'),
-          match('SF2', '1º Grupo B × 2º Grupo A'),
+          match('SF1', '1º Grupo A × 2º Grupo A'),
+          match('SF2', '1º Grupo B × 2º Grupo B'),
         ],
       },
       {

@@ -13,15 +13,15 @@ export function TournamentBracketCriteria({ formatId, className = '' }: BracketC
 
   return (
     <div className={className}>
-      <h4 className="text-lg font-semibold">{criteria.title}</h4>
-      <div className="mt-4 space-y-4 text-sm text-muted-foreground">
+      <h4 className="text-lg font-semibold text-white">{criteria.title}</h4>
+      <div className="mt-4 space-y-4 text-sm">
         {criteria.sections.map((section) => (
-          <div key={section.phase} className="rounded-lg border border-border bg-muted/10 p-4">
-            <h5 className="text-sm font-semibold text-foreground">{section.phase}</h5>
+          <div key={section.phase} className="rounded-lg border border-slate-400/40 bg-slate-700/40 p-4">
+            <h5 className="text-sm font-semibold text-white mb-2">{section.phase}</h5>
             <ul className="mt-2 space-y-1 text-sm">
               {section.matches.map((match) => (
-                <li key={`${section.phase}-${match.label}`}>
-                  <span className="font-semibold text-foreground">{match.label}:</span>{' '}
+                <li key={`${section.phase}-${match.label}`} className="text-slate-200/90">
+                  <span className="font-semibold text-white">{match.label}:</span>{' '}
                   <span>{match.description}</span>
                 </li>
               ))}

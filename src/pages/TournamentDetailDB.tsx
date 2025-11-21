@@ -65,6 +65,7 @@ import {
   GroupStanding,
   buildGroupAssignments,
   computeStandingsByGroup,
+  computeStandingsByPhase,
 } from '@/utils/tournamentStandings'
 import {
   availableTournamentFormats,
@@ -635,6 +636,9 @@ export default function TournamentDetailDB() {
     
     // Buscar sugestões de confrontos baseado nos resultados
     let suggestions: Array<{ teamAId: string | null; teamBId: string | null }> = []
+    // Criar um mapa de sugestões por fase para garantir correspondência correta
+    const suggestionsByPhase = new Map<string, { teamAId: string | null; teamBId: string | null }>()
+    
     try {
       const suggestedMatches = await suggestNextPhaseMatches({
         tournamentId: tournamentId!,
@@ -647,6 +651,18 @@ export default function TournamentDetailDB() {
         bestOf: tournament?.match_format_semifinals ? undefined : 3,
         modality: tournament?.modality || 'dupla',
       })
+      
+      // Preencher o mapa de sugestões por fase
+      suggestedMatches.forEach((m) => {
+        if (m.phase) {
+          suggestionsByPhase.set(m.phase, {
+            teamAId: m.team_a_id || null,
+            teamBId: m.team_b_id || null,
+          })
+        }
+      })
+      
+      // Manter array de sugestões para compatibilidade (ordem: 3º lugar, Final)
       suggestions = suggestedMatches.map((m) => ({
         teamAId: m.team_a_id || null,
         teamBId: m.team_b_id || null,
@@ -681,7 +697,8 @@ export default function TournamentDetailDB() {
       entries = section.matches.map((match, index) => {
         const phaseLabel = match.phaseOverride ?? nextPhaseLabel
         const defaults = getDefaultMatchSettings(phaseLabel)
-        const suggestion = suggestions[index]
+        // Usar o mapa por fase para garantir correspondência correta, não por índice
+        const suggestion = suggestionsByPhase.get(phaseLabel) || suggestions[index]
         return {
           id: `${phaseLabel}-${match.label}-${index}`,
           label: match.label,
@@ -906,6 +923,18 @@ export default function TournamentDetailDB() {
         isCrossGroupFormat: tournamentConfig?.formatId === '2_groups_6_cross_semis' || tournamentConfig?.formatId === '2_groups_3_cross_semis',
       }),
     [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentConfig?.formatId],
+  )
+
+  const standingsByPhase: GroupStanding[] = useMemo(
+    () =>
+      computeStandingsByPhase({
+        matches,
+        scoresByMatch,
+        matchStates,
+        teamNameMap,
+        phases: ['Semifinal', 'Disputa 3º lugar', 'Final'],
+      }),
+    [matches, scoresByMatch, matchStates, teamNameMap],
   )
 
   const teamMatchSummaries = useMemo(
@@ -1832,7 +1861,7 @@ export default function TournamentDetailDB() {
                 <CardTitle className="text-xl">Tabela de Classificação</CardTitle>
               </CardHeader>
               <CardContent className="space-y-8">
-                {standingsByGroup.length === 0 && eliminationSummaries.length === 0 ? (
+                {standingsByGroup.length === 0 && standingsByPhase.length === 0 && eliminationSummaries.length === 0 ? (
                   <p className="text-sm text-white/70">Nenhuma equipe ou partida registrada até o momento.</p>
                 ) : (
                   <div className="space-y-10">
@@ -1915,6 +1944,91 @@ export default function TournamentDetailDB() {
                           {!groupHasMatches && (
                             <p className="text-xs text-white/60">
                               Nenhum jogo finalizado para este grupo ainda. Assim que os resultados forem registrados, a classificação será atualizada automaticamente.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {standingsByPhase.map((phase) => {
+                      const phaseHasMatches = phase.hasResults
+
+                      return (
+                        <div key={phase.key} className="space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-lg font-semibold text-white">{phase.label}</h3>
+                            <Badge variant="outline" className="border-white/30 text-white/80">
+                              {phase.standings.length} {phase.standings.length === 1 ? 'dupla' : 'duplas'}
+                            </Badge>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-white/10 text-sm">
+                              <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-white/60">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">#</th>
+                                  <th className="px-3 py-2 text-left">Equipe</th>
+                                  <th className="px-3 py-2 text-center">J</th>
+                                  <th className="px-3 py-2 text-center">V</th>
+                                  <th className="px-3 py-2 text-center">D</th>
+                                  <th className="px-3 py-2 text-center">S+</th>
+                                  <th className="px-3 py-2 text-center">S-</th>
+                                  <th className="px-3 py-2 text-center">SΔ</th>
+                                  <th className="px-3 py-2 text-center">P+</th>
+                                  <th className="px-3 py-2 text-center">P-</th>
+                                  <th className="px-3 py-2 text-center">PΔ</th>
+                                  <th className="px-3 py-2 text-center">Pts</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5 text-white/80">
+                                {phase.standings.map((entry, index) => {
+                                  const setBalance = entry.setsWon - entry.setsLost
+                                  const pointBalance = entry.pointsFor - entry.pointsAgainst
+
+                                  return (
+                                    <tr key={entry.teamId} className="transition hover:bg-white/5">
+                                      <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
+                                      <td className="px-3 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedTeamId(entry.teamId)}
+                                          className="w-full text-left font-medium text-white transition-colors hover:text-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded"
+                                        >
+                                          {entry.teamName}
+                                        </button>
+                                      </td>
+                                      <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
+                                      <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
+                                      <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsWon}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsLost}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          setBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {setBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsFor}</td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsAgainst}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          pointBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {pointBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold text-yellow-200">
+                                        {entry.matchPoints}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {!phaseHasMatches && (
+                            <p className="text-xs text-white/60">
+                              Nenhum jogo finalizado para esta fase ainda. Assim que os resultados forem registrados, a classificação será atualizada automaticamente.
                             </p>
                           )}
                         </div>
@@ -2119,9 +2233,9 @@ export default function TournamentDetailDB() {
                     </div>
                   )}
                   {tournamentConfig?.formatId && (
-                    <div className="space-y-3 pt-6 border-t border-white/20">
-                      <h4 className="text-base font-semibold">Critérios de Confronto</h4>
-                      <div className="rounded-xl border border-white/20 bg-white/5 p-4">
+                    <div className="space-y-3 pt-6 border-t border-slate-400/40">
+                      <h4 className="text-base font-semibold text-white">Critérios de Confronto</h4>
+                      <div className="rounded-xl border border-slate-400/40 bg-slate-700/40 p-4">
                         <TournamentBracketCriteria formatId={tournamentConfig.formatId} />
                       </div>
                     </div>

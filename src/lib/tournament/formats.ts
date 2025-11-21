@@ -1246,7 +1246,7 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
     id: '2_groups_3_cross_semis',
     name: '2 Grupos de 3 - Cruzado + Semi/Final',
     description:
-      'Dois grupos de três duplas cada. Cada dupla de um grupo joga contra todas as duplas do outro grupo. Passam 2 de cada grupo para semifinais, depois 3º lugar e final. Cruzamento: 1º A × 2º B e 1º B × 2º A.',
+      'Dois grupos de três duplas cada. Cada dupla de um grupo joga contra todas as duplas do outro grupo. Os 2 melhores de cada grupo avançam para semifinais (1º A × 2º A e 1º B × 2º B), depois 3º lugar e final.',
     generate: (options) => {
       ensureSixTeams(options.teams);
       resetMatchCounter();
@@ -1306,12 +1306,12 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
         {
           title: 'Semifinal 1',
           teamA: placeholder('1º Grupo A'),
-          teamB: placeholder('2º Grupo B'),
+          teamB: placeholder('2º Grupo A'),
         },
         {
           title: 'Semifinal 2',
           teamA: placeholder('1º Grupo B'),
-          teamB: placeholder('2º Grupo A'),
+          teamB: placeholder('2º Grupo B'),
         },
       ];
 

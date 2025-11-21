@@ -18,7 +18,8 @@ import {
   Coins,
   UserCheck,
   Stethoscope,
-  Square
+  Square,
+  Loader2
 } from "lucide-react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
@@ -117,6 +118,7 @@ export default function RefereeDesk() {
   const [isFlippingCoin, setIsFlippingCoin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isApplyingSetConfig, setIsApplyingSetConfig] = useState(false);
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false);
   const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1499,9 +1501,32 @@ export default function RefereeDesk() {
   };
 
   const applySetConfiguration = async () => {
-    if (!gameState || !game || !isSetConfigurationValid) {
+    if (!gameState || !game || !isSetConfigurationValid || isApplyingSetConfig) {
       return;
     }
+
+    setIsApplyingSetConfig(true);
+
+    // Função auxiliar para fazer retry com delay
+    const retryWithDelay = async <T,>(
+      fn: () => Promise<T>,
+      maxRetries: number = 3,
+      delayMs: number = 3000
+    ): Promise<T> => {
+      let lastError: Error | unknown;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          lastError = error;
+          if (attempt < maxRetries) {
+            // Aguardar antes de tentar novamente
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+        }
+      }
+      throw lastError;
+    };
 
     const previousState = snapshotState(gameState);
     setGameHistory(prev => [...prev, previousState]);
@@ -1628,31 +1653,43 @@ export default function RefereeDesk() {
     };
 
     try {
-      await persistState(updatedState);
-      await logMatchEvent({
-        eventType: 'SET_CONFIGURATION_APPLIED',
-        setNumber: currentSetNumber,
-        metadata: {
-          startingServerTeam,
-          startingServerPlayer,
-          sideChoiceTeam: sideTeam,
-          sideSelection: sideSelection ?? 'left',
-          coinToss: {
-            performed: requiresCoinToss,
-            winner: coinWinner,
-            loser: coinLoser,
+      // Tentar aplicar com retry (3 tentativas, 3 segundos entre cada)
+      await retryWithDelay(async () => {
+        await persistState(updatedState);
+        await logMatchEvent({
+          eventType: 'SET_CONFIGURATION_APPLIED',
+          setNumber: currentSetNumber,
+          metadata: {
+            startingServerTeam,
+            startingServerPlayer,
+            sideChoiceTeam: sideTeam,
+            sideSelection: sideSelection ?? 'left',
+            coinToss: {
+              performed: requiresCoinToss,
+              winner: coinWinner,
+              loser: coinLoser,
+            },
           },
-        },
-      });
-      await ensureMatchInProgress();
+        });
+        await ensureMatchInProgress();
+      }, 3, 3000);
+
+      // Sucesso - fechar o modal e resetar o step
       setSetConfigDialogOpen(false);
+      setSetConfigStep(0);
     } catch (error) {
+      // Em caso de erro, manter o modal aberto e não resetar as seleções
       setGameHistory(prev => prev.slice(0, -1));
       toast({
         title: 'Erro ao aplicar configuração',
-        description: error instanceof Error ? error.message : 'Não foi possível salvar a configuração do set.',
+        description: error instanceof Error 
+          ? `Não foi possível salvar após 3 tentativas: ${error.message}` 
+          : 'Não foi possível salvar a configuração do set após 3 tentativas. Verifique sua conexão com a internet.',
         variant: 'destructive',
       });
+      // Não fechar o modal e não resetar o step - manter tudo como estava
+    } finally {
+      setIsApplyingSetConfig(false);
     }
   };
 
@@ -1991,7 +2028,7 @@ export default function RefereeDesk() {
 
       return (
         <div className="space-y-4">
-          <p className="text-sm font-semibold text-blue-50/90">
+          <p className="text-sm font-semibold text-slate-200/90">
             Escolha a sequência de sacadores para {teamName}. A ordem será utilizada sempre que a {getTeamTerm()} recuperar o saque.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -2006,10 +2043,10 @@ export default function RefereeDesk() {
                 <Button
                   key={`${teamKey}-order-option-${index}`}
                   variant="outline"
-                  className={`h-full rounded-2xl border-white/30 p-4 text-left transition ${
+                  className={`h-full rounded-2xl border-slate-400/40 p-4 text-left transition ${
                     isActive
                       ? 'bg-white text-slate-900 hover:bg-white/90'
-                      : 'bg-white/10 text-white hover:bg-white/20'
+                      : 'bg-slate-600/40 text-white hover:bg-slate-600/60 border-slate-400/50'
                   }`}
                   onClick={() => handleServiceOrderPreset(teamKey, order)}
                 >
@@ -2025,24 +2062,24 @@ export default function RefereeDesk() {
 
     return (
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-blue-50/90">
+        <p className="text-sm font-semibold text-slate-200/90">
           Defina a sequência de sacadores para {teamName}. A ordem será utilizada sempre que a equipe recuperar o saque.
         </p>
         {positions.map((_, index) => {
           const currentValue = teamSetupForm[teamKey].serviceOrder[index] ?? positions[index];
           return (
             <div key={`${teamKey}-service-${index}`} className="space-y-1">
-              <Label className="text-xs font-semibold text-blue-50/90">{index + 1}º sacador</Label>
+              <Label className="text-xs font-semibold text-slate-200/90">{index + 1}º sacador</Label>
               <Select
                 value={currentValue ? String(currentValue) : undefined}
                 onValueChange={val => handleServiceOrderChange(teamKey, index, Number(val))}
               >
-                <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                   <SelectValue placeholder="Selecione o atleta" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
                   {positions.map(number => (
-                    <SelectItem key={`${teamKey}-order-${number}`} value={String(number)}>
+                    <SelectItem key={`${teamKey}-order-${number}`} value={String(number)} className="focus:bg-slate-600/60">
                       Jogador nº {number} ({getPlayerNameByJersey(teamKey, number)})
                     </SelectItem>
                   ))}
@@ -2064,7 +2101,7 @@ export default function RefereeDesk() {
       case 'jersey':
         return (
           <div className="space-y-4">
-            <p className="text-sm font-semibold text-blue-50/90">
+            <p className="text-sm font-semibold text-slate-200/90">
               Defina a numeração dos jogadores de cada {getTeamTerm()} para liberar os próximos passos do set.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
@@ -2074,23 +2111,23 @@ export default function RefereeDesk() {
                 const players = teamKey === 'A' ? playersTeamA : playersTeamB;
                 return (
                   <div key={teamKey} className="space-y-3">
-                    <h4 className="text-sm font-semibold text-blue-50">{teamName}</h4>
+                    <h4 className="text-sm font-semibold text-white">{teamName}</h4>
                     <div className="space-y-3">
                       {jerseyNumbers.map(number => {
                         const value = teamSetupForm[teamKey].jerseyAssignment[String(number)];
                         return (
                           <div key={`${teamKey}-jersey-${number}`} className="space-y-1">
-                            <Label className="text-xs font-semibold text-blue-50/90">Jogador número {number}</Label>
+                            <Label className="text-xs font-semibold text-slate-200/90">Jogador número {number}</Label>
                             <Select
                               value={typeof value === 'number' ? String(value) : undefined}
                               onValueChange={val => handleJerseyAssignmentChange(teamKey, number, Number(val))}
                             >
-                              <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                              <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                                 <SelectValue placeholder="Selecione um atleta" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
                                 {players.map((player, index) => (
-                                  <SelectItem key={`${teamKey}-player-${index}-${player.number}`} value={String(index)}>
+                                  <SelectItem key={`${teamKey}-player-${index}-${player.number}`} value={String(index)} className="focus:bg-slate-600/60">
                                     {player.name}
                                   </SelectItem>
                                 ))}
@@ -2111,22 +2148,22 @@ export default function RefereeDesk() {
           <div className="space-y-4">
             {requiresCoinToss ? (
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-blue-50/90">Quem venceu o cara ou coroa?</Label>
+                <Label className="text-xs font-semibold text-slate-200/90">Quem venceu o cara ou coroa?</Label>
                 <Select
                   value={coinWinnerSelection ?? undefined}
                   onValueChange={val => handleCoinWinnerChange(val as 'A' | 'B')}
                 >
-                  <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                     <SelectValue placeholder={`Selecione a ${getTeamTerm()} vencedora`} />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A">{game.teamA.name}</SelectItem>
-                    <SelectItem value="B">{game.teamB.name}</SelectItem>
+                  <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
+                    <SelectItem value="A" className="focus:bg-slate-600/60">{game.teamA.name}</SelectItem>
+                    <SelectItem value="B" className="focus:bg-slate-600/60">{game.teamB.name}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             ) : (
-              <p className="rounded-xl bg-white/10 px-4 py-3 text-sm font-semibold text-blue-50">
+              <p className="rounded-xl bg-slate-700/40 border border-slate-400/40 px-4 py-3 text-sm font-semibold text-slate-200/90">
                 A {getTeamTerm()} {firstChoiceTeamName} inicia as escolhas por ter perdido o sorteio anterior.
               </p>
             )}
@@ -2136,35 +2173,35 @@ export default function RefereeDesk() {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-blue-50/90">
+              <Label className="text-xs font-semibold text-slate-200/90">
                 Escolha da {getTeamTerm()} vencedora ({firstChoiceTeamName})
               </Label>
               <Select value={firstChoiceOption} onValueChange={val => handleFirstChoiceOptionChange(val as CoinChoice)}>
-                <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                   <SelectValue placeholder="Selecione a opção" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="serve">Sacar primeiro</SelectItem>
-                  <SelectItem value="receive">Receber primeiro</SelectItem>
-                  <SelectItem value="side">Escolher lado da quadra</SelectItem>
+                <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
+                  <SelectItem value="serve" className="focus:bg-slate-600/60">Sacar primeiro</SelectItem>
+                  <SelectItem value="receive" className="focus:bg-slate-600/60">Receber primeiro</SelectItem>
+                  <SelectItem value="side" className="focus:bg-slate-600/60">Escolher lado da quadra</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {firstChoiceOption === 'side' && (
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-blue-50/90">
+                <Label className="text-xs font-semibold text-slate-200/90">
                   Qual lado {firstChoiceTeamName} escolhe?
                 </Label>
                 <Select
                   value={sideSelections[firstChoiceTeamState] ?? undefined}
                   onValueChange={val => handleSideSelectionChange(firstChoiceTeamState, val as CourtSide)}
                 >
-                  <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                     <SelectValue placeholder="Selecione o lado" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="left">Lado esquerdo</SelectItem>
-                    <SelectItem value="right">Lado direito</SelectItem>
+                  <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
+                    <SelectItem value="left" className="focus:bg-slate-600/60">Lado esquerdo</SelectItem>
+                    <SelectItem value="right" className="focus:bg-slate-600/60">Lado direito</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2174,37 +2211,37 @@ export default function RefereeDesk() {
       case 'secondChoice':
         return firstChoiceOption === 'side' ? (
           <div className="space-y-2">
-            <Label className="text-xs font-semibold text-blue-50/90">
+            <Label className="text-xs font-semibold text-slate-200/90">
               Escolha da {getTeamTerm()} {secondChoiceTeamName}
             </Label>
             <Select
               value={secondChoiceServeDecision ?? undefined}
               onValueChange={val => handleSecondChoiceDecisionChange(val as 'serve' | 'receive')}
             >
-              <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+              <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                 <SelectValue placeholder="Selecione a opção" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="serve">Sacar primeiro</SelectItem>
-                <SelectItem value="receive">Receber primeiro</SelectItem>
+              <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
+                <SelectItem value="serve" className="focus:bg-slate-600/60">Sacar primeiro</SelectItem>
+                <SelectItem value="receive" className="focus:bg-slate-600/60">Receber primeiro</SelectItem>
               </SelectContent>
             </Select>
           </div>
         ) : (
           <div className="space-y-2">
-            <Label className="text-xs font-semibold text-blue-50/90">
+            <Label className="text-xs font-semibold text-slate-200/90">
               Lado escolhido por {secondChoiceTeamName}
             </Label>
             <Select
               value={sideSelections[secondTeamForChoices] ?? undefined}
               onValueChange={val => handleSideSelectionChange(secondTeamForChoices, val as CourtSide)}
             >
-              <SelectTrigger className="border border-white/30 bg-white/10 text-white hover:bg-white/20">
+              <SelectTrigger className="border border-slate-400/50 bg-slate-600/60 text-white hover:bg-slate-600/80 focus:ring-slate-300/70">
                 <SelectValue placeholder="Selecione o lado" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="left">Lado esquerdo</SelectItem>
-                <SelectItem value="right">Lado direito</SelectItem>
+              <SelectContent className="bg-slate-800/95 text-white border-slate-400/50 backdrop-blur-xl">
+                <SelectItem value="left" className="focus:bg-slate-600/60">Lado esquerdo</SelectItem>
+                <SelectItem value="right" className="focus:bg-slate-600/60">Lado direito</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -2776,16 +2813,16 @@ export default function RefereeDesk() {
           }}
         >
           <DialogContent
-            className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-[#0b4f91]/70 bg-gradient-to-br from-[#0a6fd8] via-[#0bb5ff] to-[#0580c9] p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8"
+            className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-300/30 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8 backdrop-blur-xl"
           >
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-xl font-extrabold text-white">
                 Configurar início do set {currentSetNumber}
               </DialogTitle>
-              <DialogDescription className="text-sm font-semibold text-blue-50/90">
+              <DialogDescription className="text-sm font-semibold text-slate-200/90">
                 Defina as numerações e escolhas iniciais para liberar os controles deste set.
               </DialogDescription>
-              <div className="flex flex-col gap-1 rounded-2xl bg-white/10 p-3 text-xs font-semibold text-blue-50/90 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-1 rounded-2xl bg-slate-700/40 border border-slate-400/40 p-3 text-xs font-semibold text-slate-200/90 sm:flex-row sm:items-center sm:justify-between">
                 <span>Pergunta {totalSteps > 0 ? safeStepIndex + 1 : 0} de {totalSteps}</span>
                 {questionTitle ? (
                   <span className="text-sm font-bold text-white sm:text-base">{questionTitle}</span>
@@ -2800,7 +2837,7 @@ export default function RefereeDesk() {
                   setSetConfigDialogOpen(false);
                   setSetConfigStep(0);
                 }}
-                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                className="border-slate-400/50 bg-slate-600/40 text-white hover:bg-slate-600/60 hover:border-slate-400/70"
               >
                 Cancelar
               </Button>
@@ -2809,7 +2846,7 @@ export default function RefereeDesk() {
                   <Button
                     variant="outline"
                     onClick={() => setSetConfigStep(prev => Math.max(prev - 1, 0))}
-                    className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                    className="border-slate-400/50 bg-slate-600/40 text-white hover:bg-slate-600/60 hover:border-slate-400/70"
                   >
                     Voltar
                   </Button>
@@ -2817,16 +2854,23 @@ export default function RefereeDesk() {
                 {isLastStep ? (
                   <Button
                     onClick={() => void applySetConfiguration()}
-                    disabled={!isSetConfigurationValid || isSyncing}
-                    className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                    disabled={!isSetConfigurationValid || isApplyingSetConfig}
+                    className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-slate-600/40 disabled:text-slate-300/60"
                   >
-                    {isSyncing ? 'Salvando...' : 'Aplicar configuração'}
+                    {isApplyingSetConfig ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Aplicando configuração...
+                      </span>
+                    ) : (
+                      'Aplicar configuração'
+                    )}
                   </Button>
                 ) : (
                   <Button
                     onClick={() => setSetConfigStep(prev => Math.min(prev + 1, totalSteps - 1))}
                     disabled={!isCurrentStepValid}
-                    className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-white/30 disabled:text-white/60"
+                    className="bg-white text-slate-900 hover:bg-white/90 disabled:bg-slate-600/40 disabled:text-slate-300/60"
                   >
                     Próximo
                   </Button>

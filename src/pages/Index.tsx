@@ -146,8 +146,8 @@ const Index = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
               {/* Left: Login Card */}
               <div>
-                <LoginForm />
-              </div>
+            <LoginForm />
+          </div>
               
               {/* Right: Info Section */}
               <div className="text-white space-y-6">
@@ -158,7 +158,7 @@ const Index = () => {
                   <p className="text-lg lg:text-xl opacity-90">
                     Sistema profissional de arbitragem e acompanhamento de vôlei de praia
                   </p>
-                </div>
+              </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                   <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
@@ -167,7 +167,7 @@ const Index = () => {
                     <p className="opacity-80 text-sm">
                       Pontuação em tempo real, rotação automática e controle de timeouts
                     </p>
-                  </div>
+                </div>
                   
                   <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
                     <div className="text-3xl mb-3">📊</div>
@@ -175,7 +175,7 @@ const Index = () => {
                     <p className="opacity-80 text-sm">
                       Histórico de eventos, relatórios detalhados e análise de desempenho
                     </p>
-                  </div>
+                </div>
                   
                   <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
                     <div className="text-3xl mb-3">📺</div>
@@ -183,8 +183,8 @@ const Index = () => {
                     <p className="opacity-80 text-sm">
                       Placar para atletas, tela para torcida e mesa de arbitragem
                     </p>
-                  </div>
-                  
+            </div>
+
                   <div className="bg-white/10 rounded-lg p-6 backdrop-blur-sm border border-white/20">
                     <div className="text-3xl mb-3">⚡</div>
                     <h3 className="font-semibold text-lg mb-2">Tempo Real</h3>

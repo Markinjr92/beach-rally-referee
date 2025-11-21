@@ -499,9 +499,28 @@ const createFinalMatches = async (
   options: AdvancePhaseOptions,
   semifinalMatches: Match[],
 ): Promise<TablesInsert<'matches'>[]> => {
-  if (semifinalMatches.length !== 2) {
-    throw new Error('É necessário ter exatamente 2 jogos de semifinal finalizados');
+  // Filtrar apenas matches finalizados
+  const completedSemifinals = semifinalMatches.filter((m) => isMatchCompleted(m.status));
+  
+  if (completedSemifinals.length !== 2) {
+    throw new Error(
+      `É necessário ter exatamente 2 jogos de semifinal finalizados. Encontrados ${completedSemifinals.length} de ${semifinalMatches.length} semifinais finalizadas.`
+    );
   }
+
+  // Buscar nomes das equipes para debug
+  const { data: allTeams } = await supabase
+    .from('teams')
+    .select('id, name')
+    .in('id', [
+      ...completedSemifinals.map(m => m.team_a_id).filter(Boolean),
+      ...completedSemifinals.map(m => m.team_b_id).filter(Boolean),
+    ]);
+
+  const teamNameMap = new Map<string, string>();
+  allTeams?.forEach((team) => {
+    teamNameMap.set(team.id, team.name);
+  });
 
   const newMatches: TablesInsert<'matches'>[] = [];
   const pointsPerSet = options.pointsPerSet || [21, 21, 15];
@@ -509,35 +528,158 @@ const createFinalMatches = async (
   const bestOf = options.bestOf || 3;
   const modality = options.modality || 'dupla';
 
+  // Ordenar matches por ID para garantir ordem consistente
+  const sortedSemifinals = [...completedSemifinals].sort((a, b) => 
+    a.id.localeCompare(b.id)
+  );
+
   // Buscar vencedores e perdedores
   const winners: string[] = [];
   const losers: string[] = [];
 
-  for (const match of semifinalMatches) {
+  for (const match of sortedSemifinals) {
+
+    if (!match.team_a_id || !match.team_b_id) {
+      console.warn(`Match ${match.id} não tem equipes definidas`);
+      continue;
+    }
+
+    let setsWonA = 0;
+    let setsWonB = 0;
+    let matchState: { sets_won: unknown; scores: unknown; is_game_ended: boolean } | null = null;
+
+    // Tentar obter resultados de match_scores primeiro
     const { data: scores } = await supabase
       .from('match_scores')
       .select('*')
-      .eq('match_id', match.id);
+      .eq('match_id', match.id)
+      .order('set_number', { ascending: true });
 
     if (scores && scores.length > 0) {
-      const setsWonA = scores.filter((s) => s.team_a_points > s.team_b_points).length;
-      const setsWonB = scores.filter((s) => s.team_b_points > s.team_a_points).length;
+      setsWonA = scores.filter((s) => s.team_a_points > s.team_b_points).length;
+      setsWonB = scores.filter((s) => s.team_b_points > s.team_a_points).length;
+    } else {
+      // Se não encontrar em match_scores, tentar match_states
+      const { data: stateData } = await supabase
+        .from('match_states')
+        .select('sets_won, scores, is_game_ended, left_is_team_a')
+        .eq('match_id', match.id)
+        .maybeSingle();
 
-      if (setsWonA > setsWonB) {
-        winners.push(match.team_a_id);
-        losers.push(match.team_b_id);
-      } else {
-        winners.push(match.team_b_id);
-        losers.push(match.team_a_id);
+      matchState = stateData;
+
+      if (matchState && matchState.is_game_ended) {
+        const leftIsTeamA = matchState.left_is_team_a ?? true;
+        const setsWon = matchState.sets_won as { teamA: number; teamB: number } | null;
+        
+        console.log(`[createFinalMatches] Match ${match.id} - match_states raw data:`, {
+          left_is_team_a: leftIsTeamA,
+          sets_won_raw: setsWon,
+          team_a_id: match.team_a_id,
+          team_b_id: match.team_b_id,
+        });
+        
+        if (setsWon) {
+          // No match_states, teamA/teamB referem-se à posição na tela (esquerda/direita)
+          // Precisamos mapear para team_a_id/team_b_id do match
+          if (leftIsTeamA) {
+            // teamA na tela = team_a_id do match
+            setsWonA = setsWon.teamA || 0;
+            setsWonB = setsWon.teamB || 0;
+            console.log(`[createFinalMatches] leftIsTeamA=true: setsWonA=${setsWonA} (teamA tela), setsWonB=${setsWonB} (teamB tela)`);
+          } else {
+            // teamA na tela = team_b_id do match (invertido)
+            setsWonA = setsWon.teamB || 0;
+            setsWonB = setsWon.teamA || 0;
+            console.log(`[createFinalMatches] leftIsTeamA=false: INVERTENDO - setsWonA=${setsWonA} (teamB tela), setsWonB=${setsWonB} (teamA tela)`);
+          }
+        } else if (matchState.scores) {
+          // Calcular sets ganhos a partir dos scores
+          const stateScores = matchState.scores as { teamA: number[]; teamB: number[] } | null;
+          if (stateScores && stateScores.teamA && stateScores.teamB) {
+            for (let i = 0; i < Math.max(stateScores.teamA.length, stateScores.teamB.length); i++) {
+              const scoreLeft = stateScores.teamA[i] || 0;
+              const scoreRight = stateScores.teamB[i] || 0;
+              
+              // Mapear scores da tela para team_a_id/team_b_id
+              if (leftIsTeamA) {
+                // Esquerda = team_a_id, Direita = team_b_id
+                if (scoreLeft > scoreRight) {
+                  setsWonA++;
+                } else if (scoreRight > scoreLeft) {
+                  setsWonB++;
+                }
+              } else {
+                // Esquerda = team_b_id, Direita = team_a_id (invertido)
+                if (scoreLeft > scoreRight) {
+                  setsWonB++;
+                } else if (scoreRight > scoreLeft) {
+                  setsWonA++;
+                }
+              }
+            }
+          }
+        }
       }
+    }
+
+    // Verificar se conseguimos determinar um vencedor
+    if (setsWonA === 0 && setsWonB === 0) {
+      console.warn(`Match ${match.id} não tem sets definidos ou não está finalizado corretamente`);
+      continue;
+    }
+
+    const teamAName = teamNameMap.get(match.team_a_id || '') || 'N/A';
+    const teamBName = teamNameMap.get(match.team_b_id || '') || 'N/A';
+    
+    console.log(`[createFinalMatches] Processando semifinal ${match.id}:`, {
+      teamA: `${teamAName} (${match.team_a_id})`,
+      teamB: `${teamBName} (${match.team_b_id})`,
+      setsWonA,
+      setsWonB,
+      scoresLength: scores?.length || 0,
+      hasMatchState: !!matchState,
+      leftIsTeamA: matchState?.left_is_team_a ?? true,
+      setsWonFromState: matchState?.sets_won,
+    });
+
+    if (setsWonA > setsWonB) {
+      winners.push(match.team_a_id);
+      losers.push(match.team_b_id);
+      console.log(`[createFinalMatches] Vencedor: Team A - ${teamAName} (${match.team_a_id}), Perdedor: Team B - ${teamBName} (${match.team_b_id})`);
+    } else if (setsWonB > setsWonA) {
+      winners.push(match.team_b_id);
+      losers.push(match.team_a_id);
+      console.log(`[createFinalMatches] Vencedor: Team B - ${teamBName} (${match.team_b_id}), Perdedor: Team A - ${teamAName} (${match.team_a_id})`);
+    } else {
+      console.warn(`Match ${match.id} terminou em empate (${setsWonA} x ${setsWonB}), não é possível determinar vencedor`);
+      continue;
     }
   }
 
   if (winners.length !== 2 || losers.length !== 2) {
-    throw new Error('Não foi possível identificar vencedores e perdedores das semifinais');
+    const errorMsg = `Não foi possível identificar vencedores e perdedores das semifinais. Encontrados ${winners.length} vencedores e ${losers.length} perdedores de ${semifinalMatches.length} semifinais.`;
+    console.error(errorMsg, {
+      semifinalMatches: semifinalMatches.map(m => ({
+        id: m.id,
+        status: m.status,
+        teamA: m.team_a_id,
+        teamB: m.team_b_id,
+      })),
+    });
+    throw new Error(errorMsg);
   }
 
-  // Disputa de 3º lugar (se configurado)
+  const winnersNames = winners.map(id => teamNameMap.get(id || '') || id || 'N/A');
+  const losersNames = losers.map(id => teamNameMap.get(id || '') || id || 'N/A');
+  
+  console.log(`[createFinalMatches] Resumo final:`, {
+    winners: winners.map((id, idx) => `${winnersNames[idx]} (${id})`),
+    losers: losers.map((id, idx) => `${losersNames[idx]} (${id})`),
+    includeThirdPlace: options.includeThirdPlace,
+  });
+
+  // Disputa de 3º lugar (se configurado) - PERDEDORES das semifinais
   if (options.includeThirdPlace) {
     newMatches.push({
       tournament_id: options.tournamentId,
@@ -550,9 +692,10 @@ const createFinalMatches = async (
       best_of: bestOf,
       modality,
     });
+    console.log(`[createFinalMatches] Criando Disputa 3º lugar: ${losersNames[0]} (${losers[0]}) x ${losersNames[1]} (${losers[1]})`);
   }
 
-  // Final
+  // Final - VENCEDORES das semifinais
   newMatches.push({
     tournament_id: options.tournamentId,
     team_a_id: winners[0],
@@ -564,6 +707,7 @@ const createFinalMatches = async (
     best_of: bestOf,
     modality,
   });
+  console.log(`[createFinalMatches] Criando Final: ${winnersNames[0]} (${winners[0]}) x ${winnersNames[1]} (${winners[1]})`);
 
   return newMatches;
 };
@@ -857,7 +1001,7 @@ export const suggestNextPhaseMatches = async (
           context.matchScores,
           context.options.tieBreakerOrder || [],
         );
-        return createCrossGroupSemifinalMatches(context.options, qualifiers);
+        return createSameGroupSemifinalMatches(context.options, qualifiers);
       },
       Semifinal: async (context) => {
         const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
@@ -928,6 +1072,12 @@ export const suggestNextPhaseMatches = async (
     return [];
   }
 
+  // Criar mapa de nomes das equipes para debug
+  const teamNameMap = new Map<string, string>();
+  teams.forEach((team) => {
+    teamNameMap.set(team.id, team.name);
+  });
+
   const handlerContext: PhaseHandlerContext = {
     options,
     teams,
@@ -935,7 +1085,20 @@ export const suggestNextPhaseMatches = async (
     matchScores,
   };
 
-  return await handler(handlerContext);
+  const result = await handler(handlerContext);
+  
+  // Log dos resultados com nomes das equipes
+  if (result.length > 0) {
+    console.log(`[suggestNextPhaseMatches] Sugestões geradas para ${options.currentPhase}:`, 
+      result.map(m => ({
+        phase: m.phase,
+        teamA: m.team_a_id ? `${teamNameMap.get(m.team_a_id) || m.team_a_id} (${m.team_a_id})` : 'null',
+        teamB: m.team_b_id ? `${teamNameMap.get(m.team_b_id) || m.team_b_id} (${m.team_b_id})` : 'null',
+      }))
+    );
+  }
+
+  return result;
 };
 
 /**
@@ -983,6 +1146,63 @@ const createCrossGroupSemifinalMatches = async (
       tournament_id: options.tournamentId,
       team_a_id: groupB.first || null,
       team_b_id: groupA.second || null,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+  ];
+
+  return newMatches;
+};
+
+/**
+ * Cria semifinais dentro do mesmo grupo (1º A x 2º A e 1º B x 2º B)
+ */
+const createSameGroupSemifinalMatches = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
+
+  if (sortedGroups.length !== 2) {
+    return [];
+  }
+
+  const [groupA, groupB] = sortedGroups.map(([, value]) => value);
+
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_semifinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_semifinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+
+  const newMatches: TablesInsert<'matches'>[] = [
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.first || null,
+      team_b_id: groupA.second || null,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupB.first || null,
+      team_b_id: groupB.second || null,
       phase: 'Semifinal',
       status: 'scheduled',
       points_per_set: pointsPerSet,

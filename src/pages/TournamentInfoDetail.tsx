@@ -20,6 +20,7 @@ import {
   GroupStanding,
   buildGroupAssignments,
   computeStandingsByGroup,
+  computeStandingsByPhase,
 } from '@/utils/tournamentStandings'
 import { getTournamentPhases } from '@/lib/tournament'
 import { isMatchCompleted, isMatchInProgress, normalizeMatchStatus } from '@/utils/matchStatus'
@@ -484,6 +485,18 @@ const TournamentInfoDetail = () => {
         isCrossGroupFormat: tournamentFormatId === '2_groups_6_cross_semis' || tournamentFormatId === '2_groups_3_cross_semis',
       }),
     [groupAssignments, matchStates, matches, scoresByMatch, teamNameMap, tournamentFormatId],
+  )
+
+  const standingsByPhase: GroupStanding[] = useMemo(
+    () =>
+      computeStandingsByPhase({
+        matches,
+        scoresByMatch,
+        matchStates,
+        teamNameMap,
+        phases: ['Semifinal', 'Disputa 3º lugar', 'Final'],
+      }),
+    [matches, scoresByMatch, matchStates, teamNameMap],
   )
 
   const teamMatchSummaries = useMemo(
@@ -995,9 +1008,9 @@ const TournamentInfoDetail = () => {
                   </div>
                 </div>
                 {tournamentFormatId && (
-                  <div className="rounded-xl border border-white/20 bg-white/5 p-4 space-y-3">
+                  <div className="rounded-xl border border-slate-400/40 bg-slate-700/40 p-4 space-y-3">
                     <div className="flex items-center gap-2">
-                      <Activity className="text-blue-300" size={18} />
+                      <Activity className="text-slate-300" size={18} />
                       <h4 className="text-sm font-semibold text-white">Critérios de Confronto</h4>
                     </div>
                     <TournamentBracketCriteria formatId={tournamentFormatId} />
@@ -1005,7 +1018,7 @@ const TournamentInfoDetail = () => {
                 )}
               </CardHeader>
               <CardContent>
-                {standingsByGroup.length === 0 ? (
+                {standingsByGroup.length === 0 && standingsByPhase.length === 0 ? (
                   <p className="text-sm text-white/70">Nenhuma equipe possui resultados computados até o momento.</p>
                 ) : (
                   <div className="space-y-6">
@@ -1044,6 +1057,90 @@ const TournamentInfoDetail = () => {
                               </thead>
                               <tbody className="divide-y divide-white/5 text-white/80">
                                 {group.standings.map((entry, index) => {
+                                  const setBalance = entry.setsWon - entry.setsLost
+                                  const pointBalance = entry.pointsFor - entry.pointsAgainst
+
+                                  return (
+                                    <tr key={entry.teamId} className="transition hover:bg-white/5">
+                                      <td className="px-3 py-2 text-left text-white/60">{index + 1}</td>
+                                      <td className="px-3 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedTeamId(entry.teamId)}
+                                          className="w-full text-left font-medium text-white transition-colors hover:text-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 rounded"
+                                        >
+                                          {entry.teamName}
+                                        </button>
+                                      </td>
+                                      <td className="px-3 py-2 text-center">{entry.matchesPlayed}</td>
+                                      <td className="px-3 py-2 text-center text-emerald-200">{entry.wins}</td>
+                                      <td className="px-3 py-2 text-center text-rose-200">{entry.losses}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsWon}</td>
+                                      <td className="px-3 py-2 text-center">{entry.setsLost}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          setBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {setBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsFor}</td>
+                                      <td className="px-3 py-2 text-center">{entry.pointsAgainst}</td>
+                                      <td
+                                        className={`px-3 py-2 text-center ${
+                                          pointBalance >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                        }`}
+                                      >
+                                        {pointBalance}
+                                      </td>
+                                      <td className="px-3 py-2 text-center font-semibold text-yellow-200">
+                                        {entry.matchPoints}
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                    {standingsByPhase.map((phase) => {
+                      const hasResults = phase.hasResults
+
+                      return (
+                        <div key={phase.key} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+                              {phase.label}
+                            </h3>
+                            {!hasResults && (
+                              <span className="text-[11px] text-white/50">
+                                Aguardando resultados para esta fase
+                              </span>
+                            )}
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-white/10 text-sm">
+                              <thead className="bg-white/5 text-xs uppercase tracking-[0.3em] text-white/60">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">#</th>
+                                  <th className="px-3 py-2 text-left">Equipe</th>
+                                  <th className="px-3 py-2 text-center">J</th>
+                                  <th className="px-3 py-2 text-center">V</th>
+                                  <th className="px-3 py-2 text-center">D</th>
+                                  <th className="px-3 py-2 text-center">S+</th>
+                                  <th className="px-3 py-2 text-center">S-</th>
+                                  <th className="px-3 py-2 text-center">SΔ</th>
+                                  <th className="px-3 py-2 text-center">P+</th>
+                                  <th className="px-3 py-2 text-center">P-</th>
+                                  <th className="px-3 py-2 text-center">PΔ</th>
+                                  <th className="px-3 py-2 text-center">Pts</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5 text-white/80">
+                                {phase.standings.map((entry, index) => {
                                   const setBalance = entry.setsWon - entry.setsLost
                                   const pointBalance = entry.pointsFor - entry.pointsAgainst
 
