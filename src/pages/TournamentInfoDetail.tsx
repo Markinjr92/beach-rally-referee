@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, MapPin, Trophy, Activity, UserCheck, Eye } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
+import { trackPageView } from '@/utils/trackPageView'
 import { Tables } from '@/integrations/supabase/types'
 import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +52,7 @@ type MatchWithTeams = Match & {
 const TournamentInfoDetail = () => {
   const { tournamentId } = useParams()
   const { toast } = useToast()
+  const { user } = useAuth()
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
   const [scoresByMatch, setScoresByMatch] = useState<Map<string, MatchScore[]>>(new Map())
@@ -360,6 +363,17 @@ const TournamentInfoDetail = () => {
     return () => clearInterval(interval)
   }, [loadTournamentData])
 
+  // Track page view when tournament is loaded
+  useEffect(() => {
+    if (tournamentId && tournament) {
+      void trackPageView({
+        pageType: 'tournament_info',
+        resourceId: tournamentId,
+        userId: user?.id,
+      })
+    }
+  }, [tournamentId, tournament, user?.id])
+
   useEffect(() => {
     const loadPhases = async () => {
       if (!tournamentId) return
@@ -526,7 +540,7 @@ const TournamentInfoDetail = () => {
       <div className="min-h-screen bg-gradient-ocean text-white flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-lg text-white/80">Torneio não encontrado.</p>
-          <Button asChild className="bg-white/10 border border-white/20 text-white hover:bg-white/20">
+          <Button asChild className="border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70">
             <Link to="/tournament-info">Voltar para os torneios</Link>
           </Button>
         </div>

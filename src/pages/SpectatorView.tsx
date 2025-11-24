@@ -5,6 +5,8 @@ import { Zap, Trophy, TrendingUp, Target, Clock, ArrowLeftRight } from "lucide-r
 import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { trackPageView } from "@/utils/trackPageView";
 import { Game, GameState, PointCategory, Timer } from "@/types/volleyball";
 import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
@@ -117,6 +119,7 @@ const parseScoreHistoryFromEvents = (events: unknown): ScoreHistoryEntry[] => {
 
 export default function SpectatorView() {
   const { gameId } = useParams();
+  const { user } = useAuth();
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [showStats, setShowStats] = useState(false);
@@ -254,6 +257,17 @@ export default function SpectatorView() {
 
     void loadFromDB();
   }, [fetchScoreTimeline, gameId]);
+
+  // Track page view when game is loaded
+  useEffect(() => {
+    if (gameId && game && !loading) {
+      void trackPageView({
+        pageType: 'spectator',
+        resourceId: gameId,
+        userId: user?.id,
+      })
+    }
+  }, [gameId, game, loading, user?.id])
 
   useEffect(() => {
     if (!gameId || !game) return;

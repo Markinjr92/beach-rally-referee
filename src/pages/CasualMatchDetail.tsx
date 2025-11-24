@@ -268,7 +268,7 @@ export default function CasualMatchDetail() {
         <div className="flex gap-4">
           {(match.status === 'scheduled' || match.status === 'in_progress') && (
             <Link to={`/casual-matches/${match.id}/referee`} className="flex-1">
-              <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20">
+              <Button className="w-full border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70">
                 <Play className="mr-2 h-4 w-4" />
                 {match.status === 'scheduled' ? 'Iniciar Mesa' : 'Continuar Mesa'}
               </Button>

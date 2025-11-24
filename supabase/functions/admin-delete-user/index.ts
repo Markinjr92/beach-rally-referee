@@ -7,11 +7,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const createUserSchema = z.object({
-  email: z.string().email('Email inválido').max(255, 'Email muito longo'),
-  password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres').max(72, 'Senha muito longa'),
-  name: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo'),
-  roleIds: z.array(z.string().uuid('ID de role inválido')).optional().default([]),
+const deleteUserSchema = z.object({
+  userId: z.string().uuid('ID de usuário inválido'),
 });
 
 Deno.serve(async (req) => {
@@ -74,7 +71,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validate input
+    // Validar input
     let body;
     try {
       body = await req.json();
@@ -85,70 +82,42 @@ Deno.serve(async (req) => {
       );
     }
     
-    const validation = createUserSchema.safeParse(body);
+    const validation = deleteUserSchema.safeParse(body);
     
     if (!validation.success) {
       return new Response(
         JSON.stringify({ 
           ok: false, 
           message: 'Dados inválidos', 
-          errors: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+          errors: validation.error.errors.map(e => e.message) 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { email, password, name, roleIds } = validation.data;
-    
-    // Filtrar roleIds vazios ou inválidos
-    const validRoleIds = Array.isArray(roleIds) 
-      ? roleIds.filter(id => id && typeof id === 'string' && id.length > 0)
-      : [];
+    const { userId } = validation.data;
 
-    // Criar usuário no auth
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name }
-    });
-
-    if (createError || !newUser.user) {
+    // Não permitir que o usuário exclua a si mesmo
+    if (userId === user.id) {
       return new Response(
-        JSON.stringify({ ok: false, message: createError?.message || 'Erro ao criar usuário' }),
+        JSON.stringify({ ok: false, message: 'Você não pode excluir seu próprio usuário' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Atualizar nome na tabela users
-    const { error: updateError } = await supabaseAdmin
-      .from('users')
-      .update({ name })
-      .eq('id', newUser.user.id);
+    // Excluir usuário do auth (isso também excluirá automaticamente da tabela users devido ao ON DELETE CASCADE)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
-    if (updateError) {
-      console.error('Erro ao atualizar nome:', updateError);
-    }
-
-    // Atribuir roles
-    if (validRoleIds.length > 0) {
-      const userRoles = validRoleIds.map(roleId => ({
-        user_id: newUser.user.id,
-        role_id: roleId
-      }));
-
-      const { error: rolesError } = await supabaseAdmin
-        .from('user_roles')
-        .insert(userRoles);
-
-      if (rolesError) {
-        console.error('Erro ao atribuir roles:', rolesError);
-        // Não falha a criação do usuário se houver erro ao atribuir roles
-      }
+    if (deleteError) {
+      console.error('Erro ao excluir usuário:', deleteError);
+      return new Response(
+        JSON.stringify({ ok: false, message: deleteError.message || 'Erro ao excluir usuário' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(
-      JSON.stringify({ ok: true, userId: newUser.user.id }),
+      JSON.stringify({ ok: true, message: 'Usuário excluído com sucesso' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
@@ -160,3 +129,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+

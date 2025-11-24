@@ -9,11 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const userSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Mínimo 6 caracteres").optional(),
+  password: z.string().refine(
+    (val) => !val || val.length >= 8,
+    { message: "Mínimo 8 caracteres" }
+  ).optional(),
   roleIds: z.array(z.string()),
   isActive: z.boolean().default(true),
 });
@@ -48,7 +52,10 @@ export const UserFormDialog = ({
 }: UserFormDialogProps) => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
   const isEdit = !!userId;
+
+  console.log("UserFormDialog renderizado", { open, isEdit, userId, userData, rolesCount: roles.length });
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -60,6 +67,23 @@ export const UserFormDialog = ({
       isActive: true,
     },
   });
+
+  // Log de erros de validação
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      if (type === 'change') {
+        console.log('Campo alterado:', name, value);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // Log de erros de validação
+  useEffect(() => {
+    if (form.formState.errors && Object.keys(form.formState.errors).length > 0) {
+      console.error("Erros de validação:", form.formState.errors);
+    }
+  }, [form.formState.errors]);
 
   useEffect(() => {
     const fetchRoles = async () => {
@@ -101,6 +125,7 @@ export const UserFormDialog = ({
   }, [userData, isEdit, userId, form]);
 
   const onSubmit = async (data: UserFormData) => {
+    console.log("=== onSubmit chamado ===", { data, isEdit, userId });
     setIsSubmitting(true);
     try {
       const functionName = isEdit ? "admin-update-user" : "admin-create-user";
@@ -109,26 +134,56 @@ export const UserFormDialog = ({
             userId,
             name: data.name,
             email: data.email,
-            roleIds: data.roleIds,
+            roleIds: data.roleIds || [],
             isActive: data.isActive,
           }
         : {
             email: data.email,
             password: data.password,
             name: data.name,
-            roleIds: data.roleIds,
+            roleIds: data.roleIds || [],
           };
+
+      console.log("Enviando dados para", functionName, {
+        body,
+        roleIdsCount: body.roleIds?.length || 0,
+        roleIds: body.roleIds,
+      });
 
       const { data: result, error } = await supabase.functions.invoke(functionName, { body });
 
-      if (error || !result?.ok) {
-        throw new Error(result?.message || "Erro ao processar");
+      console.log("Resposta da função:", { result, error });
+
+      if (error) {
+        console.error("Erro na chamada da função:", error);
+        throw new Error(error.message || "Erro ao processar");
       }
+
+      if (!result?.ok) {
+        // Se houver erros de validação detalhados, mostre-os
+        const errorMessage = result?.errors 
+          ? `Dados inválidos: ${Array.isArray(result.errors) ? result.errors.join(', ') : result.errors}`
+          : result?.message || "Erro ao processar";
+        console.error("Resultado não OK:", result);
+        throw new Error(errorMessage);
+      }
+
+      toast({
+        title: isEdit ? "Usuário atualizado" : "Usuário criado",
+        description: isEdit 
+          ? "As informações do usuário foram atualizadas com sucesso."
+          : "O usuário foi criado com sucesso.",
+      });
 
       onSuccess();
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro:", error);
+      toast({
+        title: isEdit ? "Erro ao atualizar usuário" : "Erro ao criar usuário",
+        description: error.message || "Não foi possível processar a solicitação.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -144,7 +199,13 @@ export const UserFormDialog = ({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form 
+            onSubmit={(e) => {
+              console.log("Form submit event triggered", e);
+              form.handleSubmit(onSubmit)(e);
+            }} 
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="name"
@@ -240,7 +301,14 @@ export const UserFormDialog = ({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                disabled={isSubmitting}
+                onClick={(e) => {
+                  console.log("Botão Salvar clicado", { isSubmitting, formState: form.formState });
+                  // Não prevenir default aqui, deixar o form.handleSubmit fazer isso
+                }}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEdit ? "Salvar" : "Criar"}
               </Button>

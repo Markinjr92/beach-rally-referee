@@ -169,7 +169,7 @@ const RefereeTournaments = () => {
                 </CardHeader>
                 <CardContent className="mt-auto">
                   <Link to={`/referee/tournament/${tournament.id}`}>
-                    <Button className="w-full bg-white/15 border border-white/30 text-white hover:bg-white/25">
+                    <Button className="w-full border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70">
                       Acessar jogos
                     </Button>
                   </Link>

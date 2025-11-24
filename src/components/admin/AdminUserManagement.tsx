@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Shield, UserPlus, Edit, KeyRound } from "lucide-react";
+import { Loader2, RefreshCw, Shield, UserPlus, Edit, KeyRound, Trash2 } from "lucide-react";
 import { UserFormDialog } from "./UserFormDialog";
 import { ResetPasswordDialog } from "./ResetPasswordDialog";
+import { DeleteUserDialog } from "./DeleteUserDialog";
 
 type AdminListUser = {
   user_id: string;
@@ -34,6 +35,7 @@ export const AdminUserManagement = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminListUser | null>(null);
   const { toast } = useToast();
 
@@ -54,6 +56,22 @@ export const AdminUserManagement = () => {
     setIsLoading(true);
     setErrorMessage(null);
 
+    // Verificar se há sessão antes de chamar a função
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error("Erro de sessão:", sessionError);
+      handleError("Você precisa estar autenticado para acessar esta página. Por favor, faça login novamente.");
+      setUsers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    console.log("Chamando admin-user-management com sessão:", {
+      userId: session.user.id,
+      hasToken: !!session.access_token,
+    });
+
     const { data, error } = await supabase.functions.invoke<AdminUserManagementResponse>(
       "admin-user-management",
       {
@@ -62,8 +80,21 @@ export const AdminUserManagement = () => {
     );
 
     if (error) {
-      console.error("Erro ao chamar a função admin-user-management", error);
-      handleError(error.message);
+      console.error("Erro ao chamar a função admin-user-management", {
+        error,
+        message: error.message,
+        context: error.context,
+      });
+      
+      // Mensagem mais específica baseada no tipo de erro
+      let errorMessage = error.message || "Erro ao carregar usuários";
+      if (error.message?.includes("401") || error.message?.includes("Unauthorized")) {
+        errorMessage = "Sessão expirada. Por favor, faça login novamente.";
+      } else if (error.message?.includes("403") || error.message?.includes("Forbidden")) {
+        errorMessage = "Você não tem permissão para acessar esta funcionalidade.";
+      }
+      
+      handleError(errorMessage);
       setUsers([]);
       setIsLoading(false);
       return;
@@ -104,6 +135,11 @@ export const AdminUserManagement = () => {
   const handleResetPassword = (user: AdminListUser) => {
     setSelectedUser(user);
     setShowPasswordDialog(true);
+  };
+
+  const handleDeleteUser = (user: AdminListUser) => {
+    setSelectedUser(user);
+    setShowDeleteDialog(true);
   };
 
   const handleSuccess = () => {
@@ -204,6 +240,7 @@ export const AdminUserManagement = () => {
                           size="sm"
                           variant="outline"
                           onClick={() => handleEditUser(user)}
+                          title="Editar usuário"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -211,8 +248,18 @@ export const AdminUserManagement = () => {
                           size="sm"
                           variant="outline"
                           onClick={() => handleResetPassword(user)}
+                          title="Redefinir senha"
                         >
                           <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteUser(user)}
+                          title="Excluir usuário"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -243,6 +290,15 @@ export const AdminUserManagement = () => {
       onOpenChange={setShowPasswordDialog}
       userId={selectedUser?.user_id || ""}
       userName={selectedUser?.name || selectedUser?.email || ""}
+      onSuccess={handleSuccess}
+    />
+
+    <DeleteUserDialog
+      open={showDeleteDialog}
+      onOpenChange={setShowDeleteDialog}
+      userId={selectedUser?.user_id || ""}
+      userName={selectedUser?.name || ""}
+      userEmail={selectedUser?.email || ""}
       onSuccess={handleSuccess}
     />
     </>

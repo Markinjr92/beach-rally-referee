@@ -3015,7 +3015,7 @@ export default function RefereeDesk() {
                 <div className="w-full max-w-xs">
                   <Button
                     variant="outline"
-                    className="w-full border-white/30 text-white hover:bg-white/20 disabled:opacity-70"
+                    className="w-full border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70 disabled:opacity-70"
                     disabled={isFlippingCoin}
                     onClick={handleCoinFlip}
                   >
@@ -3048,7 +3048,7 @@ export default function RefereeDesk() {
             <DialogFooter>
               <Button
                 variant="outline"
-                className="border-white/30 text-white hover:bg-white/20"
+                className="border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70"
                 onClick={() => {
                   setCoinDialogOpen(false);
                   resetCoinState();

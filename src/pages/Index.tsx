@@ -2,11 +2,13 @@ import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Trophy, Users, Settings, Shield, Gamepad2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Activity, Trophy, Users, Settings, Shield, Gamepad2, BarChart3 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRoles } from "@/hooks/useUserRoles";
+import { useAccessExpiration } from "@/hooks/useAccessExpiration";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
 // Logos VB Jukin
@@ -72,6 +74,15 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     iconClass: "text-rose-200",
   },
   {
+    key: "dashboard",
+    title: "Dashboard",
+    description: "Estatísticas gerais e métricas do sistema",
+    to: "/dashboard",
+    icon: BarChart3,
+    roles: ["admin_sistema"],
+    iconClass: "text-indigo-300",
+  },
+  {
     key: "casual-matches",
     title: "Jogos Avulsos Arbitragem",
     description: "Crie e gerencie jogos avulsos sem necessidade de torneio",
@@ -83,8 +94,9 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
 ];
 
 const Index = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const { roles, loading: rolesLoading, error: rolesError } = useUserRoles(user, loading);
+  const { isExpired, expiresAt, daysRemaining, loading: accessLoading } = useAccessExpiration(user, loading);
 
   const isAdmin = roles.includes("admin_sistema");
   const accessibleModules = useMemo(
@@ -109,10 +121,39 @@ const Index = () => {
     });
   }, [user, roles, accessibleModules]);
 
-  if (loading || (user && rolesLoading)) {
+  if (loading || (user && rolesLoading) || (user && accessLoading)) {
     return (
       <div className="min-h-screen bg-gradient-ocean flex items-center justify-center">
         <div className="text-white text-xl">Carregando...</div>
+      </div>
+    );
+  }
+
+  // Verificar se o acesso está expirado
+  if (user && isExpired) {
+    return (
+      <div className="min-h-screen bg-gradient-ocean flex items-center justify-center px-4">
+        <Card className="w-full max-w-md bg-white/10 border-white/20 text-white">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-red-400">Acesso Expirado</CardTitle>
+            <CardDescription className="text-white/80">
+              Seu período de acesso de 15 dias expirou.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-white/90 mb-4">
+              Para continuar usando o sistema, entre em contato com o administrador para renovar seu acesso.
+            </p>
+            <Button
+              onClick={async () => {
+                await signOut();
+              }}
+              className="w-full"
+            >
+              Fazer Logout
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -200,6 +241,19 @@ const Index = () => {
           </div>
         ) : (
           <>
+            {/* Aviso de acesso próximo de expirar */}
+            {user && !isExpired && daysRemaining !== null && daysRemaining <= 3 && daysRemaining > 0 && (
+              <div className="max-w-2xl mx-auto mb-6">
+                <Alert className="bg-yellow-500/10 text-white border-yellow-400/40">
+                  <AlertTitle>Atenção: Acesso próximo de expirar</AlertTitle>
+                  <AlertDescription>
+                    Seu acesso expira em {daysRemaining} {daysRemaining === 1 ? 'dia' : 'dias'}. 
+                    Entre em contato com o administrador para renovar.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+            
             {/* Roles error */}
             {rolesError && (
               <div className="max-w-2xl mx-auto mb-10">

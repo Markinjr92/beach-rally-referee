@@ -147,20 +147,26 @@ export const createCasualMatch = async (
 
 /**
  * Lista jogos avulsos do usuário
+ * Se isAdmin for true, lista todos os jogos independente do criador
  */
 export const listCasualMatches = async (
   userId: string,
   filters?: {
     status?: 'scheduled' | 'in_progress' | 'completed' | 'canceled' | 'all';
     search?: string;
-  }
+  },
+  isAdmin: boolean = false
 ): Promise<CasualMatch[]> => {
   let query = supabase
     .from('casual_matches')
     .select('*')
-    .eq('user_id', userId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
+
+  // Se não for admin, filtrar apenas jogos do usuário
+  if (!isAdmin) {
+    query = query.eq('user_id', userId);
+  }
 
   if (filters?.status && filters.status !== 'all') {
     query = query.eq('status', filters.status);

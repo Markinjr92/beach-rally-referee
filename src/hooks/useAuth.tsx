@@ -8,7 +8,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string, cpf: string, phone: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, cpf: string, phone: string) => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       
@@ -89,6 +89,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           emailRedirectTo: redirectUrl,
           data: {
             name: name,
+            cpf: cpf,
+            phone: phone,
           }
         }
       });
@@ -110,7 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         toast({
           title: "Cadastro realizado",
-          description: "Verifique seu email para confirmar a conta.",
+          description: "Sua conta foi criada com sucesso! Você já pode fazer login.",
         });
       }
       
@@ -128,19 +130,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      // Tentar fazer logout no servidor
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      
+      // Sempre limpar a sessão localmente, mesmo se houver erro no servidor
+      setSession(null);
+      setUser(null);
+      
+      // Limpar storage local também
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {
+        // Ignorar erros ao limpar localmente
+      });
+      
+      if (error) {
+        console.warn("Erro ao fazer logout no servidor, mas sessão local foi limpa:", error);
+        toast({
+          title: "Logout realizado",
+          description: "Sessão local encerrada. Se o problema persistir, limpe o cache do navegador.",
+        });
+      } else {
+        toast({
+          title: "Logout realizado",
+          description: "Até logo!",
+        });
+      }
+    } catch (error: unknown) {
+      // Em caso de erro, ainda assim limpar a sessão local
+      setSession(null);
+      setUser(null);
+      
+      // Tentar limpar o storage
+      try {
+        // Limpar todas as chaves relacionadas ao Supabase auth
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('supabase.auth') || key.includes('sb-'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      } catch (e) {
+        // Ignorar erros ao limpar storage
+      }
+      
+      const mappedError = toError(error);
+      console.error("Erro no logout:", mappedError);
       toast({
         title: "Logout realizado",
-        description: "Até logo!",
+        description: "Sessão local encerrada. Se necessário, limpe o cache do navegador.",
       });
-    } catch (error: unknown) {
-      const mappedError = toError(error);
-      toast({
-        title: "Erro no logout",
-        description: "Ocorreu um erro ao sair",
-        variant: "destructive",
-      });
-      console.error(mappedError);
     }
   };
 

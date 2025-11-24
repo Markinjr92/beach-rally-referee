@@ -4,6 +4,8 @@ import { Zap, Clock, ArrowLeftRight } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { trackPageView } from "@/utils/trackPageView";
 import { Game, GameState, Timer } from "@/types/volleyball";
 import { calculateRemainingSeconds, createDefaultGameState } from "@/lib/matchState";
 import { loadMatchState, subscribeToMatchState } from "@/lib/matchStateService";
@@ -36,6 +38,7 @@ const buildTimerDescriptor = (game: Game, activeTimer: Timer | null | undefined)
 
 export default function PublicScoreboard() {
   const { gameId } = useParams();
+  const { user } = useAuth();
   const [game, setGame] = useState<Game | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,6 +122,17 @@ export default function PublicScoreboard() {
 
     void loadFromDB();
   }, [gameId]);
+
+  // Track page view when game is loaded
+  useEffect(() => {
+    if (gameId && game && !loading) {
+      void trackPageView({
+        pageType: 'scoreboard',
+        resourceId: gameId,
+        userId: user?.id,
+      })
+    }
+  }, [gameId, game, loading, user?.id])
 
   useEffect(() => {
     if (!gameId || !game) return;

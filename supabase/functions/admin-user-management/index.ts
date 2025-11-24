@@ -29,9 +29,10 @@ Deno.serve(async (req) => {
       return jsonResponse(405, { ok: false, message: "Method not allowed" }, corsHeaders);
     }
 
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);
+    const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("Missing or invalid authorization header");
+      return jsonResponse(401, { ok: false, message: "Unauthorized: Token não fornecido ou inválido" }, corsHeaders);
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -52,12 +53,20 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const { data: userData, error: userError } = await userClient.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
+    const token = authHeader.replace("Bearer ", "").trim();
+    const { data: userData, error: userError } = await userClient.auth.getUser(token);
+    
     if (userError || !userData?.user) {
-      console.error("Failed to validate user JWT", userError);
-      return jsonResponse(401, { ok: false, message: "Unauthorized" }, corsHeaders);
+      console.error("Failed to validate user JWT", {
+        error: userError,
+        hasToken: !!token,
+        tokenLength: token.length,
+        tokenPrefix: token.substring(0, 20)
+      });
+      return jsonResponse(401, { 
+        ok: false, 
+        message: userError?.message || "Token inválido ou expirado" 
+      }, corsHeaders);
     }
 
     const userId = userData.user.id;

@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRoles } from "@/hooks/useUserRoles";
 import { ArrowLeft, Plus, Search, Trash2, Share2, Play, Eye } from "lucide-react";
 import { listCasualMatches, deleteCasualMatch, casualMatchToGame, type CasualMatch } from "@/lib/casualMatches";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MATCH_FORMAT_PRESETS } from "@/utils/matchConfig";
 import { shareImage } from "@/lib/shareImage";
 import { loadMatchState } from "@/lib/matchStateService";
+import { supabase } from "@/integrations/supabase/client";
 
 type StatusFilter = 'all' | 'scheduled' | 'in_progress' | 'completed';
 
@@ -31,7 +33,8 @@ const statusBadgeVariants: Record<string, 'default' | 'secondary' | 'outline' | 
 };
 
 export default function CasualMatches() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { roles, loading: rolesLoading } = useUserRoles(user, authLoading);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [matches, setMatches] = useState<CasualMatch[]>([]);
@@ -39,21 +42,47 @@ export default function CasualMatches() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('in_progress');
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+
+  const isAdmin = roles.includes("admin_sistema");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || authLoading || rolesLoading) return;
     loadMatches();
-  }, [user, statusFilter, searchTerm]);
+  }, [user, statusFilter, searchTerm, isAdmin, authLoading, rolesLoading]);
 
   const loadMatches = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await listCasualMatches(user.id, {
-        status: statusFilter === 'all' ? undefined : statusFilter,
-        search: searchTerm || undefined,
-      });
+      const data = await listCasualMatches(
+        user.id,
+        {
+          status: statusFilter === 'all' ? undefined : statusFilter,
+          search: searchTerm || undefined,
+        },
+        isAdmin
+      );
       setMatches(data);
+
+      // Se for admin, buscar nomes dos usuários que criaram os jogos
+      if (isAdmin && data.length > 0) {
+        const userIds = Array.from(new Set(data.map(m => m.user_id)));
+        const { data: usersData } = await supabase
+          .from('users')
+          .select('id, name, email')
+          .in('id', userIds);
+
+        if (usersData) {
+          const namesMap: Record<string, string> = {};
+          usersData.forEach(u => {
+            namesMap[u.id] = u.name || u.email || 'Usuário desconhecido';
+          });
+          setUserNames(namesMap);
+        }
+      } else {
+        setUserNames({});
+      }
     } catch (error) {
       console.error('Erro ao carregar jogos avulsos:', error);
       toast({
@@ -141,11 +170,13 @@ export default function CasualMatches() {
             <div>
               <h1 className="text-4xl font-bold mb-2">Jogos Avulsos Arbitragem</h1>
               <p className="text-white/80">
-                Gerencie seus jogos avulsos sem necessidade de criar um torneio
+                {isAdmin 
+                  ? "Visualize e gerencie todos os jogos avulsos do sistema"
+                  : "Gerencie seus jogos avulsos sem necessidade de criar um torneio"}
               </p>
             </div>
             <Link to="/casual-matches/create">
-              <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/20">
+              <Button className="border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70">
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Jogo
               </Button>
@@ -202,7 +233,7 @@ export default function CasualMatches() {
                   : 'Você ainda não criou nenhum jogo avulso.'}
               </p>
               <Link to="/casual-matches/create">
-                <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                <Button className="border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70">
                   <Plus className="mr-2 h-4 w-4" />
                   Criar Primeiro Jogo
                 </Button>
@@ -228,6 +259,11 @@ export default function CasualMatches() {
                     </div>
                     <CardDescription className="text-white/70">
                       {preset?.label || match.format_preset}
+                      {isAdmin && userNames[match.user_id] && (
+                        <span className="block text-xs text-white/50 mt-1">
+                          Criado por: {userNames[match.user_id]}
+                        </span>
+                      )}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -254,7 +290,7 @@ export default function CasualMatches() {
                       </Link>
                       {match.status === 'scheduled' || match.status === 'in_progress' ? (
                         <Link to={`/casual-matches/${match.id}/referee`} className="flex-1 min-w-[100px]">
-                          <Button size="sm" className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                          <Button size="sm" className="w-full border-slate-400/50 bg-slate-600/60 text-white font-semibold hover:bg-slate-600/80 hover:border-slate-400/70">
                             <Play className="mr-2 h-4 w-4" />
                             Mesa
                           </Button>

@@ -19,9 +19,11 @@ import PublicTournamentView from "./pages/PublicTournamentView";
 import NotFound from "./pages/NotFound";
 import LiveMatches from "./pages/LiveMatches";
 import AdminUserManagementPage from "./pages/AdminUserManagementPage";
+import Dashboard from "./pages/Dashboard";
 import CasualMatches from "./pages/CasualMatches";
 import CreateCasualMatch from "./pages/CreateCasualMatch";
 import CasualMatchDetail from "./pages/CasualMatchDetail";
+import UserProfile from "./pages/UserProfile";
 
 const queryClient = new QueryClient();
 
@@ -46,10 +48,12 @@ const App = () => (
             <Route path="/public/tournament/:tournamentId" element={<PublicTournamentView />} />
             <Route path="/live" element={<LiveMatches />} />
             <Route path="/admin/users" element={<AdminUserManagementPage />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/casual-matches" element={<CasualMatches />} />
             <Route path="/casual-matches/create" element={<CreateCasualMatch />} />
             <Route path="/casual-matches/:id" element={<CasualMatchDetail />} />
             <Route path="/casual-matches/:id/referee" element={<RefereeDesk />} />
+            <Route path="/profile" element={<UserProfile />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

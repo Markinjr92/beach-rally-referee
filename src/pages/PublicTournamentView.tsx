@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Calendar, Clock, MapPin, Trophy, Activity, UserCheck, Share2, Eye } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
+import { trackPageView } from '@/utils/trackPageView'
 import { Tables } from '@/integrations/supabase/types'
 import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +52,7 @@ const PublicTournamentView = () => {
   const { tournamentId } = useParams()
   const { toast } = useToast()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
   const [scoresByMatch, setScoresByMatch] = useState<Map<string, MatchScore[]>>(new Map())
@@ -417,6 +420,17 @@ const PublicTournamentView = () => {
     }, 5000)
     return () => clearInterval(interval)
   }, [loadTournamentData])
+
+  // Track page view when tournament is loaded
+  useEffect(() => {
+    if (tournamentId && tournament) {
+      void trackPageView({
+        pageType: 'tournament_public',
+        resourceId: tournamentId,
+        userId: user?.id,
+      })
+    }
+  }, [tournamentId, tournament, user?.id])
 
   useEffect(() => {
     const loadPhases = async () => {
