@@ -681,16 +681,16 @@ export default function TournamentDetailDB() {
       entries = Array.from({ length: matchCount }, (_, index) => {
         const suggestion = suggestions[index]
         return {
-          id: `${nextPhaseLabel}-${index + 1}`,
-          label: `Jogo ${index + 1}`,
-          description: `Defina manualmente os confrontos para ${nextPhaseLabel}`,
-          phase: nextPhaseLabel,
+        id: `${nextPhaseLabel}-${index + 1}`,
+        label: `Jogo ${index + 1}`,
+        description: `Defina manualmente os confrontos para ${nextPhaseLabel}`,
+        phase: nextPhaseLabel,
           teamAId: suggestion?.teamAId || '',
           teamBId: suggestion?.teamBId || '',
-          bestOf: defaults.bestOf,
-          pointsText: defaults.pointsPerSet.join(', '),
-          sideSwitchText: defaults.sideSwitchSum.join(', '),
-          formatPreset: undefined,
+        bestOf: defaults.bestOf,
+        pointsText: defaults.pointsPerSet.join(', '),
+        sideSwitchText: defaults.sideSwitchSum.join(', '),
+        formatPreset: undefined,
         }
       })
     } else {

@@ -1352,12 +1352,12 @@ export default function RefereeDesk() {
           if (isCasualMatch && user) {
             await updateCasualMatch(game.id, user.id, { status: 'completed' });
           } else {
-            const { error: matchUpdateError } = await supabase
-              .from('matches')
-              .update({ status: 'completed' })
-              .eq('id', game.id);
-            if (matchUpdateError) {
-              throw matchUpdateError;
+          const { error: matchUpdateError } = await supabase
+            .from('matches')
+            .update({ status: 'completed' })
+            .eq('id', game.id);
+          if (matchUpdateError) {
+            throw matchUpdateError;
             }
           }
         } catch (error) {
@@ -1365,10 +1365,10 @@ export default function RefereeDesk() {
             if (isCasualMatch) {
               enqueueOfflineOperation('updateCasualMatch', { matchId: game.id, values: { status: 'completed' } });
             } else {
-              enqueueOfflineOperation('updateMatch', {
-                matchId: game.id,
-                values: { status: 'completed' } as TablesUpdate<'matches'>,
-              });
+            enqueueOfflineOperation('updateMatch', {
+              matchId: game.id,
+              values: { status: 'completed' } as TablesUpdate<'matches'>,
+            });
             }
             showOfflineSyncNotice();
           } else {
@@ -1683,23 +1683,23 @@ export default function RefereeDesk() {
     try {
       // Tentar aplicar com retry (3 tentativas, 3 segundos entre cada)
       await retryWithDelay(async () => {
-        await persistState(updatedState);
-        await logMatchEvent({
-          eventType: 'SET_CONFIGURATION_APPLIED',
-          setNumber: currentSetNumber,
-          metadata: {
-            startingServerTeam,
-            startingServerPlayer,
-            sideChoiceTeam: sideTeam,
-            sideSelection: sideSelection ?? 'left',
-            coinToss: {
-              performed: requiresCoinToss,
-              winner: coinWinner,
-              loser: coinLoser,
-            },
+      await persistState(updatedState);
+      await logMatchEvent({
+        eventType: 'SET_CONFIGURATION_APPLIED',
+        setNumber: currentSetNumber,
+        metadata: {
+          startingServerTeam,
+          startingServerPlayer,
+          sideChoiceTeam: sideTeam,
+          sideSelection: sideSelection ?? 'left',
+          coinToss: {
+            performed: requiresCoinToss,
+            winner: coinWinner,
+            loser: coinLoser,
           },
-        });
-        await ensureMatchInProgress();
+        },
+      });
+      await ensureMatchInProgress();
       }, 3, 3000);
 
       // Sucesso - fechar o modal e resetar o step
@@ -1850,11 +1850,11 @@ export default function RefereeDesk() {
       const timeoutPayload: TablesInsert<'match_timeouts'> = {
         match_id: isCasualMatch ? null : game.id,
         casual_match_id: isCasualMatch ? game.id : null,
-        set_number: gameState.currentSet,
-        team: team ?? null,
-        timeout_type: type,
-        duration_seconds: duration,
-        started_at: startedAt,
+          set_number: gameState.currentSet,
+          team: team ?? null,
+          timeout_type: type,
+          duration_seconds: duration,
+          started_at: startedAt,
       };
       const { data, error } = await supabase
         .from('match_timeouts')

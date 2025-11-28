@@ -33,15 +33,15 @@ const persistWithMatchScores = async (state: GameState, isCasualMatch = false) =
   // Note: match_scores não suporta casual_match_id, então não persistimos scores para casual matches
   // quando usando fallback. Isso é uma limitação do sistema atual.
   if (!isCasualMatch) {
-    const { error: deleteError } = await client.from("match_scores").delete().eq("match_id", state.gameId);
-    if (deleteError) {
-      throw deleteError;
-    }
+  const { error: deleteError } = await client.from("match_scores").delete().eq("match_id", state.gameId);
+  if (deleteError) {
+    throw deleteError;
+  }
 
-    if (scoreRows.length > 0) {
-      const { error: insertError } = await client.from("match_scores").insert(scoreRows);
-      if (insertError) {
-        throw insertError;
+  if (scoreRows.length > 0) {
+    const { error: insertError } = await client.from("match_scores").insert(scoreRows);
+    if (insertError) {
+      throw insertError;
       }
     }
   }
@@ -118,7 +118,7 @@ export const loadMatchState = async (matchId: string, game: Game, isCasualMatch 
       // Se for erro de constraint única (já existe - race condition), buscar novamente
       if (insertError.code === '23505') {
         const { data: retryData, error: retryError } = await client
-          .from("match_states")
+    .from("match_states")
           .select("*")
           .eq("casual_match_id", matchId)
           .maybeSingle();
@@ -132,20 +132,20 @@ export const loadMatchState = async (matchId: string, game: Game, isCasualMatch 
       
       if (isTableMissingError(insertError)) {
         return loadFromMatchScores(matchId, game, isCasualMatch);
-      }
-      // If it's a permission error (RLS), return default state without saving
+    }
+    // If it's a permission error (RLS), return default state without saving
       if (insertError.code === '42501') {
-        markSupport(true);
-        return { state: defaultState, usedFallback: false } as const;
-      }
+      markSupport(true);
+      return { state: defaultState, usedFallback: false } as const;
+    }
       // Para outros erros, logar mas retornar estado padrão (não travar)
       console.error('Erro ao inserir match_state para casual match:', insertError);
       markSupport(true);
       return { state: defaultState, usedFallback: false } as const;
-    }
+  }
 
-    markSupport(true);
-    return { state: defaultState, usedFallback: false } as const;
+  markSupport(true);
+  return { state: defaultState, usedFallback: false } as const;
   } else {
     // Para matches normais, usar SELECT + INSERT/UPDATE (mesma abordagem de casual matches)
     const { data: existingMatch, error: selectMatchError } = await client
@@ -306,16 +306,16 @@ export const saveMatchState = async (state: GameState, isCasualMatch = false) =>
       throw error;
     } else {
       // Inserir novo registro
-      const { error } = await client
-        .from("match_states")
+  const { error } = await client
+    .from("match_states")
         .insert([payload]);
 
-      if (!error) {
-        markSupport(true);
-        return { usedFallback: false } as const;
-      }
-      
-      if (isTableMissingError(error)) {
+  if (!error) {
+    markSupport(true);
+    return { usedFallback: false } as const;
+  }
+
+  if (isTableMissingError(error)) {
         return persistWithMatchScores(state, isCasualMatch);
       }
       
@@ -342,9 +342,9 @@ export const saveMatchState = async (state: GameState, isCasualMatch = false) =>
             return { usedFallback: false } as const;
           }
         }
-      }
-      
-      throw error;
+  }
+
+  throw error;
     }
   }
 };

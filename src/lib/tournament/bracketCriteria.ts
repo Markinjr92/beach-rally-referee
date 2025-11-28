@@ -373,6 +373,158 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '5_teams_round_robin': {
+    title: '5 Duplas - Todos contra Todos + Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '1 grupo único com 5 duplas'),
+          match('Formato', 'Todos contra todos (round-robin)'),
+          match('Total de jogos', '10 jogos na fase de grupos'),
+          match('Cálculo', 'Cada dupla joga 4 jogos (5 × 4 / 2 = 10)'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Critérios', '1º: Pontos de jogo, 2º: Diferença de sets, 3º: Diferença de pontos'),
+          match('Final', '1º Colocado × 2º Colocado'),
+          match('3º lugar', '3º Colocado × 4º Colocado (opcional)'),
+        ],
+      },
+      {
+        phase: 'Finais',
+        matches: [
+          match('Final', '1º Colocado × 2º Colocado', 'Final'),
+          match('3º lugar', '3º Colocado × 4º Colocado', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
+  '3_groups_3_semis': {
+    title: '3 Grupos de 3 - Semifinal',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '3 grupos com 3 equipes cada'),
+          match('Formato', 'Todos contra todos em cada grupo (3 jogos por grupo)'),
+          match('Total', '9 jogos na fase de grupos'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Avanço', '3 primeiros colocados de cada grupo (3 equipes)'),
+          match('Melhor 2º', '+ 1 melhor 2º colocado'),
+          match('Total', '4 equipes nas semifinais'),
+        ],
+      },
+      {
+        phase: 'Semifinais',
+        matches: [
+          match('SF1', '1º Grupo A × Melhor 2º'),
+          match('SF2', '1º Grupo B × 1º Grupo C'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Venc. SF1 × Venc. SF2', 'Final'),
+          match('3º lugar', 'Perd. SF1 × Perd. SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
+  '3_groups_3_quarterfinals': {
+    title: '3 Grupos de 3 - Quartas de Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '3 grupos com 3 equipes cada'),
+          match('Formato', 'Todos contra todos em cada grupo (3 jogos por grupo)'),
+          match('Total', '9 jogos na fase de grupos'),
+        ],
+      },
+      {
+        phase: 'Classificação para Quartas',
+        matches: [
+          match('Avanço', '3 primeiros colocados de cada grupo (3 equipes)'),
+          match('Melhores 2º', '+ 5 melhores 2º colocados'),
+          match('Total', '8 equipes nas quartas de final'),
+        ],
+      },
+      {
+        phase: 'Quartas de Final',
+        matches: [
+          match('QF1', '1º Grupo A × Melhor 2º'),
+          match('QF2', '1º Grupo B × 2º Melhor 2º'),
+          match('QF3', '1º Grupo C × 3º Melhor 2º'),
+          match('QF4', '2º Grupo A × 4º Melhor 2º'),
+        ],
+      },
+      {
+        phase: 'Semifinais',
+        matches: [
+          match('SF1', 'Venc. QF1 × Venc. QF2'),
+          match('SF2', 'Venc. QF3 × Venc. QF4'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Venc. SF1 × Venc. SF2', 'Final'),
+          match('3º lugar', 'Perd. SF1 × Perd. SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
+  '5_groups_3_quarterfinals': {
+    title: '5 Grupos de 3 - Quartas de Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '5 grupos com 3 equipes cada'),
+          match('Formato', 'Todos contra todos em cada grupo (3 jogos por grupo)'),
+          match('Total', '15 jogos na fase de grupos'),
+        ],
+      },
+      {
+        phase: 'Classificação para Quartas',
+        matches: [
+          match('Avanço', '5 primeiros colocados de cada grupo (5 equipes)'),
+          match('Melhores 2º', '+ 3 melhores 2º colocados'),
+          match('Total', '8 equipes nas quartas de final'),
+        ],
+      },
+      {
+        phase: 'Quartas de Final',
+        matches: [
+          match('QF1', '1º Grupo A × Melhor 2º'),
+          match('QF2', '1º Grupo B × 2º Melhor 2º'),
+          match('QF3', '1º Grupo C × 3º Melhor 2º'),
+          match('QF4', '1º Grupo D × 1º Grupo E'),
+        ],
+      },
+      {
+        phase: 'Semifinais',
+        matches: [
+          match('SF1', 'Venc. QF1 × Venc. QF2'),
+          match('SF2', 'Venc. QF3 × Venc. QF4'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Venc. SF1 × Venc. SF2', 'Final'),
+          match('3º lugar', 'Perd. SF1 × Perd. SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
 }
 
 const singularize = (value: string) => {

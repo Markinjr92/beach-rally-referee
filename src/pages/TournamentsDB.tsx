@@ -31,6 +31,7 @@ import {
   defaultTieBreakerOrder,
   generateTournamentStructure,
 } from "@/lib/tournament"
+import { getFormatsByTeamCount, getSupportedTeamCounts } from "@/lib/tournament/formatFilter"
 import { Tournament as TournamentType, TournamentFormatId, TournamentTeam, TieBreakerCriterion } from "@/types/volleyball"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 
@@ -70,6 +71,7 @@ export default function TournamentsDB() {
     category: "",
     modality: "",
     hasStatistics: true,
+    teamCount: null,
     formatId: "groups_and_knockout",
     includeThirdPlace: true,
     matchFormats: {
@@ -91,8 +93,14 @@ export default function TournamentsDB() {
   )
 
   const availableFormats = useMemo(
-    () => Object.values(availableTournamentFormats),
-    [],
+    () => {
+      if (form.teamCount === null) {
+        return [];
+      }
+      const formatIds = getFormatsByTeamCount(form.teamCount);
+      return formatIds.map(id => availableTournamentFormats[id]).filter(Boolean);
+    },
+    [form.teamCount]
   )
 
   const tieBreakerOptions = useMemo(
@@ -247,6 +255,31 @@ export default function TournamentsDB() {
         { key: 'final', label: 'Final' },
         { key: 'thirdPlace', label: 'Disputa 3º lugar' },
       ],
+      '5_teams_round_robin': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
+      '3_groups_3_semis': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
+      '3_groups_3_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
+      '5_groups_3_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
     }
     return phasesByFormat[formatId] || []
   }
@@ -264,15 +297,20 @@ export default function TournamentsDB() {
       '2_groups_6_cross_semis': 12,
       '2_groups_3_cross_semis': 6,
       '6_teams_round_robin': 6,
+      '5_teams_round_robin': 5,
+      '3_groups_3_semis': 9,
+      '3_groups_3_quarterfinals': 9,
+      '5_groups_3_quarterfinals': 15,
     }
     return teamCounts[formatId] || 12
   }
 
   const initializeTournamentStructure = async (tournament: Tables<'tournaments'>) => {
     try {
-      const requiredTeamCount = getRequiredTeamCount(form.formatId || 'groups_and_knockout')
+      const requiredTeamCount = form.teamCount || getRequiredTeamCount(form.formatId || 'groups_and_knockout')
+      const teamLabel = form.modality === 'quarteto' ? 'Quarteto' : 'Dupla'
       const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: requiredTeamCount }, (_, index) => ({
-        name: `Dupla Seed ${index + 1}`,
+        name: `${teamLabel} Seed ${index + 1}`,
         player_a: `Atleta ${index + 1}A`,
         player_b: `Atleta ${index + 1}B`,
       }))
@@ -284,7 +322,7 @@ export default function TournamentsDB() {
 
       if (insertTeamsError) throw insertTeamsError
       if (!createdTeams || createdTeams.length !== placeholderTeams.length) {
-        throw new Error('Falha ao registrar as duplas placeholder do torneio.')
+        throw new Error('Falha ao registrar as equipes placeholder do torneio.')
       }
 
       const tournamentTeamsPayload: TablesInsert<'tournament_teams'>[] = createdTeams.map((team, index) => ({
@@ -300,7 +338,7 @@ export default function TournamentsDB() {
 
       if (insertTournamentTeamsError) throw insertTournamentTeamsError
       if (!createdTournamentTeams) {
-        throw new Error('Falha ao atrelar as duplas ao torneio recém criado.')
+        throw new Error('Falha ao atrelar as equipes ao torneio recém criado.')
       }
 
       const registeredTeams: TournamentTeam[] = createdTournamentTeams.map((entry, index) => ({
@@ -469,8 +507,22 @@ export default function TournamentsDB() {
       })
       return
     }
+    if (!form.teamCount) {
+      toast({ title: "Selecione a quantidade de equipes" })
+      return
+    }
     if (!form.formatId) {
       toast({ title: "Selecione o formato do torneio" })
+      return
+    }
+    // Validar se o formato selecionado é compatível com a quantidade
+    const requiredCount = getRequiredTeamCount(form.formatId);
+    if (requiredCount !== form.teamCount) {
+      toast({ 
+        title: "Incompatibilidade detectada", 
+        description: `O formato selecionado requer ${requiredCount} equipes, mas você selecionou ${form.teamCount}.`,
+        variant: "destructive"
+      })
       return
     }
     const location = normalizeString(form.location)
@@ -532,6 +584,7 @@ export default function TournamentsDB() {
       category: "",
       modality: "",
       hasStatistics: true,
+      teamCount: null,
       formatId: "groups_and_knockout",
       includeThirdPlace: true,
       matchFormats: {
@@ -676,6 +729,34 @@ export default function TournamentsDB() {
               </Select>
             </div>
           </div>
+          <div className="space-y-2">
+            <Label className="text-white">Quantidade de Equipes <span className="text-red-400">*</span></Label>
+            <Select
+              value={form.teamCount?.toString() || ""}
+              onValueChange={(value) => {
+                const count = value ? parseInt(value, 10) : null;
+                setForm({ 
+                  ...form, 
+                  teamCount: count,
+                  formatId: count ? (getFormatsByTeamCount(count)[0] || form.formatId) : form.formatId
+                });
+              }}
+            >
+              <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
+                <SelectValue placeholder="Selecione a quantidade de equipes" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                {getSupportedTeamCounts().map((count) => (
+                  <SelectItem key={count} value={count.toString()} className="focus:bg-white/10 focus:text-white">
+                    {count} equipes
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-blue-50/80">
+              Selecione a quantidade de equipes que participarão do torneio.
+            </p>
+          </div>
           <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <Label className="text-white">Registrar estatísticas</Label>
@@ -694,21 +775,31 @@ export default function TournamentsDB() {
             <Select
               value={form.formatId}
               onValueChange={(value) => setForm({ ...form, formatId: value as TournamentFormatId })}
+              disabled={!form.teamCount || availableFormats.length === 0}
             >
-              <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
-                <SelectValue placeholder="Selecione o formato" />
+              <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                <SelectValue placeholder={form.teamCount ? "Selecione o formato" : "Selecione primeiro a quantidade de equipes"} />
               </SelectTrigger>
               <SelectContent className="max-h-72 bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
-                {availableFormats.map((format) => (
+                {availableFormats.length > 0 ? availableFormats.map((format) => (
                   <SelectItem key={format.id} value={format.id} className="focus:bg-white/10 focus:text-white">
                     <div className="flex flex-col text-left">
                       <span className="font-semibold">{format.name}</span>
                       <span className="text-xs text-blue-50/80">{format.description}</span>
                     </div>
                   </SelectItem>
-                ))}
+                )) : (
+                  <div className="px-3 py-2 text-sm text-blue-50/60">
+                    {form.teamCount ? "Nenhum formato disponível para esta quantidade." : "Selecione a quantidade de equipes primeiro."}
+                  </div>
+                )}
               </SelectContent>
             </Select>
+            {form.teamCount && availableFormats.length === 0 && (
+              <p className="text-xs text-yellow-400">
+                Não há formatos disponíveis para {form.teamCount} equipes.
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
