@@ -7,7 +7,8 @@ export type TournamentFormatId =
   | '3_groups_quarterfinals'
   | '2_groups_5_quarterfinals'
   | '2_groups_6_cross_semis'
-  | '2_groups_3_cross_semis';
+  | '2_groups_3_cross_semis'
+  | '6_teams_round_robin';
 
 export type TieBreakerCriterion =
   | 'head_to_head'

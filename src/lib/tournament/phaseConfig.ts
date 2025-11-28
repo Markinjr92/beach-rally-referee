@@ -10,6 +10,7 @@ export const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
   series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
   single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],
   double_elimination: ['Chave de Vencedores - R1', 'Chave de Vencedores - R2', 'Semifinal', 'Final'],
+  '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
 }
 
 export const normalizePhaseName = (value: string) => value.trim().toLowerCase()
@@ -41,4 +42,5 @@ export const phaseFormatKeyMap: Record<string, 'groups' | 'quarterfinals' | 'sem
   'série ouro': 'semifinals',
   'série prata': 'semifinals',
   'primeira rodada': 'groups',
+  'finais': 'final',
 }

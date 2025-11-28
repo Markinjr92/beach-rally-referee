@@ -493,6 +493,87 @@ const createSemifinalMatches = async (
 };
 
 /**
+ * Cria os jogos finais (final e 3º lugar) baseado na classificação do round-robin de 6 duplas
+ */
+const createRoundRobinFinals = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  const newMatches: TablesInsert<'matches'>[] = [];
+
+  // Obter configurações do torneio
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_final, match_format_third_place')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const finalConfig = getMatchConfigFromFormat(tournament?.match_format_final);
+  const thirdPlaceConfig = getMatchConfigFromFormat(tournament?.match_format_third_place);
+
+  const pointsPerSetFinal = options.pointsPerSet || finalConfig.pointsPerSet;
+  const sideSwitchSumFinal = options.sideSwitchSum || finalConfig.sideSwitchSum;
+  const bestOfFinal = options.bestOf || finalConfig.bestOf;
+  const modality = options.modality || 'dupla';
+
+  const pointsPerSetThird = options.pointsPerSet || thirdPlaceConfig.pointsPerSet;
+  const sideSwitchSumThird = options.sideSwitchSum || thirdPlaceConfig.sideSwitchSum;
+  const bestOfThird = options.bestOf || thirdPlaceConfig.bestOf;
+
+  // Deve haver apenas um grupo (grupo único)
+  if (qualifiers.size !== 1) {
+    throw new Error('O formato round-robin de 6 duplas requer exatamente 1 grupo.');
+  }
+
+  const [groupKey, groupEntry] = Array.from(qualifiers.entries())[0];
+
+  if (!groupEntry) {
+    throw new Error('Grupo não encontrado');
+  }
+
+  // Verificar se há pelo menos 4 equipes classificadas
+  if (groupEntry.standings.length < 4) {
+    throw new Error('É necessário ter pelo menos 4 equipes classificadas para criar as finais.');
+  }
+
+  const [first, second, third, fourth] = groupEntry.standings;
+
+  if (!first || !second) {
+    throw new Error('É necessário ter pelo menos 2 equipes classificadas para criar a final.');
+  }
+
+  // Final: 1º vs 2º
+  newMatches.push({
+    tournament_id: options.tournamentId,
+    team_a_id: first.teamId,
+    team_b_id: second.teamId,
+    phase: 'Final',
+    status: 'scheduled',
+    points_per_set: pointsPerSetFinal,
+    side_switch_sum: sideSwitchSumFinal,
+    best_of: bestOfFinal,
+    modality,
+  });
+
+  // Disputa de 3º lugar (opcional): 3º vs 4º
+  if (options.includeThirdPlace && third && fourth) {
+    newMatches.push({
+      tournament_id: options.tournamentId,
+      team_a_id: third.teamId,
+      team_b_id: fourth.teamId,
+      phase: 'Disputa 3º lugar',
+      status: 'scheduled',
+      points_per_set: pointsPerSetThird,
+      side_switch_sum: sideSwitchSumThird,
+      best_of: bestOfThird,
+      modality,
+    });
+  }
+
+  return newMatches;
+};
+
+/**
  * Cria os jogos finais (final e 3º lugar) baseado nas semifinais
  */
 const createFinalMatches = async (
@@ -722,6 +803,7 @@ export const advanceToNextPhase = async (
     const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
       groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
       '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+      '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
     };
 
     const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
@@ -763,6 +845,18 @@ export const advanceToNextPhase = async (
         Semifinal: async (context) => {
           const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
           return createFinalMatches(context.options, semifinalMatches);
+        },
+      },
+      '6_teams_round_robin': {
+        'Fase de Grupos': async (context) => {
+          const qualifiers = await calculateGroupQualifiers(
+            context.options.tournamentId,
+            context.teams,
+            context.matches,
+            context.matchScores,
+            context.options.tieBreakerOrder || [],
+          );
+          return createRoundRobinFinals(context.options, qualifiers);
         },
       },
     };
@@ -913,6 +1007,7 @@ export const suggestNextPhaseMatches = async (
     series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
     single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],
     double_elimination: ['Chave de Vencedores - R1', 'Chave de Vencedores - R2', 'Semifinal', 'Final'],
+    '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
   };
 
   const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
@@ -1022,6 +1117,18 @@ export const suggestNextPhaseMatches = async (
       Semifinal: async (context) => {
         const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
         return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '6_teams_round_robin': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createRoundRobinFinals(context.options, qualifiers);
       },
     },
   };

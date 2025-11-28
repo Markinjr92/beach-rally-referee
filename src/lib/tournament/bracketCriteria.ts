@@ -344,6 +344,35 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '6_teams_round_robin': {
+    title: '6 Duplas - Todos contra Todos + Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '1 grupo único com 6 duplas'),
+          match('Formato', 'Todos contra todos (round-robin)'),
+          match('Total de jogos', '15 jogos na fase de grupos'),
+          match('Cálculo', 'Cada dupla joga 5 jogos (6 × 5 / 2 = 15)'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Critérios', '1º: Pontos de jogo, 2º: Diferença de sets, 3º: Diferença de pontos'),
+          match('Final', '1º Colocado × 2º Colocado'),
+          match('3º lugar', '3º Colocado × 4º Colocado (opcional)'),
+        ],
+      },
+      {
+        phase: 'Finais',
+        matches: [
+          match('Final', '1º Colocado × 2º Colocado', 'Final'),
+          match('3º lugar', '3º Colocado × 4º Colocado', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
 }
 
 const singularize = (value: string) => {
