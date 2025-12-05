@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { ArrowLeft } from "lucide-react";
@@ -27,6 +28,7 @@ export default function CreateCasualMatch() {
     team_b_player_1: '',
     team_b_player_2: '',
     format_preset: 'best3_21_15' as MatchFormatPresetKey,
+    direct_win_format: false,
   });
 
   const formatOptions = Object.entries(MATCH_FORMAT_PRESETS).map(([key, preset]) => ({
@@ -97,6 +99,7 @@ export default function CreateCasualMatch() {
         points_per_set: preset.pointsPerSet,
         side_switch_sum: preset.sideSwitchSum,
         status: 'scheduled',
+        direct_win_format: formData.direct_win_format,
       });
 
       toast({
@@ -192,6 +195,17 @@ export default function CreateCasualMatch() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/5 p-3">
+                  <Switch
+                    id="directWinFormat"
+                    checked={formData.direct_win_format}
+                    onCheckedChange={(checked) => setFormData({ ...formData, direct_win_format: checked })}
+                  />
+                  <Label htmlFor="directWinFormat" className="text-white/90 cursor-pointer">
+                    Vai a 3 direto
+                  </Label>
                 </div>
               </div>
 

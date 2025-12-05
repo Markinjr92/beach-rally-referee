@@ -44,6 +44,7 @@ export const casualMatchToGame = (casualMatch: CasualMatch): Game => {
     teamB,
     pointsPerSet: casualMatch.points_per_set,
     needTwoPointLead: true,
+    directWinFormat: casualMatch.direct_win_format ?? false,
     sideSwitchSum: casualMatch.side_switch_sum,
     hasTechnicalTimeout: false,
     technicalTimeoutSum: 0,
