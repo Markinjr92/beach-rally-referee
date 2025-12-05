@@ -9,7 +9,7 @@ import {
   TieBreakerCriterion,
 } from '@/types/volleyball';
 
-export type TournamentPhaseConfigType = 'group' | 'knockout' | 'thirdPlace';
+export type TournamentPhaseConfigType = 'group' | 'knockout' | 'thirdPlace' | 'quarterfinals';
 
 export type TournamentPhaseConfigs = Partial<Record<TournamentPhaseConfigType, Partial<GameConfiguration>>>;
 
@@ -42,6 +42,7 @@ const DEFAULT_GAME_CONFIG: Partial<GameConfiguration> = {
   format: 'melhorDe3',
   pointsPerSet: [21, 21, 15],
   needTwoPointLead: true,
+  directWinFormat: false,
   sideSwitchSum: [7, 7, 5],
   hasTechnicalTimeout: false,
   technicalTimeoutSum: 0,
@@ -81,15 +82,21 @@ const ensureSixTeams = (teams: TournamentTeam[]) => {
   }
 };
 
-const ensureFiveTeams = (teams: TournamentTeam[]) => {
-  if (teams.length !== 5) {
-    throw new Error('Este formato suporta exatamente 5 equipes inscritas.');
+const ensureEightTeams = (teams: TournamentTeam[]) => {
+  if (teams.length !== 8) {
+    throw new Error('Este formato suporta exatamente 8 duplas inscritas (2 grupos de 4).');
   }
 };
 
 const ensureNineTeams = (teams: TournamentTeam[]) => {
   if (teams.length !== 9) {
-    throw new Error('Este formato suporta exatamente 9 equipes inscritas.');
+    throw new Error('Este formato suporta exatamente 9 duplas inscritas (Grupo A com 5 e Grupo B com 4).');
+  }
+};
+
+const ensureFiveTeams = (teams: TournamentTeam[]) => {
+  if (teams.length !== 5) {
+    throw new Error('Este formato suporta exatamente 5 equipes inscritas.');
   }
 };
 
@@ -214,6 +221,7 @@ const createMatch = (
     teamB: params.teamB,
     pointsPerSet: baseConfig.pointsPerSet ?? [21, 21, 15],
     needTwoPointLead: baseConfig.needTwoPointLead ?? true,
+    directWinFormat: baseConfig.directWinFormat ?? false,
     sideSwitchSum: baseConfig.sideSwitchSum ?? [7, 7, 5],
     hasTechnicalTimeout: baseConfig.hasTechnicalTimeout ?? false,
     technicalTimeoutSum: baseConfig.technicalTimeoutSum ?? 0,
@@ -1370,6 +1378,143 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
       };
     },
   },
+  '2_groups_3_repescagem_semis': {
+    id: '2_groups_3_repescagem_semis',
+    name: '2 Grupos de 3 - Repescagem + Semi/Final',
+    description:
+      'Dois grupos de três duplas cada. Todos contra todos dentro do grupo. O 1º de cada grupo vai direto para semifinal. Os 2º e 3º fazem repescagem cruzada (2º A × 3º B e 2º B × 3º A). Vencedores das repescagens avançam para semifinais.',
+    generate: (options) => {
+      ensureSixTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseRepechage: TournamentPhase = {
+        id: 'fase-repescagem',
+        name: 'Repescagem',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Eliminatórias',
+        order: 3,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      // Distribuir seeds: Grupo A (1, 3, 5) e Grupo B (2, 4, 6)
+      const groupASeeds = [1, 3, 5];
+      const groupBSeeds = [2, 4, 6];
+
+      groups[0].teamIds = groupASeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      groups[1].teamIds = groupBSeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      // Gerar jogos dentro dos grupos (todos contra todos)
+      const groupMatches = generateGroupStageMatches(options, phaseGroup, groups, teamsBySeed);
+
+      // Criar placeholders para repescagem
+      const placeholder = placeholderTeam;
+      const repechageMatches = [
+        {
+          title: 'Repescagem 1',
+          teamA: placeholder('2º Grupo A'),
+          teamB: placeholder('3º Grupo B'),
+        },
+        {
+          title: 'Repescagem 2',
+          teamA: placeholder('2º Grupo B'),
+          teamB: placeholder('3º Grupo A'),
+        },
+      ];
+
+      const repechageMatchesList: TournamentMatch[] = repechageMatches.map((match) =>
+        createMatch(options, phaseRepechage, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+          configType: 'quarterfinals',
+        }),
+      );
+
+      // Criar placeholders para semifinais
+      const semifinals = [
+        {
+          title: 'Semifinal 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('Vencedor Repescagem 2'),
+        },
+        {
+          title: 'Semifinal 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('Vencedor Repescagem 1'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = semifinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+        }),
+      );
+
+      // Disputa de 3º lugar
+      if (options.includeThirdPlaceMatch) {
+        knockoutMatches.push(
+          createMatch(options, phaseKnockout, {
+            round: 2,
+            title: 'Decisão 3º lugar',
+            teamA: placeholder('Perdedor Semifinal 1'),
+            teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
+          }),
+        );
+      }
+
+      // Final
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 3,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseRepechage, phaseKnockout],
+        groups,
+        matches: [...groupMatches, ...repechageMatchesList, ...knockoutMatches],
+      };
+    },
+  },
   '6_teams_round_robin': {
     id: '6_teams_round_robin',
     name: '6 Duplas - Todos contra Todos + Final',
@@ -1876,6 +2021,228 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
       knockoutMatches.push(
         createMatch(options, phaseKnockout, {
           round: 4,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseKnockout],
+        groups,
+        matches: [...groupMatches, ...knockoutMatches],
+      };
+    },
+  },
+  '2_groups_4_semis': {
+    id: '2_groups_4_semis',
+    name: '2 Grupos de 4 - Semi/Final',
+    description:
+      'Dois grupos de quatro duplas cada. Todos contra todos dentro de cada grupo. Os 2 primeiros colocados de cada grupo avançam para semifinais (1º A × 2º B, 1º B × 2º A), depois 3º lugar e final.',
+    generate: (options) => {
+      ensureEightTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Semifinal',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      // Distribuir seeds: Grupo A (1, 3, 5, 7) e Grupo B (2, 4, 6, 8)
+      const groupASeeds = [1, 3, 5, 7];
+      const groupBSeeds = [2, 4, 6, 8];
+
+      groups[0].teamIds = groupASeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      groups[1].teamIds = groupBSeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      // Gerar jogos dentro de cada grupo (todos contra todos)
+      const groupMatches = generateGroupStageMatches(
+        options,
+        phaseGroup,
+        groups,
+        teamsBySeed,
+      );
+
+      // Criar placeholders para semifinais (serão definidos manualmente)
+      const placeholder = placeholderTeam;
+      const semifinals = [
+        {
+          title: 'Semifinal 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('2º Grupo B'),
+        },
+        {
+          title: 'Semifinal 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('2º Grupo A'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = semifinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+        }),
+      );
+
+      // Disputa de 3º lugar
+      if (options.includeThirdPlaceMatch) {
+        knockoutMatches.push(
+          createMatch(options, phaseKnockout, {
+            round: 2,
+            title: 'Decisão 3º lugar',
+            teamA: placeholder('Perdedor Semifinal 1'),
+            teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
+          }),
+        );
+      }
+
+      // Final
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 3,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseKnockout],
+        groups,
+        matches: [...groupMatches, ...knockoutMatches],
+      };
+    },
+  },
+  '2_groups_5_4_semis': {
+    id: '2_groups_5_4_semis',
+    name: '2 Grupos (5+4) - Semi/Final',
+    description:
+      'Dois grupos: Grupo A com 5 duplas e Grupo B com 4 duplas. Todos contra todos dentro de cada grupo. Os 2 primeiros colocados de cada grupo avançam para semifinais (1º A × 2º B, 1º B × 2º A), depois 3º lugar e final.',
+    generate: (options) => {
+      ensureNineTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Semifinal',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      // Distribuir seeds: Grupo A (1, 3, 5, 7, 9) e Grupo B (2, 4, 6, 8)
+      const groupASeeds = [1, 3, 5, 7, 9];
+      const groupBSeeds = [2, 4, 6, 8];
+
+      groups[0].teamIds = groupASeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      groups[1].teamIds = groupBSeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      // Gerar jogos dentro de cada grupo (todos contra todos)
+      const groupMatches = generateGroupStageMatches(
+        options,
+        phaseGroup,
+        groups,
+        teamsBySeed,
+      );
+
+      // Criar placeholders para semifinais (serão definidos manualmente)
+      const placeholder = placeholderTeam;
+      const semifinals = [
+        {
+          title: 'Semifinal 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('2º Grupo B'),
+        },
+        {
+          title: 'Semifinal 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('2º Grupo A'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = semifinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+        }),
+      );
+
+      // Disputa de 3º lugar
+      if (options.includeThirdPlaceMatch) {
+        knockoutMatches.push(
+          createMatch(options, phaseKnockout, {
+            round: 2,
+            title: 'Decisão 3º lugar',
+            teamA: placeholder('Perdedor Semifinal 1'),
+            teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
+          }),
+        );
+      }
+
+      // Final
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 3,
           title: 'Final',
           teamA: placeholder('Vencedor Semifinal 1'),
           teamB: placeholder('Vencedor Semifinal 2'),

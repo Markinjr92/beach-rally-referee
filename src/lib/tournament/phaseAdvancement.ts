@@ -44,6 +44,7 @@ export interface AdvancePhaseOptions {
   sideSwitchSum?: number[];
   bestOf?: number;
   modality?: string;
+  directWinFormat?: boolean;
 }
 
 export interface AdvancePhaseResult {
@@ -217,6 +218,7 @@ const createKnockoutMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   // Quartas de final
   newMatches.push(
@@ -230,6 +232,7 @@ const createKnockoutMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -241,6 +244,7 @@ const createKnockoutMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -252,6 +256,7 @@ const createKnockoutMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -263,6 +268,7 @@ const createKnockoutMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   );
 
@@ -387,6 +393,7 @@ const createThreeGroupQuarterfinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -399,6 +406,7 @@ const createThreeGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -410,6 +418,7 @@ const createThreeGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -421,6 +430,7 @@ const createThreeGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -432,6 +442,7 @@ const createThreeGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   ];
 
@@ -471,6 +482,7 @@ const createThreeGroupSemifinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -483,6 +495,7 @@ const createThreeGroupSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -494,6 +507,7 @@ const createThreeGroupSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   ];
 
@@ -533,6 +547,7 @@ const createThreeGroupQuarterfinalMatchesFor9 = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -545,6 +560,7 @@ const createThreeGroupQuarterfinalMatchesFor9 = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -556,6 +572,7 @@ const createThreeGroupQuarterfinalMatchesFor9 = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -567,6 +584,7 @@ const createThreeGroupQuarterfinalMatchesFor9 = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -578,6 +596,7 @@ const createThreeGroupQuarterfinalMatchesFor9 = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   ];
 
@@ -617,6 +636,7 @@ const createFiveGroupQuarterfinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -629,6 +649,7 @@ const createFiveGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -640,6 +661,7 @@ const createFiveGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -651,6 +673,7 @@ const createFiveGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -662,6 +685,7 @@ const createFiveGroupQuarterfinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   ];
 
@@ -693,6 +717,7 @@ const createSemifinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   // Buscar os vencedores
   const winners: string[] = [];
@@ -726,6 +751,7 @@ const createSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -737,6 +763,7 @@ const createSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   );
 
@@ -766,6 +793,7 @@ const createRoundRobinFinals = async (
   const sideSwitchSumFinal = options.sideSwitchSum || finalConfig.sideSwitchSum;
   const bestOfFinal = options.bestOf || finalConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const pointsPerSetThird = options.pointsPerSet || thirdPlaceConfig.pointsPerSet;
   const sideSwitchSumThird = options.sideSwitchSum || thirdPlaceConfig.sideSwitchSum;
@@ -804,6 +832,7 @@ const createRoundRobinFinals = async (
     side_switch_sum: sideSwitchSumFinal,
     best_of: bestOfFinal,
     modality,
+    direct_win_format: directWinFormat,
   });
 
   // Disputa de 3º lugar (opcional): 3º vs 4º
@@ -818,6 +847,7 @@ const createRoundRobinFinals = async (
       side_switch_sum: sideSwitchSumThird,
       best_of: bestOfThird,
       modality,
+      direct_win_format: directWinFormat,
     });
   }
 
@@ -859,6 +889,7 @@ const createFinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || [7, 7, 5];
   const bestOf = options.bestOf || 3;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   // Ordenar matches por ID para garantir ordem consistente
   const sortedSemifinals = [...completedSemifinals].sort((a, b) => 
@@ -1023,6 +1054,7 @@ const createFinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     });
     console.log(`[createFinalMatches] Criando Disputa 3º lugar: ${losersNames[0]} (${losers[0]}) x ${losersNames[1]} (${losers[1]})`);
   }
@@ -1038,6 +1070,7 @@ const createFinalMatches = async (
     side_switch_sum: sideSwitchSum,
     best_of: bestOf,
     modality,
+    direct_win_format: directWinFormat,
   });
   console.log(`[createFinalMatches] Criando Final: ${winnersNames[0]} (${winners[0]}) x ${winnersNames[1]} (${winners[1]})`);
 
@@ -1226,7 +1259,7 @@ export const getTournamentPhases = async (
   const phases = Array.from(new Set(matches.map((m) => m.phase).filter((p): p is string => Boolean(p))));
   
   // Ordenar fases na ordem lógica
-  const phaseOrder = ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Disputa 3º lugar', 'Final'];
+  const phaseOrder = ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Disputa 3º lugar', 'Final'];
   return phases.sort((a, b) => {
     const indexA = phaseOrder.indexOf(a);
     const indexB = phaseOrder.indexOf(b);
@@ -1258,6 +1291,9 @@ export const suggestNextPhaseMatches = async (
     '2_groups_5_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
     '2_groups_6_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
     '2_groups_3_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
+    '2_groups_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
+    '2_groups_5_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
+    '2_groups_3_repescagem_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
     global_semis: ['Fase de Grupos', 'Semifinal', 'Final'],
     series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
     single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],
@@ -1353,6 +1389,58 @@ export const suggestNextPhaseMatches = async (
           context.options.tieBreakerOrder || [],
         );
         return createSameGroupSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_4_semis': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createCrossGroupSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_5_4_semis': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createCrossGroupSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_3_repescagem_semis': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createRepechageMatches(context.options, qualifiers);
+      },
+      Repescagem: async (context) => {
+        const repechageMatches = context.matches.filter((m) => m.phase === 'Repescagem');
+        return createRepechageSemifinalMatches(context.options, repechageMatches);
       },
       Semifinal: async (context) => {
         const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
@@ -1560,6 +1648,7 @@ const createCrossGroupSemifinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -1572,6 +1661,7 @@ const createCrossGroupSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -1583,6 +1673,7 @@ const createCrossGroupSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   ];
 
@@ -1617,6 +1708,7 @@ const createSameGroupSemifinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -1629,6 +1721,7 @@ const createSameGroupSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -1640,6 +1733,7 @@ const createSameGroupSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
   ];
 
@@ -1688,6 +1782,7 @@ const createGlobalSemifinalMatches = async (
   const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
   const bestOf = options.bestOf || matchConfig.bestOf;
   const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
 
   const newMatches: TablesInsert<'matches'>[] = [
     {
@@ -1700,6 +1795,7 @@ const createGlobalSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
     },
     {
       tournament_id: options.tournamentId,
@@ -1711,6 +1807,194 @@ const createGlobalSemifinalMatches = async (
       side_switch_sum: sideSwitchSum,
       best_of: bestOf,
       modality,
+      direct_win_format: directWinFormat,
+    },
+  ];
+
+  return newMatches;
+};
+
+/**
+ * Obtém o vencedor de um match baseado nos scores
+ */
+const getMatchWinner = async (match: Match, matchScores: MatchScore[]): Promise<string | null> => {
+  const scores = matchScores.filter((s) => s.match_id === match.id);
+  
+  if (scores.length === 0) {
+    return null;
+  }
+
+  const setsWonA = scores.filter((s) => s.team_a_points > s.team_b_points).length;
+  const setsWonB = scores.filter((s) => s.team_b_points > s.team_a_points).length;
+  
+  if (setsWonA > setsWonB) {
+    return match.team_a_id;
+  } else if (setsWonB > setsWonA) {
+    return match.team_b_id;
+  }
+  
+  return null;
+};
+
+/**
+ * Cria sugestões de confrontos para repescagem (2 grupos de 3 com repescagem)
+ * Repescagem 1: 2º Grupo A × 3º Grupo B
+ * Repescagem 2: 2º Grupo B × 3º Grupo A
+ */
+const createRepechageMatches = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
+
+  if (sortedGroups.length !== 2) {
+    return [];
+  }
+
+  const [groupA, groupB] = sortedGroups.map(([, value]) => value);
+
+  // Obter configurações do torneio
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_quarterfinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_quarterfinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
+
+  const newMatches: TablesInsert<'matches'>[] = [
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.second || null,
+      team_b_id: groupB.third || null,
+      phase: 'Repescagem',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupB.second || null,
+      team_b_id: groupA.third || null,
+      phase: 'Repescagem',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+  ];
+
+  return newMatches;
+};
+
+/**
+ * Cria sugestões de confrontos para semifinais após repescagem
+ * Semi 1: 1º Grupo A × Vencedor Repescagem 2
+ * Semi 2: 1º Grupo B × Vencedor Repescagem 1
+ */
+const createRepechageSemifinalMatches = async (
+  options: AdvancePhaseOptions,
+  repechageMatches: Match[],
+): Promise<TablesInsert<'matches'>[]> => {
+  if (repechageMatches.length !== 2) {
+    return [];
+  }
+
+  // Obter classificados dos grupos
+  const qualifiers = await calculateGroupQualifiers(
+    options.tournamentId,
+    options.teams || [],
+    options.matches || [],
+    options.matchScores || [],
+    options.tieBreakerOrder || [],
+  );
+
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
+
+  if (sortedGroups.length !== 2) {
+    return [];
+  }
+
+  const [groupA, groupB] = sortedGroups.map(([, value]) => value);
+
+  // Identificar qual repescagem é qual
+  // Repescagem 1: 2º A × 3º B
+  // Repescagem 2: 2º B × 3º A
+  const repechage1 = repechageMatches.find(
+    (m) =>
+      (m.team_a_id === groupA.second || m.team_b_id === groupA.second) &&
+      (m.team_a_id === groupB.third || m.team_b_id === groupB.third),
+  );
+  const repechage2 = repechageMatches.find(
+    (m) =>
+      (m.team_a_id === groupB.second || m.team_b_id === groupB.second) &&
+      (m.team_a_id === groupA.third || m.team_b_id === groupA.third),
+  );
+
+  if (!repechage1 || !repechage2) {
+    return [];
+  }
+
+  // Obter vencedores das repescagens
+  const repechage1Winner = await getMatchWinner(repechage1, options.matchScores || []);
+  const repechage2Winner = await getMatchWinner(repechage2, options.matchScores || []);
+
+  if (!repechage1Winner || !repechage2Winner) {
+    return [];
+  }
+
+  // Obter configurações do torneio
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_semifinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_semifinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
+
+  const newMatches: TablesInsert<'matches'>[] = [
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.first || null,
+      team_b_id: repechage2Winner,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupB.first || null,
+      team_b_id: repechage1Winner,
+      phase: 'Semifinal',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
     },
   ];
 

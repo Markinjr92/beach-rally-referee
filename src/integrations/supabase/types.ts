@@ -213,6 +213,7 @@ export type Database = {
           best_of: number | null
           court: string | null
           created_at: string | null
+          direct_win_format: boolean | null
           id: string
           modality: string | null
           phase: string | null
@@ -229,6 +230,7 @@ export type Database = {
           best_of?: number | null
           court?: string | null
           created_at?: string | null
+          direct_win_format?: boolean | null
           id?: string
           modality?: string | null
           phase?: string | null
@@ -245,6 +247,7 @@ export type Database = {
           best_of?: number | null
           court?: string | null
           created_at?: string | null
+          direct_win_format?: boolean | null
           id?: string
           modality?: string | null
           phase?: string | null

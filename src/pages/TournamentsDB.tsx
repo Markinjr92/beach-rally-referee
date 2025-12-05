@@ -32,12 +32,24 @@ import {
   generateTournamentStructure,
 } from "@/lib/tournament"
 import { getFormatsByTeamCount, getSupportedTeamCounts } from "@/lib/tournament/formatFilter"
+import { getTeamNameStructure } from "@/lib/tournament/teamNameStructure"
 import { Tournament as TournamentType, TournamentFormatId, TournamentTeam, TieBreakerCriterion } from "@/types/volleyball"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 
 type Tournament = Tables<'tournaments'>
 
 type MatchFormatOption = 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10' | 'melhorDe3_15_12'
+
+interface TeamNameEntry {
+  seed: number
+  groupName?: string
+  groupId?: string
+  teamName: string
+  playerA: string
+  playerB: string
+  playerC?: string
+  playerD?: string
+}
 
 interface CreateTournamentFormState {
   name: string
@@ -49,6 +61,7 @@ interface CreateTournamentFormState {
   hasStatistics: boolean
   formatId: TournamentFormatId
   includeThirdPlace: boolean
+  directWinFormat: boolean
   matchFormats: {
     groups?: MatchFormatOption
     quarterfinals?: MatchFormatOption
@@ -74,6 +87,7 @@ export default function TournamentsDB() {
     teamCount: null,
     formatId: "groups_and_knockout",
     includeThirdPlace: true,
+    directWinFormat: false,
     matchFormats: {
       groups: "melhorDe3",
       quarterfinals: "melhorDe3",
@@ -84,6 +98,10 @@ export default function TournamentsDB() {
     tieBreakerOrder: [...defaultTieBreakerOrder],
   })
   const [currentStep, setCurrentStep] = useState(0)
+  const [hasTeamNames, setHasTeamNames] = useState<boolean | null>(null)
+  const [showTeamNamesDialog, setShowTeamNamesDialog] = useState(false)
+  const [showTeamNamesForm, setShowTeamNamesForm] = useState(false)
+  const [teamNamesData, setTeamNamesData] = useState<TeamNameEntry[]>([])
   const { toast } = useToast()
   const { user, loading: authLoading } = useAuth()
   const { roles, loading: rolesLoading } = useUserRoles(user, authLoading)
@@ -250,6 +268,25 @@ export default function TournamentsDB() {
         { key: 'final', label: 'Final' },
         { key: 'thirdPlace', label: 'Disputa 3º lugar' },
       ],
+      '2_groups_3_repescagem_semis': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Repescagem' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
+      '2_groups_4_semis': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
+      '2_groups_5_4_semis': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
       '6_teams_round_robin': [
         { key: 'groups', label: 'Fase de Grupos' },
         { key: 'final', label: 'Final' },
@@ -301,19 +338,52 @@ export default function TournamentsDB() {
       '3_groups_3_semis': 9,
       '3_groups_3_quarterfinals': 9,
       '5_groups_3_quarterfinals': 15,
+      '2_groups_3_repescagem_semis': 6,
+      '2_groups_4_semis': 8,
+      '2_groups_5_4_semis': 9,
     }
     return teamCounts[formatId] || 12
   }
 
-  const initializeTournamentStructure = async (tournament: Tables<'tournaments'>) => {
+  const initializeTournamentStructure = async (tournament: Tables<'tournaments'>, teamNamesData?: TeamNameEntry[]) => {
     try {
       const requiredTeamCount = form.teamCount || getRequiredTeamCount(form.formatId || 'groups_and_knockout')
       const teamLabel = form.modality === 'quarteto' ? 'Quarteto' : 'Dupla'
-      const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: requiredTeamCount }, (_, index) => ({
-        name: `${teamLabel} Seed ${index + 1}`,
-        player_a: `Atleta ${index + 1}A`,
-        player_b: `Atleta ${index + 1}B`,
-      }))
+      
+      // Criar mapa de nomes por seed se teamNamesData foi fornecido
+      const namesBySeed = new Map<number, TeamNameEntry>()
+      if (teamNamesData) {
+        teamNamesData.forEach(entry => {
+          namesBySeed.set(entry.seed, entry)
+        })
+      }
+      
+      const placeholderTeams: TablesInsert<'teams'>[] = Array.from({ length: requiredTeamCount }, (_, index) => {
+        const seed = index + 1
+        const customName = namesBySeed.get(seed)
+        
+        if (customName) {
+          // Usar nomes customizados
+          const teamData: TablesInsert<'teams'> = {
+            name: customName.teamName,
+            player_a: customName.playerA,
+            player_b: customName.playerB,
+            ...(form.modality === 'quarteto' && {
+              player_c: customName.playerC || null,
+              player_d: customName.playerD || null,
+            }),
+          }
+          
+          return teamData
+        } else {
+          // Usar placeholders padrão
+          return {
+            name: `${teamLabel} Seed ${seed}`,
+            player_a: `Atleta ${seed}A`,
+            player_b: `Atleta ${seed}B`,
+          }
+        }
+      })
 
       const { data: createdTeams, error: insertTeamsError } = await supabase
         .from('teams')
@@ -381,6 +451,7 @@ export default function TournamentsDB() {
           category: form.category || 'Misto',
           modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
           hasStatistics: form.hasStatistics,
+          directWinFormat: form.directWinFormat,
           pointsPerSet: [...finalPreset.pointsPerSet],
           sideSwitchSum: [...finalPreset.sideSwitchSum],
           teamTimeoutsPerSet: finalPreset.teamTimeoutsPerSet,
@@ -395,6 +466,11 @@ export default function TournamentsDB() {
             pointsPerSet: [...finalPreset.pointsPerSet],
             sideSwitchSum: [...finalPreset.sideSwitchSum],
             teamTimeoutsPerSet: finalPreset.teamTimeoutsPerSet,
+          },
+          quarterfinals: {
+            pointsPerSet: [...quarterfinalsPreset.pointsPerSet],
+            sideSwitchSum: [...quarterfinalsPreset.sideSwitchSum],
+            teamTimeoutsPerSet: quarterfinalsPreset.teamTimeoutsPerSet,
           },
           thirdPlace: {
             pointsPerSet: [...thirdPlacePreset.pointsPerSet],
@@ -436,8 +512,9 @@ export default function TournamentsDB() {
               team_b_id: teamBId,
               phase: match.phaseName,
               scheduled_at: match.scheduledAt ?? null,
-              status: match.status,
+              status: 'scheduled',
               modality: match.modality,
+              direct_win_format: match.directWinFormat ?? false,
               points_per_set: match.pointsPerSet,
               side_switch_sum: match.sideSwitchSum,
               best_of: match.pointsPerSet.length,
@@ -525,6 +602,13 @@ export default function TournamentsDB() {
       })
       return
     }
+    
+    // Mostrar dialog perguntando se já tem os nomes das equipes
+    setHasTeamNames(null)
+    setShowTeamNamesDialog(true)
+  }
+
+  const proceedWithTournamentCreation = async () => {
     const location = normalizeString(form.location)
     const category = normalizeString(form.category)
     const modality = normalizeString(form.modality)
@@ -532,7 +616,7 @@ export default function TournamentsDB() {
     const endDateISO = formatDateToISO(form.end)
 
     const payload: TablesInsert<'tournaments'> = {
-      name: trimmedName,
+      name: normalizeString(form.name),
       status: "upcoming",
       has_statistics: !!form.hasStatistics,
       location: location ?? null,
@@ -567,7 +651,7 @@ export default function TournamentsDB() {
       return
     }
 
-    await initializeTournamentStructure(createdTournament)
+    await initializeTournamentStructure(createdTournament, hasTeamNames ? teamNamesData : undefined)
 
     const { data } = await supabase
       .from("tournaments")
@@ -576,6 +660,10 @@ export default function TournamentsDB() {
     setTournaments(data || [])
     setOpen(false)
     setCurrentStep(0)
+    setHasTeamNames(null)
+    setShowTeamNamesDialog(false)
+    setShowTeamNamesForm(false)
+    setTeamNamesData([])
     setForm({
       name: "",
       location: "",
@@ -583,11 +671,12 @@ export default function TournamentsDB() {
       end: "",
       category: "",
       modality: "",
-      hasStatistics: true,
+      hasStatistics: false,
       teamCount: null,
       formatId: "groups_and_knockout",
-      includeThirdPlace: true,
-      matchFormats: {
+    includeThirdPlace: true,
+    directWinFormat: false,
+    matchFormats: {
         groups: "melhorDe3",
         quarterfinals: "melhorDe3",
         semifinals: "melhorDe3",
@@ -767,6 +856,19 @@ export default function TournamentsDB() {
             <Switch
               checked={form.hasStatistics}
               onCheckedChange={(checked) => setForm({ ...form, hasStatistics: checked })}
+              className="data-[state=checked]:bg-white"
+            />
+          </div>
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label className="text-white">Formato de Pontuação</Label>
+              <p className="text-xs text-blue-50/80">
+                Vai a 3 direto: quando ambas equipes chegam no penúltimo ponto empatadas (20x20, 14x14, etc), o set vai até +3 pontos sem necessidade de diferença de 2 pontos.
+              </p>
+            </div>
+            <Switch
+              checked={form.directWinFormat}
+              onCheckedChange={(checked) => setForm({ ...form, directWinFormat: checked })}
               className="data-[state=checked]:bg-white"
             />
           </div>
@@ -1311,6 +1413,316 @@ export default function TournamentsDB() {
           </div>
         )}
       </div>
+
+      {/* Dialog para perguntar se já tem os nomes das equipes */}
+      <Dialog open={showTeamNamesDialog} onOpenChange={setShowTeamNamesDialog}>
+        <DialogContent className="w-[92vw] max-w-md md:w-[85vw] rounded-3xl border border-slate-300/30 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8 backdrop-blur-xl">
+          <DialogHeader className="space-y-4">
+            <DialogTitle className="text-2xl font-extrabold text-white sm:text-3xl">
+              Nomes das equipes
+            </DialogTitle>
+            <DialogDescription className="text-sm font-semibold text-blue-50/90">
+              Você já tem os nomes das equipes cadastradas?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setHasTeamNames(false)
+                setShowTeamNamesDialog(false)
+                proceedWithTournamentCreation()
+              }}
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+            >
+              Não
+            </Button>
+            <Button
+              onClick={() => {
+                setHasTeamNames(true)
+                setShowTeamNamesDialog(false)
+                setShowTeamNamesForm(true)
+              }}
+              className="bg-white text-slate-900 hover:bg-white/90"
+            >
+              Sim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para coletar nomes das equipes */}
+      <Dialog open={showTeamNamesForm} onOpenChange={setShowTeamNamesForm}>
+        <DialogContent className="w-[92vw] max-w-4xl md:w-[85vw] lg:max-w-4xl xl:max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-300/30 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8 backdrop-blur-xl">
+          <DialogHeader className="space-y-4">
+            <DialogTitle className="text-2xl font-extrabold text-white sm:text-3xl">
+              Cadastrar nomes das equipes
+            </DialogTitle>
+            <DialogDescription className="text-sm font-semibold text-blue-50/90">
+              Preencha os nomes das equipes e atletas conforme a estrutura do formato selecionado.
+            </DialogDescription>
+          </DialogHeader>
+          <TeamNamesForm
+            formatId={form.formatId}
+            teamCount={form.teamCount || 0}
+            modality={form.modality}
+            teamNamesData={teamNamesData}
+            setTeamNamesData={setTeamNamesData}
+          />
+          <DialogFooter className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTeamNamesForm(false)
+                setHasTeamNames(null)
+                setTeamNamesData([])
+              }}
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                // Validar que todos os campos estão preenchidos
+                const isValid = teamNamesData.every(entry => 
+                  entry.teamName.trim() !== '' &&
+                  entry.playerA.trim() !== '' &&
+                  entry.playerB.trim() !== '' &&
+                  (form.modality !== 'quarteto' || (entry.playerC?.trim() !== '' && entry.playerD?.trim() !== ''))
+                )
+                
+                if (!isValid) {
+                  toast({
+                    title: "Campos obrigatórios",
+                    description: "Por favor, preencha todos os nomes das equipes e atletas.",
+                    variant: "destructive"
+                  })
+                  return
+                }
+                
+                setShowTeamNamesForm(false)
+                proceedWithTournamentCreation()
+              }}
+              className="bg-white text-slate-900 hover:bg-white/90"
+            >
+              Confirmar e Criar Torneio
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+// Componente para o formulário de nomes das equipes
+function TeamNamesForm({
+  formatId,
+  teamCount,
+  modality,
+  teamNamesData,
+  setTeamNamesData,
+}: {
+  formatId: TournamentFormatId
+  teamCount: number
+  modality: string
+  teamNamesData: TeamNameEntry[]
+  setTeamNamesData: (data: TeamNameEntry[]) => void
+}) {
+  const isQuarteto = modality === 'quarteto'
+
+  // Inicializar dados se estiver vazio
+  useEffect(() => {
+    if (teamNamesData.length === 0 && teamCount > 0) {
+      const structure = getTeamNameStructure(formatId, teamCount)
+      const initialData: TeamNameEntry[] = []
+      
+      if (structure.type === 'groups') {
+        structure.groups.forEach(group => {
+          group.teams.forEach(team => {
+            initialData.push({
+              seed: team.seed,
+              groupName: group.name,
+              groupId: group.id,
+              teamName: '',
+              playerA: '',
+              playerB: '',
+              playerC: isQuarteto ? '' : undefined,
+              playerD: isQuarteto ? '' : undefined,
+            })
+          })
+        })
+      } else {
+        structure.teams.forEach(team => {
+          initialData.push({
+            seed: team.seed,
+            teamName: '',
+            playerA: '',
+            playerB: '',
+            playerC: isQuarteto ? '' : undefined,
+            playerD: isQuarteto ? '' : undefined,
+          })
+        })
+      }
+      
+      setTeamNamesData(initialData)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formatId, teamCount, modality])
+
+  const structure = getTeamNameStructure(formatId, teamCount)
+
+  if (teamNamesData.length === 0) {
+    return <div className="text-white/70">Carregando...</div>
+  }
+
+  const updateEntry = (seed: number, field: keyof TeamNameEntry, value: string) => {
+    setTeamNamesData(
+      teamNamesData.map(entry =>
+        entry.seed === seed ? { ...entry, [field]: value } : entry
+      )
+    )
+  }
+
+  if (structure.type === 'groups') {
+    return (
+      <div className="space-y-6">
+        {structure.groups.map(group => {
+          const groupEntries = teamNamesData.filter(e => e.groupId === group.id)
+          return (
+            <div key={group.id} className="space-y-4">
+              <h3 className="text-lg font-semibold text-white border-b border-white/20 pb-2">
+                {group.name}
+              </h3>
+              <div className="space-y-4">
+                {groupEntries.map((entry, index) => {
+                  const teamInfo = group.teams.find(t => t.seed === entry.seed)
+                  return (
+                  <div key={entry.seed} className="p-4 rounded-lg border border-white/20 bg-white/5 space-y-3">
+                    <div className="font-medium text-white/90">{teamInfo?.label || `${entry.groupName} - Equipe ${index + 1}`}</div>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <Label className="text-white/80">Nome da Equipe</Label>
+                        <Input
+                          value={entry.teamName}
+                          onChange={(e) => updateEntry(entry.seed, 'teamName', e.target.value)}
+                          placeholder="Nome da equipe"
+                          className="bg-white/10 border-white/20 text-white"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-white/80">Atleta A</Label>
+                          <Input
+                            value={entry.playerA}
+                            onChange={(e) => updateEntry(entry.seed, 'playerA', e.target.value)}
+                            placeholder="Nome do atleta A"
+                            className="bg-white/10 border-white/20 text-white"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/80">Atleta B</Label>
+                          <Input
+                            value={entry.playerB}
+                            onChange={(e) => updateEntry(entry.seed, 'playerB', e.target.value)}
+                            placeholder="Nome do atleta B"
+                            className="bg-white/10 border-white/20 text-white"
+                          />
+                        </div>
+                      </div>
+                      {isQuarteto && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-white/80">Atleta C</Label>
+                            <Input
+                              value={entry.playerC || ''}
+                              onChange={(e) => updateEntry(entry.seed, 'playerC', e.target.value)}
+                              placeholder="Nome do atleta C"
+                              className="bg-white/10 border-white/20 text-white"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-white/80">Atleta D</Label>
+                            <Input
+                              value={entry.playerD || ''}
+                              onChange={(e) => updateEntry(entry.seed, 'playerD', e.target.value)}
+                              placeholder="Nome do atleta D"
+                              className="bg-white/10 border-white/20 text-white"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  } else {
+    return (
+      <div className="space-y-4">
+        {teamNamesData.map(entry => (
+          <div key={entry.seed} className="p-4 rounded-lg border border-white/20 bg-white/5 space-y-3">
+            <div className="font-medium text-white/90">Equipe {entry.seed}</div>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <Label className="text-white/80">Nome da Equipe</Label>
+                <Input
+                  value={entry.teamName}
+                  onChange={(e) => updateEntry(entry.seed, 'teamName', e.target.value)}
+                  placeholder="Nome da equipe"
+                  className="bg-white/10 border-white/20 text-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-white/80">Atleta A</Label>
+                  <Input
+                    value={entry.playerA}
+                    onChange={(e) => updateEntry(entry.seed, 'playerA', e.target.value)}
+                    placeholder="Nome do atleta A"
+                    className="bg-white/10 border-white/20 text-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-white/80">Atleta B</Label>
+                  <Input
+                    value={entry.playerB}
+                    onChange={(e) => updateEntry(entry.seed, 'playerB', e.target.value)}
+                    placeholder="Nome do atleta B"
+                    className="bg-white/10 border-white/20 text-white"
+                  />
+                </div>
+              </div>
+              {isQuarteto && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-white/80">Atleta C</Label>
+                    <Input
+                      value={entry.playerC || ''}
+                      onChange={(e) => updateEntry(entry.seed, 'playerC', e.target.value)}
+                      placeholder="Nome do atleta C"
+                      className="bg-white/10 border-white/20 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-white/80">Atleta D</Label>
+                    <Input
+                      value={entry.playerD || ''}
+                      onChange={(e) => updateEntry(entry.seed, 'playerD', e.target.value)}
+                      placeholder="Nome do atleta D"
+                      className="bg-white/10 border-white/20 text-white"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
 }

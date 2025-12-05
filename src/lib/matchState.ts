@@ -501,6 +501,56 @@ const getSetsToWin = (game: Game) => {
   return Math.floor(sets / 2) + 1;
 };
 
+/**
+ * Calcula se um set tem vencedor considerando o formato de pontuação
+ * @param pointsA Pontos da equipe A
+ * @param pointsB Pontos da equipe B
+ * @param targetPoints Pontos necessários para vencer o set (21, 15, 10, 12, etc)
+ * @param directWinFormat Se true, usa formato "vai a 3 direto"
+ * @returns true se o set tem vencedor
+ */
+const calculateSetWinner = (
+  pointsA: number,
+  pointsB: number,
+  targetPoints: number,
+  directWinFormat: boolean
+): boolean => {
+  if (directWinFormat) {
+    // Formato "vai a 3 direto"
+    const secondToLastPoint = targetPoints - 1;
+    const directWinTarget = targetPoints + 2; // +3 pontos (23 para 21, 17 para 15, etc)
+    
+    // Verificar se uma equipe já chegou em +3 pontos (23, 17, etc)
+    if (pointsA >= directWinTarget || pointsB >= directWinTarget) {
+      return true;
+    }
+    
+    // Verificar se ambas equipes chegaram no penúltimo ponto empatadas (20x20, 14x14, etc)
+    // Se sim, o set só termina quando uma chega em +3, então ainda não terminou
+    if (pointsA === secondToLastPoint && pointsB === secondToLastPoint) {
+      return false; // Ainda não terminou, precisa ir até +3
+    }
+    
+    // Se uma equipe já passou do penúltimo ponto mas ainda não chegou em +3
+    // e a outra ainda está no penúltimo ou abaixo, verificar se entrou no modo "vai a 3"
+    if ((pointsA > secondToLastPoint && pointsB === secondToLastPoint) || 
+        (pointsB > secondToLastPoint && pointsA === secondToLastPoint)) {
+      // Uma equipe passou de 20, mas a outra ainda está em 20
+      // Isso significa que quando ambas estavam em 20x20, uma marcou ponto
+      // Então agora está no modo "vai a 3 direto" e só termina em +3
+      return false; // Ainda não terminou, precisa ir até +3
+    }
+    
+    // Caso contrário, mantém lógica tradicional
+    const difference = Math.abs(pointsA - pointsB);
+    return difference >= 2 && (pointsA >= targetPoints || pointsB >= targetPoints);
+  } else {
+    // Formato tradicional "vai a 2"
+    const difference = Math.abs(pointsA - pointsB);
+    return difference >= 2 && (pointsA >= targetPoints || pointsB >= targetPoints);
+  }
+};
+
 export const mapScoreRowsToGameState = (rows: MatchScoreRow[] | null | undefined, game: Game): GameState => {
   const state = createDefaultGameState(game);
   if (!rows || rows.length === 0) {
@@ -519,8 +569,13 @@ export const mapScoreRowsToGameState = (rows: MatchScoreRow[] | null | undefined
     state.scores.teamB[setIndex] = row.team_b_points;
 
     const targetPoints = getSetTargetPoints(game, setIndex);
-    const difference = Math.abs(row.team_a_points - row.team_b_points);
-    const hasWinner = difference >= 2 && (row.team_a_points >= targetPoints || row.team_b_points >= targetPoints);
+    const directWinFormat = game.directWinFormat ?? false;
+    const hasWinner = calculateSetWinner(
+      row.team_a_points,
+      row.team_b_points,
+      targetPoints,
+      directWinFormat
+    );
 
     if (hasWinner) {
       if (row.team_a_points > row.team_b_points) {

@@ -6,8 +6,9 @@ import { TournamentFormatId } from '@/types/volleyball';
 export const getFormatsByTeamCount = (teamCount: number): TournamentFormatId[] => {
   const formatMap: Record<number, TournamentFormatId[]> = {
     5: ['5_teams_round_robin'],
-    6: ['2_groups_3_cross_semis', '6_teams_round_robin'],
-    9: ['3_groups_3_semis', '3_groups_3_quarterfinals'],
+    6: ['2_groups_3_cross_semis', '2_groups_3_repescagem_semis', '6_teams_round_robin'],
+    8: ['2_groups_4_semis'],
+    9: ['2_groups_5_4_semis', '3_groups_3_semis', '3_groups_3_quarterfinals'],
     10: ['2_groups_5_quarterfinals'],
     12: [
       'groups_and_knockout',
@@ -27,6 +28,6 @@ export const getFormatsByTeamCount = (teamCount: number): TournamentFormatId[] =
  * Retorna todas as quantidades de equipes suportadas pelos formatos
  */
 export const getSupportedTeamCounts = (): number[] => {
-  return [5, 6, 9, 10, 12, 15];
+  return [5, 6, 8, 9, 10, 12, 15];
 };
 

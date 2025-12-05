@@ -12,7 +12,10 @@ export type TournamentFormatId =
   | '5_teams_round_robin'
   | '3_groups_3_semis'
   | '3_groups_3_quarterfinals'
-  | '5_groups_3_quarterfinals';
+  | '5_groups_3_quarterfinals'
+  | '2_groups_3_repescagem_semis'
+  | '2_groups_4_semis'
+  | '2_groups_5_4_semis';
 
 export type TieBreakerCriterion =
   | 'head_to_head'
@@ -123,6 +126,7 @@ export interface GameConfiguration {
   teamB: Team;
   pointsPerSet: number[]; // [21, 21, 15]
   needTwoPointLead: boolean;
+  directWinFormat?: boolean; // true = vai a 3 direto, false = vai a 2 tradicional
   sideSwitchSum: number[]; // [7, 7, 5]
   hasTechnicalTimeout: boolean;
   technicalTimeoutSum: number;

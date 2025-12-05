@@ -280,6 +280,7 @@ const TournamentInfoDetail = () => {
             },
             pointsPerSet,
             needTwoPointLead: true,
+            directWinFormat: match.direct_win_format ?? false,
             sideSwitchSum,
             hasTechnicalTimeout: false,
             technicalTimeoutSum: 0,

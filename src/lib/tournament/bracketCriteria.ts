@@ -344,6 +344,114 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '2_groups_4_semis': {
+    title: '2 Grupos de 4 - Semi/Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 4 duplas cada'),
+          match('Formato', 'Todos contra todos dentro de cada grupo'),
+          match('Total', '12 jogos na fase de grupos (6 por grupo)'),
+          match('Grupo A', 'Seeds: 1, 3, 5, 7'),
+          match('Grupo B', 'Seeds: 2, 4, 6, 8'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Avanço', 'Os 2 primeiros colocados de cada grupo avançam'),
+          match('Total', '4 duplas nas semifinais'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('Semi 1', '1º Grupo A × 2º Grupo B'),
+          match('Semi 2', '1º Grupo B × 2º Grupo A'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor Semi 1 × Vencedor Semi 2', 'Final'),
+          match('3º lugar', 'Perdedor Semi 1 × Perdedor Semi 2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
+  '2_groups_5_4_semis': {
+    title: '2 Grupos (5+4) - Semi/Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', 'Grupo A com 5 duplas e Grupo B com 4 duplas'),
+          match('Formato', 'Todos contra todos dentro de cada grupo'),
+          match('Total', '16 jogos na fase de grupos (10 no Grupo A + 6 no Grupo B)'),
+          match('Grupo A', 'Seeds: 1, 3, 5, 7, 9'),
+          match('Grupo B', 'Seeds: 2, 4, 6, 8'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Avanço', 'Os 2 primeiros colocados de cada grupo avançam'),
+          match('Total', '4 duplas nas semifinais'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('Semi 1', '1º Grupo A × 2º Grupo B'),
+          match('Semi 2', '1º Grupo B × 2º Grupo A'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor Semi 1 × Vencedor Semi 2', 'Final'),
+          match('3º lugar', 'Perdedor Semi 1 × Perdedor Semi 2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
+  '2_groups_3_repescagem_semis': {
+    title: '2 Grupos de 3 - Repescagem + Semi/Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 3 duplas cada'),
+          match('Formato', 'Todos contra todos dentro do grupo'),
+          match('Total', '6 jogos na fase de grupos (3 por grupo)'),
+          match('Grupo A', 'Seeds: 1, 3, 5'),
+          match('Grupo B', 'Seeds: 2, 4, 6'),
+        ],
+      },
+      {
+        phase: 'Repescagem',
+        matches: [
+          match('Repescagem 1', '2º Grupo A × 3º Grupo B'),
+          match('Repescagem 2', '2º Grupo B × 3º Grupo A'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('Semi 1', '1º Grupo A × Vencedor Repescagem 2'),
+          match('Semi 2', '1º Grupo B × Vencedor Repescagem 1'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor Semi 1 × Vencedor Semi 2', 'Final'),
+          match('3º lugar', 'Perdedor Semi 1 × Perdedor Semi 2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
   '6_teams_round_robin': {
     title: '6 Duplas - Todos contra Todos + Final',
     sections: [

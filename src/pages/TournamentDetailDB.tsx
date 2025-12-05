@@ -39,6 +39,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -98,6 +99,7 @@ type MatchSetupEntry = {
   pointsText: string
   sideSwitchText: string
   formatPreset?: MatchFormatPresetKey
+  directWinFormat?: boolean
 }
 
 type TeamOption = { value: string; label: string }
@@ -203,6 +205,7 @@ type MatchFormState = {
   scheduled_at: string
   court: string
   mode: MatchModeValue
+  directWinFormat: boolean
 }
 
 type EditingMatch = {
@@ -214,6 +217,7 @@ type EditingMatch = {
   points_per_set?: number[]
   side_switch_sum?: number[]
   formatPreset?: MatchFormatPresetKey
+  direct_win_format?: boolean
 } | null
 
 type EditingTeam = {
@@ -374,6 +378,7 @@ export default function TournamentDetailDB() {
     scheduled_at: '',
     court: '',
     mode: MATCH_MODES[0].value,
+    directWinFormat: false,
   })
   const [editingTeam, setEditingTeam] = useState<EditingTeam>(null)
   const [editingMatch, setEditingMatch] = useState<EditingMatch>(null)
@@ -386,6 +391,8 @@ export default function TournamentDetailDB() {
   const [logoUrl, setLogoUrl] = useState('')
   const [sponsorLogos, setSponsorLogos] = useState<string[]>([])
   const [newSponsorUrl, setNewSponsorUrl] = useState('')
+  const [editingTournamentName, setEditingTournamentName] = useState(false)
+  const [tournamentNameValue, setTournamentNameValue] = useState('')
   const [teamGroups, setTeamGroups] = useState<Record<string, string | null>>({})
   const [matchScores, setMatchScores] = useState<MatchScore[]>([])
   const [matchStates, setMatchStates] = useState<Record<string, GameState>>({})
@@ -463,6 +470,7 @@ export default function TournamentDetailDB() {
       if (t.sponsor_logos && Array.isArray(t.sponsor_logos)) {
         setSponsorLogos(t.sponsor_logos as string[])
       }
+      if (t.name) setTournamentNameValue(t.name)
     }
     load()
   }, [tournamentId, toast, loadTournamentTeams])
@@ -691,6 +699,7 @@ export default function TournamentDetailDB() {
         pointsText: defaults.pointsPerSet.join(', '),
         sideSwitchText: defaults.sideSwitchSum.join(', '),
         formatPreset: undefined,
+        directWinFormat: false,
         }
       })
     } else {
@@ -710,6 +719,7 @@ export default function TournamentDetailDB() {
           pointsText: defaults.pointsPerSet.join(', '),
           sideSwitchText: defaults.sideSwitchSum.join(', '),
           formatPreset: undefined,
+          directWinFormat: false,
         }
       })
     }
@@ -758,6 +768,7 @@ export default function TournamentDetailDB() {
       points_per_set: parseNumberList(entry.pointsText),
       side_switch_sum: parseNumberList(entry.sideSwitchText),
       modality: tournament?.modality || 'dupla',
+      direct_win_format: entry.directWinFormat ?? false,
     }))
 
     setIsSavingMatchSetup(true)
@@ -1082,6 +1093,26 @@ export default function TournamentDetailDB() {
     toast({ title: 'Equipe atualizada com sucesso' })
   }
 
+  const handleSaveTournamentName = async () => {
+    if (!tournament || !tournamentNameValue.trim()) {
+      toast({ title: 'Nome inválido', description: 'O nome do torneio não pode estar vazio', variant: 'destructive' })
+      return
+    }
+    
+    const { error } = await supabase
+      .from('tournaments')
+      .update({ name: tournamentNameValue.trim() })
+      .eq('id', tournament.id)
+    
+    if (error) {
+      toast({ title: 'Erro ao salvar nome', description: error.message, variant: 'destructive' })
+    } else {
+      setTournament({ ...tournament, name: tournamentNameValue.trim() })
+      setEditingTournamentName(false)
+      toast({ title: 'Nome do torneio atualizado com sucesso' })
+    }
+  }
+
   const handleSaveLogo = async () => {
     if (!logoUrl) return
     const { error } = await supabase
@@ -1139,10 +1170,12 @@ export default function TournamentDetailDB() {
       best_of?: number
       points_per_set?: number[]
       side_switch_sum?: number[]
+      direct_win_format?: boolean
     } = {
       scheduled_at: editingMatch.scheduled_at || null,
       court: editingMatch.court || null,
       phase: editingMatch.phase || null,
+      direct_win_format: editingMatch.direct_win_format ?? false,
     }
     
     // Se houver formato definido, incluir nos dados de atualização
@@ -1185,6 +1218,7 @@ export default function TournamentDetailDB() {
       best_of: updateData.best_of ?? m.best_of,
       points_per_set: updateData.points_per_set ?? m.points_per_set,
       side_switch_sum: updateData.side_switch_sum ?? m.side_switch_sum,
+      direct_win_format: updateData.direct_win_format ?? m.direct_win_format ?? false,
     } : m))
     setEditingMatch(null)
     toast({ title: 'Jogo atualizado com sucesso' })
@@ -1552,8 +1586,8 @@ export default function TournamentDetailDB() {
                       size="sm"
                       aria-label={`Finalizar "${currentPhaseFilter}"`}
                     >
-                      <Play className="h-4 w-4 sm:mr-2" />
-                      <span className="hidden sm:inline">Finalizar "{currentPhaseFilter}"</span>
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Finalizar "{currentPhaseFilter}"</span>
                     </Button>
                   </div>
                 )}
@@ -1597,6 +1631,18 @@ export default function TournamentDetailDB() {
                                   className="bg-white/10 border-white/20 text-white"
                                   placeholder="Ex: Fase de Grupos"
                                 />
+                              </div>
+                              <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 p-2">
+                                <input
+                                  type="checkbox"
+                                  id="editingDirectWinFormat"
+                                  checked={editingMatch?.direct_win_format ?? false}
+                                  onChange={(e) => setEditingMatch({ ...editingMatch, direct_win_format: e.target.checked } as EditingMatch)}
+                                  className="h-4 w-4 rounded border-white/30 bg-white/10 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                />
+                                <Label htmlFor="editingDirectWinFormat" className="text-xs text-white/90 cursor-pointer">
+                                  Vai a 3 direto
+                                </Label>
                               </div>
                             </div>
                             <div className="space-y-3 border-t border-white/10 pt-3">
@@ -1648,7 +1694,7 @@ export default function TournamentDetailDB() {
                                 variant="outline"
                                 onClick={() => setEditingMatch(null)}
                                 aria-label="Cancelar edição do jogo"
-                                className="border-white/30 text-white hover:bg-white/15"
+                                className="border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200"
                               >
                                 <X className="h-4 w-4 sm:mr-2" />
                                 <span className="hidden sm:inline">Cancelar</span>
@@ -1694,7 +1740,7 @@ export default function TournamentDetailDB() {
                                   <SelectItem value="canceled">Cancelado</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {(m.status !== 'completed' || isAdminSistema) && (
+                              {m.status !== 'completed' && (
                                 <Button
                                   size="sm"
                                   className="bg-amber-500/90 text-white hover:bg-amber-600"
@@ -1710,6 +1756,7 @@ export default function TournamentDetailDB() {
                                       points_per_set: toNumberArray(m.points_per_set) || undefined,
                                       side_switch_sum: toNumberArray(m.side_switch_sum) || undefined,
                                       formatPreset: detectedPreset,
+                                      direct_win_format: m.direct_win_format ?? false,
                                     })
                                   }}
                                 >
@@ -1727,16 +1774,6 @@ export default function TournamentDetailDB() {
                                   <span className="hidden sm:inline">Mesa</span>
                                 </Button>
                               </Link>
-                              <Link to={`/scoreboard/${m.id}`}>
-                                <Button
-                                  size="sm"
-                                  className="bg-emerald-500/90 text-white hover:bg-emerald-600"
-                                  aria-label="Abrir placar do jogo"
-                                >
-                                  <Tv className="h-4 w-4 sm:mr-2" />
-                                  <span className="hidden sm:inline">Placar</span>
-                                </Button>
-                              </Link>
                               {m.status === 'in_progress' && (
                                 <Link to={`/spectator/${m.id}`}>
                                   <Button
@@ -1749,30 +1786,32 @@ export default function TournamentDetailDB() {
                                   </Button>
                                 </Link>
                               )}
-                              <ConfirmDialog
-                                title="Excluir jogo"
-                                description="Confirme para remover este jogo da tabela. Esta ação não pode ser desfeita."
-                                confirmText="Excluir jogo"
-                                destructive
-                                trigger={
-                                  <Button
-                                    size="sm"
-                                    aria-label="Excluir jogo"
-                                    className="bg-red-500/90 text-white hover:bg-red-600"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                }
-                                onConfirm={async () => {
-                                  const { error } = await supabase.from('matches').delete().eq('id', m.id)
-                                  if (error) {
-                                    toast({ title: 'Erro ao excluir jogo', description: error.message })
-                                    return
+                              {m.status !== 'completed' && (
+                                <ConfirmDialog
+                                  title="Excluir jogo"
+                                  description="Confirme para remover este jogo da tabela. Esta ação não pode ser desfeita."
+                                  confirmText="Excluir jogo"
+                                  destructive
+                                  trigger={
+                                    <Button
+                                      size="sm"
+                                      aria-label="Excluir jogo"
+                                      className="bg-red-500/90 text-white hover:bg-red-600"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
                                   }
-                                  setMatches(prev => prev.filter(x => x.id !== m.id))
-                                  toast({ title: 'Jogo removido' })
-                                }}
-                              />
+                                  onConfirm={async () => {
+                                    const { error } = await supabase.from('matches').delete().eq('id', m.id)
+                                    if (error) {
+                                      toast({ title: 'Erro ao excluir jogo', description: error.message })
+                                      return
+                                    }
+                                    setMatches(prev => prev.filter(x => x.id !== m.id))
+                                    toast({ title: 'Jogo removido' })
+                                  }}
+                                />
+                              )}
                             </div>
                           </div>
                         )}
@@ -1838,11 +1877,12 @@ export default function TournamentDetailDB() {
                           best_of: selectedMode.bestOf,
                           points_per_set: [...selectedMode.pointsPerSet],
                           side_switch_sum: [...selectedMode.sideSwitchSum],
+                          direct_win_format: matchForm.directWinFormat,
                         }])
                         if (error) { toast({ title: 'Erro ao criar jogo', description: error.message }); return }
                         const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournament.id).order('scheduled_at', { ascending: true })
                         setMatches(m || [])
-                        setMatchForm({ teamA: '', teamB: '', scheduled_at: '', court: '', mode: MATCH_MODES[0].value })
+                        setMatchForm({ teamA: '', teamB: '', scheduled_at: '', court: '', mode: MATCH_MODES[0].value, directWinFormat: false })
                         toast({ title: 'Jogo criado' })
                       }}
                     >
@@ -2080,6 +2120,69 @@ export default function TournamentDetailDB() {
                 <CardTitle className="text-xl">Configurações do Torneio</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Tournament Name */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Edit2 size={20} />
+                    Nome do Torneio
+                  </h3>
+                  {editingTournamentName ? (
+                    <div className="flex gap-2">
+                      <Input
+                        value={tournamentNameValue}
+                        onChange={(e) => setTournamentNameValue(e.target.value)}
+                        placeholder="Nome do torneio"
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveTournamentName()
+                          } else if (e.key === 'Escape') {
+                            setEditingTournamentName(false)
+                            setTournamentNameValue(tournament?.name || '')
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <Button
+                        onClick={handleSaveTournamentName}
+                        aria-label="Salvar nome do torneio"
+                        className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                      >
+                        <Save className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Salvar</span>
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setEditingTournamentName(false)
+                          setTournamentNameValue(tournament?.name || '')
+                        }}
+                        variant="outline"
+                        aria-label="Cancelar edição"
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                      >
+                        <X className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Cancelar</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <p className="text-white/90 text-lg font-medium flex-1">{tournament?.name || 'Sem nome'}</p>
+                      <Button
+                        onClick={() => {
+                          setEditingTournamentName(true)
+                          setTournamentNameValue(tournament?.name || '')
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                      >
+                        <Edit2 className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Editar</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Tournament Logo */}
                 <div className="space-y-3">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -2439,6 +2542,16 @@ export default function TournamentDetailDB() {
                       <span className="font-semibold">Troca:</span> {entry.sideSwitchText}
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 p-2">
+                    <Switch
+                      id={`directWinFormat-${entry.id}`}
+                      checked={entry.directWinFormat ?? false}
+                      onCheckedChange={(checked) => updateMatchSetupEntry(entry.id, { directWinFormat: checked })}
+                    />
+                    <Label htmlFor={`directWinFormat-${entry.id}`} className="text-xs text-white/90 cursor-pointer">
+                      Vai a 3 direto
+                    </Label>
+                  </div>
                 </div>
                 <p className="text-[11px] text-white/50">Fase: {entry.phase}</p>
               </div>
@@ -2450,7 +2563,7 @@ export default function TournamentDetailDB() {
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               variant="outline"
-              className="border-white/20 text-white hover:bg-white/10"
+              className="border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200"
               onClick={() => setShowMatchSetupDialog(false)}
               aria-label="Cancelar configuração"
             >

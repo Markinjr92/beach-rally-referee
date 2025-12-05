@@ -902,6 +902,7 @@ export default function RefereeDesk() {
           },
           pointsPerSet,
           needTwoPointLead: true,
+          directWinFormat: match.direct_win_format ?? false,
           sideSwitchSum,
           hasTechnicalTimeout: false,
           technicalTimeoutSum: 0,
@@ -1175,10 +1176,44 @@ export default function RefereeDesk() {
       game.pointsPerSet?.[hypotheticalSetIndex] ??
       game.pointsPerSet?.[game.pointsPerSet.length - 1] ??
       21;
-    const minimumLead = game.needTwoPointLead ? 2 : 1;
-    const wouldFinishSet =
-      prospectiveWinnerScore >= targetPoints &&
-      prospectiveWinnerScore - prospectiveOpponentScore >= minimumLead;
+    const directWinFormat = game.directWinFormat ?? false;
+    
+    let wouldFinishSet = false;
+    
+    if (directWinFormat) {
+      // Formato "vai a 3 direto"
+      const secondToLastPoint = targetPoints - 1;
+      const directWinTarget = targetPoints + 2; // +3 pontos (23 para 21, 17 para 15, etc)
+      
+      // Se ambas equipes chegaram no penúltimo ponto empatadas (20x20, 14x14, etc)
+      if (currentScoreA === secondToLastPoint && currentScoreB === secondToLastPoint) {
+        // Set termina quando uma equipe chega em +3 pontos (23, 17, etc)
+        wouldFinishSet = prospectiveWinnerScore >= directWinTarget;
+      } else {
+        // Verificar se já entrou no modo "vai a 3 direto"
+        // Isso acontece quando ambas chegaram em 20x20 e uma já passou
+        const minCurrentScore = Math.min(currentScoreA, currentScoreB);
+        const maxCurrentScore = Math.max(currentScoreA, currentScoreB);
+        
+        // Se ambas estão no penúltimo ponto ou acima, e nenhuma chegou em +3, está no modo "vai a 3"
+        if (minCurrentScore >= secondToLastPoint && maxCurrentScore < directWinTarget) {
+          // Set só termina quando uma equipe chega em +3 pontos
+          wouldFinishSet = prospectiveWinnerScore >= directWinTarget || prospectiveOpponentScore >= directWinTarget;
+        } else {
+          // Caso contrário, mantém lógica tradicional
+          const minimumLead = game.needTwoPointLead ? 2 : 1;
+          wouldFinishSet =
+            prospectiveWinnerScore >= targetPoints &&
+            prospectiveWinnerScore - prospectiveOpponentScore >= minimumLead;
+        }
+      }
+    } else {
+      // Formato tradicional "vai a 2"
+      const minimumLead = game.needTwoPointLead ? 2 : 1;
+      wouldFinishSet =
+        prospectiveWinnerScore >= targetPoints &&
+        prospectiveWinnerScore - prospectiveOpponentScore >= minimumLead;
+    }
 
     if (wouldFinishSet && !options?.bypassConfirmation) {
       const winnerKey = team === 'A' ? 'teamA' : 'teamB';
@@ -1266,8 +1301,48 @@ export default function RefereeDesk() {
     const opponentKey: 'teamA' | 'teamB' = team === 'A' ? 'teamB' : 'teamA';
     const winnerScore = updatedScores[winnerKey][currentSet];
     const opponentScore = updatedScores[opponentKey][currentSet];
-    const setWon =
-      winnerScore >= targetPointsForCurrentSet && winnerScore - opponentScore >= minimumLead;
+    
+    let setWon = false;
+    if (directWinFormat) {
+      // Formato "vai a 3 direto"
+      const secondToLastPoint = targetPointsForCurrentSet - 1;
+      const directWinTarget = targetPointsForCurrentSet + 2; // +3 pontos (23 para 21, 17 para 15, etc)
+      
+      // Verificar se uma equipe já chegou em +3 pontos (23, 17, etc)
+      if (winnerScore >= directWinTarget || opponentScore >= directWinTarget) {
+        setWon = winnerScore >= directWinTarget;
+      } else {
+        // Verificar se ambas estavam no penúltimo ponto antes deste ponto (20x20, 14x14, etc)
+        const previousWinnerScore = winnerScore - 1;
+        const previousOpponentScore = opponentScore;
+        
+        // Se ambas chegaram no penúltimo ponto empatadas, entrou no modo "vai a 3 direto"
+        const enteredDirectWinMode = previousWinnerScore === secondToLastPoint && previousOpponentScore === secondToLastPoint;
+        
+        // Se já entrou no modo "vai a 3 direto", o set só termina quando uma equipe chega em +3 pontos
+        if (enteredDirectWinMode) {
+          // Ainda não terminou, precisa ir até +3
+          setWon = false;
+        } else {
+          // Verificar se ainda está no modo "vai a 3 direto" (uma equipe >= 20 e outra >= 20, mas nenhuma chegou em +3)
+          const minScore = Math.min(winnerScore, opponentScore);
+          const maxScore = Math.max(winnerScore, opponentScore);
+          
+          // Se ambas estão no penúltimo ponto ou acima, e nenhuma chegou em +3, está no modo "vai a 3"
+          if (minScore >= secondToLastPoint && maxScore < directWinTarget) {
+            setWon = false; // Ainda não terminou, precisa ir até +3
+          } else {
+            // Caso contrário, mantém lógica tradicional
+            const minimumLead = game.needTwoPointLead ? 2 : 1;
+            setWon = winnerScore >= targetPointsForCurrentSet && winnerScore - opponentScore >= minimumLead;
+          }
+        }
+      }
+    } else {
+      // Formato tradicional "vai a 2"
+      const minimumLead = game.needTwoPointLead ? 2 : 1;
+      setWon = winnerScore >= targetPointsForCurrentSet && winnerScore - opponentScore >= minimumLead;
+    }
 
     const eventsToLog: Array<Parameters<typeof logMatchEvent>[0]> = [
       {
