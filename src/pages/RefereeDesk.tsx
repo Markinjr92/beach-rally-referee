@@ -1044,6 +1044,150 @@ export default function RefereeDesk() {
     }
   }, [playAlert, showSideSwitchAlert]);
 
+  // Verificação automática de finalização do jogo
+  useEffect(() => {
+    if (!game || !gameState || gameState.isGameEnded) return;
+
+    const totalSets = game.pointsPerSet?.length ?? 3;
+    const setsToWin = Math.ceil(totalSets / 2);
+    const directWinFormat = game.directWinFormat ?? false;
+
+    // Verificar se algum set já deveria estar finalizado mas não foi marcado
+    let needsUpdate = false;
+    const updatedSetsWon = { ...gameState.setsWon };
+    const updatedScores = {
+      teamA: [...gameState.scores.teamA],
+      teamB: [...gameState.scores.teamB],
+    };
+
+    for (let setIndex = 0; setIndex < totalSets; setIndex++) {
+      const scoreA = updatedScores.teamA[setIndex] ?? 0;
+      const scoreB = updatedScores.teamB[setIndex] ?? 0;
+      const targetPoints = game.pointsPerSet?.[setIndex] ?? game.pointsPerSet?.[game.pointsPerSet.length - 1] ?? 21;
+
+      // Verificar se o set já tem vencedor usando a mesma lógica de calculateSetWinner
+      let setHasWinner = false;
+      if (directWinFormat) {
+        const secondToLastPoint = targetPoints - 1;
+        const directWinTarget = targetPoints + 2;
+        
+        if (scoreA >= directWinTarget || scoreB >= directWinTarget) {
+          setHasWinner = true;
+        } else if (scoreA === secondToLastPoint && scoreB === secondToLastPoint) {
+          setHasWinner = false;
+        } else {
+          const minScore = Math.min(scoreA, scoreB);
+          const maxScore = Math.max(scoreA, scoreB);
+          
+          if (minScore >= secondToLastPoint && maxScore < directWinTarget) {
+            setHasWinner = false;
+          } else {
+            const difference = Math.abs(scoreA - scoreB);
+            setHasWinner = difference >= 2 && (scoreA >= targetPoints || scoreB >= targetPoints);
+          }
+        }
+      } else {
+        const difference = Math.abs(scoreA - scoreB);
+        setHasWinner = difference >= 2 && (scoreA >= targetPoints || scoreB >= targetPoints);
+      }
+
+      // Se o set tem vencedor mas não foi contabilizado nos setsWon
+      if (setHasWinner && scoreA !== scoreB) {
+        const setWinner = scoreA > scoreB ? 'A' : 'B';
+        const currentSetWonA = updatedSetsWon.teamA;
+        const currentSetWonB = updatedSetsWon.teamB;
+        
+        // Verificar se este set já foi contabilizado
+        // Se não, precisamos verificar quantos sets cada equipe deveria ter ganho
+        let expectedSetsWonA = 0;
+        let expectedSetsWonB = 0;
+        
+        for (let i = 0; i <= setIndex; i++) {
+          const sA = updatedScores.teamA[i] ?? 0;
+          const sB = updatedScores.teamB[i] ?? 0;
+          const tP = game.pointsPerSet?.[i] ?? game.pointsPerSet?.[game.pointsPerSet.length - 1] ?? 21;
+          
+          let hasWinner = false;
+          if (directWinFormat) {
+            const stl = tP - 1;
+            const dwt = tP + 2;
+            if (sA >= dwt || sB >= dwt) {
+              hasWinner = true;
+            } else if (sA === stl && sB === stl) {
+              hasWinner = false;
+            } else {
+              const minS = Math.min(sA, sB);
+              const maxS = Math.max(sA, sB);
+              if (minS >= stl && maxS < dwt) {
+                hasWinner = false;
+              } else {
+                const diff = Math.abs(sA - sB);
+                hasWinner = diff >= 2 && (sA >= tP || sB >= tP);
+              }
+            }
+          } else {
+            const diff = Math.abs(sA - sB);
+            hasWinner = diff >= 2 && (sA >= tP || sB >= tP);
+          }
+          
+          if (hasWinner && sA !== sB) {
+            if (sA > sB) {
+              expectedSetsWonA++;
+            } else {
+              expectedSetsWonB++;
+            }
+          }
+        }
+        
+        if (expectedSetsWonA !== currentSetWonA || expectedSetsWonB !== currentSetWonB) {
+          needsUpdate = true;
+          updatedSetsWon.teamA = expectedSetsWonA;
+          updatedSetsWon.teamB = expectedSetsWonB;
+        }
+      }
+    }
+
+    // Verificar se o jogo deveria estar finalizado
+    const shouldBeEnded = updatedSetsWon.teamA >= setsToWin || updatedSetsWon.teamB >= setsToWin;
+    
+    if (needsUpdate || (shouldBeEnded && !gameState.isGameEnded)) {
+      const updatedState: GameState = {
+        ...gameState,
+        setsWon: updatedSetsWon,
+        isGameEnded: shouldBeEnded,
+      };
+
+      // Atualizar o estado e o banco de dados
+      void (async () => {
+        try {
+          await persistState(updatedState);
+          if (shouldBeEnded && !gameState.isGameEnded) {
+            // Marcar o jogo como finalizado no banco
+            if (isCasualMatch && user) {
+              await updateCasualMatch(game.id, user.id, { status: 'completed' });
+            } else {
+              const { error: matchUpdateError } = await supabase
+                .from('matches')
+                .update({ status: 'completed' })
+                .eq('id', game.id);
+              if (matchUpdateError) {
+                throw matchUpdateError;
+              }
+            }
+            setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
+            toast({
+              title: 'Jogo finalizado automaticamente',
+              description: 'O sistema detectou que o jogo já havia terminado e foi marcado como finalizado.',
+              variant: 'default',
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao atualizar estado do jogo:', error);
+        }
+      })();
+    }
+  }, [game, gameState, isCasualMatch, user, persistState, toast]);
+
   useEffect(() => {
     if (!setConfigDialogOpen || !game || !gameState) {
       return;
@@ -1310,7 +1454,9 @@ export default function RefereeDesk() {
       
       // Verificar se uma equipe já chegou em +3 pontos (23, 17, etc)
       if (winnerScore >= directWinTarget || opponentScore >= directWinTarget) {
-        setWon = winnerScore >= directWinTarget;
+        // Se qualquer equipe chegou em +3, o set terminou
+        // A equipe com mais pontos venceu
+        setWon = winnerScore > opponentScore;
       } else {
         // Verificar se ambas estavam no penúltimo ponto antes deste ponto (20x20, 14x14, etc)
         const previousWinnerScore = winnerScore - 1;

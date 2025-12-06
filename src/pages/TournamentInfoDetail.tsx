@@ -407,6 +407,118 @@ const TournamentInfoDetail = () => {
     }
   }, [gameConfigs, usingMatchStateFallback])
 
+  // Verificação automática de finalização de jogos
+  useEffect(() => {
+    if (!matches.length) return
+
+    const checkAndUpdateMatches = async () => {
+      const matchesToUpdate: string[] = []
+
+      for (const match of matches) {
+        // Pular se já está finalizado
+        if (isMatchCompleted(match.status)) continue
+
+        const gameConfig = gameConfigs[match.id]
+        const matchState = matchStates[match.id]
+
+        if (!gameConfig) continue
+
+        const totalSets = gameConfig.pointsPerSet?.length ?? 3
+        const setsToWin = Math.ceil(totalSets / 2)
+        const directWinFormat = gameConfig.directWinFormat ?? false
+
+        let shouldBeEnded = false
+        let calculatedSetsWon = { teamA: 0, teamB: 0 }
+
+        // Se temos o estado do jogo, verificar diretamente
+        if (matchState) {
+          shouldBeEnded =
+            matchState.isGameEnded ||
+            matchState.setsWon.teamA >= setsToWin ||
+            matchState.setsWon.teamB >= setsToWin
+          calculatedSetsWon = matchState.setsWon
+        } else {
+          // Se não temos o estado, verificar pelos placares salvos
+          const scores = scoresByMatch.get(match.id) ?? []
+          if (scores.length > 0) {
+            // Calcular sets ganhos baseado nos placares
+            for (const score of scores) {
+              const setIndex = score.set_number - 1
+              const targetPoints = gameConfig.pointsPerSet?.[setIndex] ?? gameConfig.pointsPerSet?.[gameConfig.pointsPerSet.length - 1] ?? 21
+
+              // Verificar se o set tem vencedor
+              let setHasWinner = false
+              if (directWinFormat) {
+                const secondToLastPoint = targetPoints - 1
+                const directWinTarget = targetPoints + 2
+
+                if (score.team_a_points >= directWinTarget || score.team_b_points >= directWinTarget) {
+                  setHasWinner = true
+                } else if (score.team_a_points === secondToLastPoint && score.team_b_points === secondToLastPoint) {
+                  setHasWinner = false
+                } else {
+                  const minScore = Math.min(score.team_a_points, score.team_b_points)
+                  const maxScore = Math.max(score.team_a_points, score.team_b_points)
+
+                  if (minScore >= secondToLastPoint && maxScore < directWinTarget) {
+                    setHasWinner = false
+                  } else {
+                    const difference = Math.abs(score.team_a_points - score.team_b_points)
+                    setHasWinner = difference >= 2 && (score.team_a_points >= targetPoints || score.team_b_points >= targetPoints)
+                  }
+                }
+              } else {
+                const difference = Math.abs(score.team_a_points - score.team_b_points)
+                setHasWinner = difference >= 2 && (score.team_a_points >= targetPoints || score.team_b_points >= targetPoints)
+              }
+
+              if (setHasWinner && score.team_a_points !== score.team_b_points) {
+                if (score.team_a_points > score.team_b_points) {
+                  calculatedSetsWon.teamA++
+                } else {
+                  calculatedSetsWon.teamB++
+                }
+              }
+            }
+
+            shouldBeEnded = calculatedSetsWon.teamA >= setsToWin || calculatedSetsWon.teamB >= setsToWin
+          }
+        }
+
+        if (shouldBeEnded) {
+          matchesToUpdate.push(match.id)
+        }
+      }
+
+      // Atualizar os jogos que deveriam estar finalizados
+      if (matchesToUpdate.length > 0) {
+        try {
+          const { error } = await supabase
+            .from('matches')
+            .update({ status: 'completed' })
+            .in('id', matchesToUpdate)
+
+          if (error) {
+            console.error('Erro ao atualizar status dos jogos:', error)
+          } else {
+            // Recarregar os dados do torneio para refletir as mudanças
+            void loadTournamentData()
+          }
+        } catch (error) {
+          console.error('Erro ao atualizar status dos jogos:', error)
+        }
+      }
+    }
+
+    // Verificar imediatamente e depois a cada 10 segundos
+    void checkAndUpdateMatches()
+    const interval = setInterval(() => {
+      void checkAndUpdateMatches()
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [matches, matchStates, gameConfigs, scoresByMatch, loadTournamentData])
+
   const filteredAndSortedMatches = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
 
