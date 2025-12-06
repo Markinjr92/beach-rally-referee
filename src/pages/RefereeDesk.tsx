@@ -126,6 +126,7 @@ export default function RefereeDesk() {
   const lastCompletedTimeoutId = useRef<string | null>(null);
   const fallbackWarningDisplayed = useRef(false);
   const offlineNoticeDisplayed = useRef(false);
+  const isAutoCheckingRef = useRef(false);
   const [setConfigDialogOpen, setSetConfigDialogOpen] = useState(false);
   const [setConfigStep, setSetConfigStep] = useState(0);
   const [teamSetupForm, setTeamSetupForm] = useState<Record<'A' | 'B', { jerseyAssignment: Record<string, number | null>; serviceOrder: number[] }>>({
@@ -688,7 +689,9 @@ export default function RefereeDesk() {
 
   // Function to refresh team names from database
   const refreshTeamNames = useCallback(async () => {
-    if (!gameId || !game) return;
+    if (!gameId || !game) {
+      return;
+    }
     
     try {
       // Para casual matches, não precisa buscar nomes (já estão no game)
@@ -696,18 +699,24 @@ export default function RefereeDesk() {
         return;
       }
       
-      const { data: match } = await supabase
+      const { data: match, error: matchError } = await supabase
         .from('matches')
         .select('team_a_id, team_b_id')
         .eq('id', gameId)
         .single();
       
-      if (!match) return;
+      if (matchError || !match) {
+        return;
+      }
       
-      const { data: teams } = await supabase
+      const { data: teams, error: teamsError } = await supabase
         .from('teams')
         .select('*')
         .in('id', [match.team_a_id, match.team_b_id]);
+      
+      if (teamsError) {
+        return;
+      }
       
       const teamA = teams?.find(t => t.id === match.team_a_id);
       const teamB = teams?.find(t => t.id === match.team_b_id);
@@ -733,7 +742,7 @@ export default function RefereeDesk() {
     } catch (error) {
       console.error('Failed to refresh team names', error);
     }
-  }, [gameId, game]);
+  }, [gameId, game, isCasualMatch]);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -1046,23 +1055,26 @@ export default function RefereeDesk() {
 
   // Verificação automática de finalização do jogo
   useEffect(() => {
-    if (!game || !gameState || gameState.isGameEnded) return;
+    // Prevenir execução simultânea
+    if (isAutoCheckingRef.current) {
+      return;
+    }
+    
+    if (!game || !gameState || gameState.isGameEnded) {
+      return;
+    }
 
     const totalSets = game.pointsPerSet?.length ?? 3;
     const setsToWin = Math.ceil(totalSets / 2);
     const directWinFormat = game.directWinFormat ?? false;
 
-    // Verificar se algum set já deveria estar finalizado mas não foi marcado
-    let needsUpdate = false;
-    const updatedSetsWon = { ...gameState.setsWon };
-    const updatedScores = {
-      teamA: [...gameState.scores.teamA],
-      teamB: [...gameState.scores.teamB],
-    };
-
+    // Calcular sets ganhos baseado nos placares atuais
+    let expectedSetsWonA = 0;
+    let expectedSetsWonB = 0;
+    
     for (let setIndex = 0; setIndex < totalSets; setIndex++) {
-      const scoreA = updatedScores.teamA[setIndex] ?? 0;
-      const scoreB = updatedScores.teamB[setIndex] ?? 0;
+      const scoreA = gameState.scores.teamA[setIndex] ?? 0;
+      const scoreB = gameState.scores.teamB[setIndex] ?? 0;
       const targetPoints = game.pointsPerSet?.[setIndex] ?? game.pointsPerSet?.[game.pointsPerSet.length - 1] ?? 21;
 
       // Verificar se o set já tem vencedor usando a mesma lógica de calculateSetWinner
@@ -1090,102 +1102,75 @@ export default function RefereeDesk() {
         const difference = Math.abs(scoreA - scoreB);
         setHasWinner = difference >= 2 && (scoreA >= targetPoints || scoreB >= targetPoints);
       }
-
-      // Se o set tem vencedor mas não foi contabilizado nos setsWon
+      
       if (setHasWinner && scoreA !== scoreB) {
-        const setWinner = scoreA > scoreB ? 'A' : 'B';
-        const currentSetWonA = updatedSetsWon.teamA;
-        const currentSetWonB = updatedSetsWon.teamB;
-        
-        // Verificar se este set já foi contabilizado
-        // Se não, precisamos verificar quantos sets cada equipe deveria ter ganho
-        let expectedSetsWonA = 0;
-        let expectedSetsWonB = 0;
-        
-        for (let i = 0; i <= setIndex; i++) {
-          const sA = updatedScores.teamA[i] ?? 0;
-          const sB = updatedScores.teamB[i] ?? 0;
-          const tP = game.pointsPerSet?.[i] ?? game.pointsPerSet?.[game.pointsPerSet.length - 1] ?? 21;
-          
-          let hasWinner = false;
-          if (directWinFormat) {
-            const stl = tP - 1;
-            const dwt = tP + 2;
-            if (sA >= dwt || sB >= dwt) {
-              hasWinner = true;
-            } else if (sA === stl && sB === stl) {
-              hasWinner = false;
-            } else {
-              const minS = Math.min(sA, sB);
-              const maxS = Math.max(sA, sB);
-              if (minS >= stl && maxS < dwt) {
-                hasWinner = false;
-              } else {
-                const diff = Math.abs(sA - sB);
-                hasWinner = diff >= 2 && (sA >= tP || sB >= tP);
-              }
-            }
-          } else {
-            const diff = Math.abs(sA - sB);
-            hasWinner = diff >= 2 && (sA >= tP || sB >= tP);
-          }
-          
-          if (hasWinner && sA !== sB) {
-            if (sA > sB) {
-              expectedSetsWonA++;
-            } else {
-              expectedSetsWonB++;
-            }
-          }
-        }
-        
-        if (expectedSetsWonA !== currentSetWonA || expectedSetsWonB !== currentSetWonB) {
-          needsUpdate = true;
-          updatedSetsWon.teamA = expectedSetsWonA;
-          updatedSetsWon.teamB = expectedSetsWonB;
+        if (scoreA > scoreB) {
+          expectedSetsWonA++;
+        } else {
+          expectedSetsWonB++;
         }
       }
     }
 
-    // Verificar se o jogo deveria estar finalizado
-    const shouldBeEnded = updatedSetsWon.teamA >= setsToWin || updatedSetsWon.teamB >= setsToWin;
+    // Verificar se há diferença entre o esperado e o atual
+    const needsUpdate = 
+      expectedSetsWonA !== gameState.setsWon.teamA || 
+      expectedSetsWonB !== gameState.setsWon.teamB;
     
-    if (needsUpdate || (shouldBeEnded && !gameState.isGameEnded)) {
-      const updatedState: GameState = {
-        ...gameState,
-        setsWon: updatedSetsWon,
-        isGameEnded: shouldBeEnded,
-      };
-
-      // Atualizar o estado e o banco de dados
-      void (async () => {
-        try {
-          await persistState(updatedState);
-          if (shouldBeEnded && !gameState.isGameEnded) {
-            // Marcar o jogo como finalizado no banco
-            if (isCasualMatch && user) {
-              await updateCasualMatch(game.id, user.id, { status: 'completed' });
-            } else {
-              const { error: matchUpdateError } = await supabase
-                .from('matches')
-                .update({ status: 'completed' })
-                .eq('id', game.id);
-              if (matchUpdateError) {
-                throw matchUpdateError;
-              }
-            }
-            setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
-            toast({
-              title: 'Jogo finalizado automaticamente',
-              description: 'O sistema detectou que o jogo já havia terminado e foi marcado como finalizado.',
-              variant: 'default',
-            });
-          }
-        } catch (error) {
-          console.error('Erro ao atualizar estado do jogo:', error);
-        }
-      })();
+    // Verificar se o jogo deveria estar finalizado
+    const shouldBeEnded = expectedSetsWonA >= setsToWin || expectedSetsWonB >= setsToWin;
+    const needsEndUpdate = shouldBeEnded && !gameState.isGameEnded;
+    
+    // Só atualizar se realmente houver diferença
+    if (!needsUpdate && !needsEndUpdate) {
+      return;
     }
+    
+    // Marcar que estamos processando para evitar loops
+    isAutoCheckingRef.current = true;
+    
+    const updatedState: GameState = {
+      ...gameState,
+      setsWon: {
+        teamA: expectedSetsWonA,
+        teamB: expectedSetsWonB,
+      },
+      isGameEnded: shouldBeEnded,
+    };
+
+    // Atualizar o estado e o banco de dados
+    void (async () => {
+      try {
+        await persistState(updatedState);
+        if (needsEndUpdate) {
+          // Marcar o jogo como finalizado no banco
+          if (isCasualMatch && user) {
+            await updateCasualMatch(game.id, user.id, { status: 'completed' });
+          } else {
+            const { error: matchUpdateError } = await supabase
+              .from('matches')
+              .update({ status: 'completed' })
+              .eq('id', game.id);
+            if (matchUpdateError) {
+              throw matchUpdateError;
+            }
+          }
+          setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
+          toast({
+            title: 'Jogo finalizado automaticamente',
+            description: 'O sistema detectou que o jogo já havia terminado e foi marcado como finalizado.',
+            variant: 'default',
+          });
+        }
+      } catch (error) {
+        console.error('[RefereeDesk] Erro ao atualizar estado do jogo:', error);
+      } finally {
+        // Liberar o lock após um pequeno delay para permitir que o estado seja atualizado
+        setTimeout(() => {
+          isAutoCheckingRef.current = false;
+        }, 100);
+      }
+    })();
   }, [game, gameState, isCasualMatch, user, persistState, toast]);
 
   useEffect(() => {
@@ -2609,8 +2594,15 @@ export default function RefereeDesk() {
                   !isCurrentSetConfigured && 'animate-pulse'
                 )}
                 onClick={async () => {
-                  await refreshTeamNames();
+                  // Abrir o modal imediatamente, sem esperar refreshTeamNames
                   setSetConfigDialogOpen(true);
+                  
+                  // Atualizar nomes das equipes em background (não bloqueia o modal)
+                  try {
+                    await refreshTeamNames();
+                  } catch (error) {
+                    // Erro não crítico, não bloquear a funcionalidade
+                  }
                 }}
                 disabled={gameIsEnded || (isCurrentSetConfigured && hasPointsScored)}
               >
