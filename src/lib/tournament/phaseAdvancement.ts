@@ -1089,6 +1089,7 @@ export const advanceToNextPhase = async (
       '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
       '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
       '5_teams_round_robin': ['Fase de Grupos', 'Finais'],
+      '4_teams_round_robin': ['Fase de Grupos', 'Finais'],
       '3_groups_3_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
       '3_groups_3_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
       '5_groups_3_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
@@ -1136,6 +1137,30 @@ export const advanceToNextPhase = async (
         },
       },
       '6_teams_round_robin': {
+        'Fase de Grupos': async (context) => {
+          const qualifiers = await calculateGroupQualifiers(
+            context.options.tournamentId,
+            context.teams,
+            context.matches,
+            context.matchScores,
+            context.options.tieBreakerOrder || [],
+          );
+          return createRoundRobinFinals(context.options, qualifiers);
+        },
+      },
+      '5_teams_round_robin': {
+        'Fase de Grupos': async (context) => {
+          const qualifiers = await calculateGroupQualifiers(
+            context.options.tournamentId,
+            context.teams,
+            context.matches,
+            context.matchScores,
+            context.options.tieBreakerOrder || [],
+          );
+          return createRoundRobinFinals(context.options, qualifiers);
+        },
+      },
+      '4_teams_round_robin': {
         'Fase de Grupos': async (context) => {
           const qualifiers = await calculateGroupQualifiers(
             context.options.tournamentId,
@@ -1300,6 +1325,7 @@ export const suggestNextPhaseMatches = async (
     double_elimination: ['Chave de Vencedores - R1', 'Chave de Vencedores - R2', 'Semifinal', 'Final'],
     '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
     '5_teams_round_robin': ['Fase de Grupos', 'Finais'],
+    '4_teams_round_robin': ['Fase de Grupos', 'Finais'],
   };
 
   const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
@@ -1476,6 +1502,18 @@ export const suggestNextPhaseMatches = async (
       },
     },
     '5_teams_round_robin': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createRoundRobinFinals(context.options, qualifiers);
+      },
+    },
+    '4_teams_round_robin': {
       'Fase de Grupos': async (context) => {
         const qualifiers = await calculateGroupQualifiers(
           context.options.tournamentId,

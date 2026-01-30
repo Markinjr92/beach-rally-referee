@@ -94,6 +94,12 @@ const ensureNineTeams = (teams: TournamentTeam[]) => {
   }
 };
 
+const ensureFourTeams = (teams: TournamentTeam[]) => {
+  if (teams.length !== 4) {
+    throw new Error('Este formato suporta exatamente 4 equipes inscritas.');
+  }
+};
+
 const ensureFiveTeams = (teams: TournamentTeam[]) => {
   if (teams.length !== 5) {
     throw new Error('Este formato suporta exatamente 5 equipes inscritas.');
@@ -1657,6 +1663,79 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
           }),
         );
       }
+
+      return {
+        phases: [phaseGroup, phaseFinals],
+        groups,
+        matches: [...groupMatches, ...finalMatches],
+      };
+    },
+  },
+  '4_teams_round_robin': {
+    id: '4_teams_round_robin',
+    name: '4 Duplas - Todos contra Todos + Final',
+    description:
+      'Quatro duplas em um único grupo. Todos jogam contra todos (6 jogos). Após a fase de grupos, o 1º e 2º colocados disputam a final e os 3º e 4º colocados disputam o 3º lugar.',
+    generate: (options) => {
+      ensureFourTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseFinals: TournamentPhase = {
+        id: 'fase-finais',
+        name: 'Finais',
+        order: 2,
+        type: 'knockout',
+      };
+
+      // Todas as 4 duplas em um único grupo
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-único', name: 'Grupo Único', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      // Adicionar todas as 4 duplas ao grupo único
+      groups[0].teamIds = [1, 2, 3, 4].map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      // Gerar todos os jogos do round-robin (todos contra todos)
+      const groupMatches = generateGroupStageMatches(options, phaseGroup, groups, teamsBySeed);
+
+      // Criar placeholders para as finais
+      const placeholder = placeholderTeam;
+      const finalMatches: TournamentMatch[] = [];
+
+      // Final: 1º vs 2º
+      finalMatches.push(
+        createMatch(options, phaseFinals, {
+          round: 1,
+          title: 'Final',
+          teamA: placeholder('1º Colocado'),
+          teamB: placeholder('2º Colocado'),
+        }),
+      );
+
+      // Disputa de 3º lugar: 3º vs 4º
+      finalMatches.push(
+        createMatch(options, phaseFinals, {
+          round: 1,
+          title: 'Disputa 3º lugar',
+          teamA: placeholder('3º Colocado'),
+          teamB: placeholder('4º Colocado'),
+          configType: 'thirdPlace',
+        }),
+      );
 
       return {
         phases: [phaseGroup, phaseFinals],

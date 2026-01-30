@@ -510,6 +510,35 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '4_teams_round_robin': {
+    title: '4 Duplas - Todos contra Todos + Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '1 grupo único com 4 duplas'),
+          match('Formato', 'Todos contra todos (round-robin)'),
+          match('Total de jogos', '6 jogos na fase de grupos'),
+          match('Cálculo', 'Cada dupla joga 3 jogos (4 × 3 / 2 = 6)'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Critérios', '1º: Pontos de jogo, 2º: Diferença de sets, 3º: Diferença de pontos'),
+          match('Final', '1º Colocado × 2º Colocado'),
+          match('3º lugar', '3º Colocado × 4º Colocado'),
+        ],
+      },
+      {
+        phase: 'Finais',
+        matches: [
+          match('Final', '1º Colocado × 2º Colocado', 'Final'),
+          match('3º lugar', '3º Colocado × 4º Colocado', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
   '3_groups_3_semis': {
     title: '3 Grupos de 3 - Semifinal',
     sections: [

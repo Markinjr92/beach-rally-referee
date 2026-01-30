@@ -297,6 +297,11 @@ export default function TournamentsDB() {
         { key: 'final', label: 'Final' },
         { key: 'thirdPlace', label: 'Disputa 3º lugar' },
       ],
+      '4_teams_round_robin': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
       '3_groups_3_semis': [
         { key: 'groups', label: 'Fase de Grupos' },
         { key: 'semifinals', label: 'Semifinais' },
@@ -335,6 +340,7 @@ export default function TournamentsDB() {
       '2_groups_3_cross_semis': 6,
       '6_teams_round_robin': 6,
       '5_teams_round_robin': 5,
+      '4_teams_round_robin': 4,
       '3_groups_3_semis': 9,
       '3_groups_3_quarterfinals': 9,
       '5_groups_3_quarterfinals': 15,

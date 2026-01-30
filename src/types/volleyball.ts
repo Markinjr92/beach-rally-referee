@@ -10,6 +10,7 @@ export type TournamentFormatId =
   | '2_groups_3_cross_semis'
   | '6_teams_round_robin'
   | '5_teams_round_robin'
+  | '4_teams_round_robin'
   | '3_groups_3_semis'
   | '3_groups_3_quarterfinals'
   | '5_groups_3_quarterfinals'

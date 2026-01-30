@@ -328,6 +328,23 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
         ],
       };
 
+    case '4_teams_round_robin':
+      return {
+        type: 'groups',
+        groups: [
+          {
+            name: 'Grupo Único',
+            id: 'grupo-único',
+            teams: [
+              { seed: 1, label: 'Equipe 1' },
+              { seed: 2, label: 'Equipe 2' },
+              { seed: 3, label: 'Equipe 3' },
+              { seed: 4, label: 'Equipe 4' },
+            ],
+          },
+        ],
+      };
+
     case '3_groups_3_semis':
       return {
         type: 'groups',
