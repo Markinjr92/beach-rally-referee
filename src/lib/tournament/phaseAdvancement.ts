@@ -1284,7 +1284,7 @@ export const getTournamentPhases = async (
   const phases = Array.from(new Set(matches.map((m) => m.phase).filter((p): p is string => Boolean(p))));
   
   // Ordenar fases na ordem lógica
-  const phaseOrder = ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Disputa 3º lugar', 'Final'];
+  const phaseOrder = ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Finais', 'Disputa 3º lugar', 'Final'];
   return phases.sort((a, b) => {
     const indexA = phaseOrder.indexOf(a);
     const indexB = phaseOrder.indexOf(b);
