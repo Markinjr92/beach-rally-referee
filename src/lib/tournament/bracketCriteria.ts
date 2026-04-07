@@ -416,6 +416,112 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '3_groups_4_repechage_quarterfinals': {
+    title: '3 Grupos de 4 + Repescagem + Quartas',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '3 grupos com 4 equipes cada'),
+          match('Formato', 'Todos contra todos dentro de cada grupo'),
+          match('Total', '18 jogos na fase de grupos (6 por grupo)'),
+          match('Classificação', 'Ranking geral de 1º a 12º após os grupos'),
+        ],
+      },
+      {
+        phase: 'Repescagem',
+        matches: [
+          match('R1', '5º Geral × 12º Geral'),
+          match('R2', '6º Geral × 11º Geral'),
+          match('R3', '7º Geral × 10º Geral'),
+          match('R4', '8º Geral × 9º Geral'),
+        ],
+      },
+      {
+        phase: 'Quartas de final',
+        matches: [
+          match('QF1', '1º Geral × Venc. R4'),
+          match('QF2', '2º Geral × Venc. R3'),
+          match('QF3', '3º Geral × Venc. R2'),
+          match('QF4', '4º Geral × Venc. R1'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('SF1', 'Venc. QF1 × Venc. QF4'),
+          match('SF2', 'Venc. QF2 × Venc. QF3'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor SF1 × Vencedor SF2', 'Final'),
+          match('3º lugar', 'Perdedor SF1 × Perdedor SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
+  '2_groups_cross_full_repechage_semis': {
+    title: '2 Grupos de 4 (Cruzado Completo) + Repescagem + Semifinal',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 4 equipes cada'),
+          match('Formato', 'Cruzado completo: todas do Grupo A contra todas do Grupo B'),
+          match('Total', '16 jogos na classificatória (4 × 4)'),
+          match('Classificação', 'Ranking geral de 1º a 8º'),
+        ],
+      },
+      {
+        phase: 'Repescagem',
+        matches: [
+          match('R1', '3º Geral × 6º Geral'),
+          match('R2', '4º Geral × 5º Geral'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('SF1', '1º Geral × Venc. R2'),
+          match('SF2', '2º Geral × Venc. R1'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor SF1 × Vencedor SF2', 'Final'),
+        ],
+      },
+    ],
+  },
+  '2_groups_double_bracket_final': {
+    title: '2 Grupos de 4 + Chave Dupla + Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Grupo A', 'J1: 1×2, J2: 3×4, J3: vencedores, J4: perdedores'),
+          match('Grupo B', 'J1: 1×2, J2: 3×4, J3: vencedores, J4: perdedores'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('SF1', 'Vencedor Grupo A × Vencedor Grupo B'),
+          match('SF2', 'Perdedor Grupo A × Perdedor Grupo B'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor SF1 × Vencedor SF2', 'Final'),
+          match('3º lugar', 'Perdedor SF1 × Perdedor SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
   '2_groups_3_repescagem_semis': {
     title: '2 Grupos de 3 - Repescagem + Semi/Final',
     sections: [

@@ -287,6 +287,25 @@ export default function TournamentsDB() {
         { key: 'final', label: 'Final' },
         { key: 'thirdPlace', label: 'Disputa 3º lugar' },
       ],
+      '3_groups_4_repechage_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Repescagem/Quartas' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
+      '2_groups_cross_full_repechage_semis': [
+        { key: 'groups', label: 'Fase Classificatória Cruzada' },
+        { key: 'quarterfinals', label: 'Repescagem' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
+      '2_groups_double_bracket_final': [
+        { key: 'groups', label: 'Chave Interna dos Grupos' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+        { key: 'thirdPlace', label: 'Disputa 3º lugar' },
+      ],
       '6_teams_round_robin': [
         { key: 'groups', label: 'Fase de Grupos' },
         { key: 'final', label: 'Final' },
@@ -347,6 +366,9 @@ export default function TournamentsDB() {
       '2_groups_3_repescagem_semis': 6,
       '2_groups_4_semis': 8,
       '2_groups_5_4_semis': 9,
+      '3_groups_4_repechage_quarterfinals': 12,
+      '2_groups_cross_full_repechage_semis': 8,
+      '2_groups_double_bracket_final': 8,
     }
     return teamCounts[formatId] || 12
   }

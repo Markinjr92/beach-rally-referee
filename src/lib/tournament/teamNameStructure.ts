@@ -90,6 +90,7 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
       };
 
     case '3_groups_quarterfinals':
+    case '3_groups_4_repechage_quarterfinals':
       return {
         type: 'groups',
         groups: [
@@ -237,6 +238,8 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
       };
 
     case '2_groups_4_semis':
+    case '2_groups_cross_full_repechage_semis':
+    case '2_groups_double_bracket_final':
       return {
         type: 'groups',
         groups: [
@@ -488,4 +491,3 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
       };
   }
 }
-

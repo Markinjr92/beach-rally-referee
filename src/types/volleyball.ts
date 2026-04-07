@@ -16,7 +16,10 @@ export type TournamentFormatId =
   | '5_groups_3_quarterfinals'
   | '2_groups_3_repescagem_semis'
   | '2_groups_4_semis'
-  | '2_groups_5_4_semis';
+  | '2_groups_5_4_semis'
+  | '3_groups_4_repechage_quarterfinals'
+  | '2_groups_cross_full_repechage_semis'
+  | '2_groups_double_bracket_final';
 
 export type TieBreakerCriterion =
   | 'head_to_head'
