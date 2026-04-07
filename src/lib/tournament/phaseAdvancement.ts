@@ -1093,6 +1093,9 @@ export const advanceToNextPhase = async (
       '3_groups_3_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
       '3_groups_3_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
       '5_groups_3_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+      '3_groups_4_repechage_quarterfinals': ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Final'],
+      '2_groups_cross_full_repechage_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
+      '2_groups_double_bracket_final': ['Fase de Grupos', 'Semifinal', 'Final'],
     };
 
     const formatHandlers: Partial<Record<TournamentFormatId, Record<string, PhaseHandler>>> = {
@@ -1319,6 +1322,9 @@ export const suggestNextPhaseMatches = async (
     '2_groups_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
     '2_groups_5_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
     '2_groups_3_repescagem_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
+    '3_groups_4_repechage_quarterfinals': ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Final'],
+    '2_groups_cross_full_repechage_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
+    '2_groups_double_bracket_final': ['Fase de Grupos', 'Semifinal', 'Final'],
     global_semis: ['Fase de Grupos', 'Semifinal', 'Final'],
     series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
     single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],
@@ -2038,4 +2044,3 @@ const createRepechageSemifinalMatches = async (
 
   return newMatches;
 };
-
