@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -40,7 +39,7 @@ export default function TournamentList() {
     endDate: '',
     category: '',
     modality: '',
-    hasStatistics: true,
+    hasStatistics: false,
   });
   const [tournaments, setTournaments] = useState<TournamentWithGames[]>([]);
   const { toast } = useToast();
@@ -203,20 +202,6 @@ export default function TournamentList() {
                     </Select>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-white/15 bg-white/5 px-4 py-3">
-                  <div className="space-y-1">
-                    <Label className="text-white">Registrar estatísticas</Label>
-                    <p className="text-xs text-white/60">
-                      Escolha se os árbitros deverão classificar cada ponto por categoria.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={formData.hasStatistics}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hasStatistics: checked })}
-                    className="data-[state=checked]:bg-yellow-400"
-                  />
-                </div>
-
                 <div className="flex justify-end gap-2 pt-4">
                   <Button
                     variant="ghost"
@@ -253,7 +238,7 @@ export default function TournamentList() {
                       const payload: TablesInsert<'tournaments'> = {
                         name: trimmedName,
                         status: 'upcoming',
-                        has_statistics: !!formData.hasStatistics,
+                        has_statistics: false,
                         location: location ?? null,
                         category: category ?? null,
                         modality: modality ?? null,
@@ -280,7 +265,7 @@ export default function TournamentList() {
                           endDate: '',
                           category: '',
                           modality: '',
-                          hasStatistics: true,
+                          hasStatistics: false,
                         })
                         const { data } = await supabase.from('tournaments').select('*').order('created_at', { ascending: false })
                         setTournaments((data as TournamentWithGames[]) || [])

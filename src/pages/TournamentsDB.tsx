@@ -83,7 +83,7 @@ export default function TournamentsDB() {
     end: "",
     category: "",
     modality: "",
-    hasStatistics: true,
+    hasStatistics: false,
     teamCount: null,
     formatId: "groups_and_knockout",
     includeThirdPlace: true,
@@ -873,19 +873,6 @@ export default function TournamentsDB() {
             <p className="text-xs text-blue-50/80">
               Selecione a quantidade de equipes que participarão do torneio.
             </p>
-          </div>
-          <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <Label className="text-white">Registrar estatísticas</Label>
-              <p className="text-xs text-blue-50/80">
-                Exige que a mesa categorize os pontos de cada equipe durante as partidas.
-              </p>
-            </div>
-            <Switch
-              checked={form.hasStatistics}
-              onCheckedChange={(checked) => setForm({ ...form, hasStatistics: checked })}
-              className="data-[state=checked]:bg-white"
-            />
           </div>
           <div className="flex flex-col gap-3 rounded-2xl border border-white/25 bg-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
