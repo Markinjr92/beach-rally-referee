@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export const useUserRoles = (user: User | null, authLoading: boolean) => {
   const [roles, setRoles] = useState<string[]>([]);
-  const [loading, setLoading] = useState<boolean>(authLoading);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRoles = useCallback(async () => {
@@ -46,12 +46,19 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
       return;
     }
 
+    if (!user?.id) {
+      setRoles([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     const loadRoles = async () => {
       await fetchRoles();
     };
 
     loadRoles();
-  }, [authLoading, fetchRoles]);
+  }, [authLoading, fetchRoles, user?.id]);
 
   return {
     roles,

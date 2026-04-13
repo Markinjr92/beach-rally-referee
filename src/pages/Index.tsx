@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Trophy, Users, Settings, Shield, Gamepad2, BarChart3 } from "lucide-react";
+import { Activity, Trophy, Users, Settings, Shield, Gamepad2, BarChart3, Database } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -72,6 +72,15 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: Shield,
     roles: ["admin_sistema"],
     iconClass: "text-rose-200",
+  },
+  {
+    key: "system-data",
+    title: "Dados do Sistema",
+    description: "Acesse consultas globais e exportações administrativas",
+    to: "/system-data",
+    icon: Database,
+    roles: ["admin_sistema"],
+    iconClass: "text-cyan-200",
   },
   {
     key: "dashboard",
