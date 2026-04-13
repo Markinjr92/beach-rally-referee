@@ -482,6 +482,40 @@ export default function RefereeDesk() {
     }
   }, [game, showOfflineSyncNotice]);
 
+  const ensureRefereeAssigned = useCallback(async () => {
+    if (!game?.id || !user?.id || isCasualMatch) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('matches')
+        .update({ referee_id: user.id })
+        .eq('id', game.id);
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      if (isLikelyOfflineError(error)) {
+        enqueueOfflineOperation('updateMatch', {
+          matchId: game.id,
+          values: { referee_id: user.id },
+        });
+        showOfflineSyncNotice();
+      } else {
+        console.error('Failed to assign referee to match', error);
+      }
+    }
+  }, [game?.id, isCasualMatch, showOfflineSyncNotice, user?.id]);
+
+  const getCompletedMatchUpdatePayload = useCallback((): TablesUpdate<'matches'> => {
+    const payload: TablesUpdate<'matches'> = { status: 'completed' };
+    if (user?.id) {
+      payload.referee_id = user.id;
+    }
+    return payload;
+  }, [user?.id]);
+
   useEffect(() => {
     void processOfflineQueue();
   }, []);
@@ -557,6 +591,7 @@ export default function RefereeDesk() {
 
       setIsSyncing(true);
       try {
+        await ensureRefereeAssigned();
         const isCasualMatch = !game?.tournamentId || game.tournamentId === '';
         const { usedFallback } = await saveMatchState(newState, isCasualMatch);
         if (usedFallback) {
@@ -593,6 +628,7 @@ export default function RefereeDesk() {
       showOfflineSyncNotice,
       snapshotState,
       toast,
+      ensureRefereeAssigned,
     ]
   );
 
@@ -1149,7 +1185,7 @@ export default function RefereeDesk() {
           } else {
             const { error: matchUpdateError } = await supabase
               .from('matches')
-              .update({ status: 'completed' })
+              .update(getCompletedMatchUpdatePayload())
               .eq('id', game.id);
             if (matchUpdateError) {
               throw matchUpdateError;
@@ -1171,7 +1207,7 @@ export default function RefereeDesk() {
         }, 100);
       }
     })();
-  }, [game, gameState, isCasualMatch, user, persistState, toast]);
+  }, [game, gameState, getCompletedMatchUpdatePayload, isCasualMatch, user, persistState, toast]);
 
   useEffect(() => {
     if (!setConfigDialogOpen || !game || !gameState) {
@@ -1560,7 +1596,7 @@ export default function RefereeDesk() {
           } else {
           const { error: matchUpdateError } = await supabase
             .from('matches')
-            .update({ status: 'completed' })
+            .update(getCompletedMatchUpdatePayload())
             .eq('id', game.id);
           if (matchUpdateError) {
             throw matchUpdateError;
@@ -1573,7 +1609,7 @@ export default function RefereeDesk() {
             } else {
             enqueueOfflineOperation('updateMatch', {
               matchId: game.id,
-              values: { status: 'completed' } as TablesUpdate<'matches'>,
+              values: getCompletedMatchUpdatePayload(),
             });
             }
             showOfflineSyncNotice();
