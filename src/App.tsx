@@ -24,6 +24,8 @@ import CasualMatches from "./pages/CasualMatches";
 import CreateCasualMatch from "./pages/CreateCasualMatch";
 import CasualMatchDetail from "./pages/CasualMatchDetail";
 import UserProfile from "./pages/UserProfile";
+import SystemData from "./pages/SystemData";
+import SystemAllGames from "./pages/SystemAllGames";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +56,8 @@ const App = () => (
             <Route path="/casual-matches/:id" element={<CasualMatchDetail />} />
             <Route path="/casual-matches/:id/referee" element={<RefereeDesk />} />
             <Route path="/profile" element={<UserProfile />} />
+            <Route path="/system-data" element={<SystemData />} />
+            <Route path="/system-data/all-games" element={<SystemAllGames />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

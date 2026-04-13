@@ -43,12 +43,6 @@ export const useAccessExpiration = (user: User | null, authLoading: boolean): Ac
 
         const expired = isExpiredData === true;
 
-        if (error) {
-          console.error('Erro ao verificar acesso:', error);
-          setLoading(false);
-          return;
-        }
-
         // Buscar data de expiração
         const { data: userData } = await supabase
           .from('users')
@@ -88,4 +82,3 @@ export const useAccessExpiration = (user: User | null, authLoading: boolean): Ac
     loading,
   };
 };
-
