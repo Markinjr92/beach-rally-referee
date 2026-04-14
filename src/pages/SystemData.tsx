@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { Database, ListChecks } from 'lucide-react'
+import { ArrowLeft, Database, ListChecks } from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
 import { useUserRoles } from '@/hooks/useUserRoles'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 const SystemData = () => {
@@ -27,6 +28,16 @@ const SystemData = () => {
   return (
     <div className="min-h-screen bg-gradient-ocean">
       <div className="container mx-auto px-4 py-8 space-y-6">
+        <Link to="/">
+          <Button
+            variant="ghost"
+            className="bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-white backdrop-blur-md"
+          >
+            <ArrowLeft size={18} />
+            Voltar
+          </Button>
+        </Link>
+
         <div className="flex items-center gap-3 text-white">
           <Database className="h-8 w-8 text-cyan-200" />
           <div>
