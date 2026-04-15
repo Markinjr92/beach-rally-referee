@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Calendar, Clock, MapPin, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, Languages, MapPin, Search, SlidersHorizontal } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDateShortPtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
 
@@ -19,7 +21,7 @@ type MatchWithTeams = Tables<'matches'> & {
   team_b: Team | null
 }
 
-type StatusFilter = 'all' | 'not_started'
+type StatusFilter = 'all' | 'not_started' | 'in_progress' | 'completed' | 'canceled'
 type OrderFilter = 'asc' | 'desc'
 
 const statusLabels: Record<string, string> = {
@@ -35,9 +37,11 @@ const RefereeTournamentMatches = () => {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matches, setMatches] = useState<MatchWithTeams[]>([])
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('not_started')
   const [courtFilter, setCourtFilter] = useState('all')
   const [order, setOrder] = useState<OrderFilter>('asc')
+  const [searchFilter, setSearchFilter] = useState('')
+  const [translationWarningVisible, setTranslationWarningVisible] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -76,6 +80,43 @@ const RefereeTournamentMatches = () => {
     void load()
   }, [toast, tournamentId])
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+
+    const defaultLang = (document.documentElement.lang || 'pt-BR').toLowerCase()
+
+    const detectAutoTranslation = () => {
+      const htmlLang = document.documentElement.lang.toLowerCase()
+      const bodyClasses = document.body.classList
+      const hasGoogleTranslateMarker =
+        bodyClasses.contains('translated-ltr') ||
+        bodyClasses.contains('translated-rtl') ||
+        Boolean(document.querySelector('iframe.goog-te-banner-frame, .goog-te-combo'))
+      const langSeemsTranslated = defaultLang.startsWith('pt') && htmlLang && !htmlLang.startsWith('pt')
+
+      setTranslationWarningVisible(hasGoogleTranslateMarker || langSeemsTranslated)
+    }
+
+    detectAutoTranslation()
+
+    const observer = new MutationObserver(() => {
+      detectAutoTranslation()
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['lang', 'class'],
+      subtree: true,
+    })
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class'],
+      subtree: true,
+    })
+
+    return () => observer.disconnect()
+  }, [])
+
   const availableCourts = useMemo(() => {
     const courts = matches
       .map((match) => match.court?.trim())
@@ -87,9 +128,17 @@ const RefereeTournamentMatches = () => {
     const filtered = matches.filter((match) => {
       const statusValue = match.status || 'scheduled'
       const matchesStatus =
-        statusFilter === 'all' || (statusFilter === 'not_started' && statusValue === 'scheduled')
+        statusFilter === 'all' ||
+        (statusFilter === 'not_started' && statusValue === 'scheduled') ||
+        (statusFilter === 'in_progress' && statusValue === 'in_progress') ||
+        (statusFilter === 'completed' && statusValue === 'completed') ||
+        (statusFilter === 'canceled' && statusValue === 'canceled')
       const matchesCourt = courtFilter === 'all' || (match.court || '').trim() === courtFilter
-      return matchesStatus && matchesCourt
+      const search = searchFilter.trim().toLowerCase()
+      const teamAName = match.team_a?.name?.toLowerCase() || ''
+      const teamBName = match.team_b?.name?.toLowerCase() || ''
+      const matchesSearch = !search || teamAName.includes(search) || teamBName.includes(search)
+      return matchesStatus && matchesCourt && matchesSearch
     })
 
     const sorted = [...filtered].sort((a, b) => {
@@ -106,7 +155,7 @@ const RefereeTournamentMatches = () => {
     })
 
     return sorted
-  }, [matches, statusFilter, courtFilter, order])
+  }, [matches, statusFilter, courtFilter, order, searchFilter])
 
   if (!tournamentId) {
     return (
@@ -120,6 +169,16 @@ const RefereeTournamentMatches = () => {
     <div className="min-h-screen bg-gradient-ocean text-white">
       <div className="container mx-auto px-4 py-10 space-y-8">
         <div className="flex flex-col gap-6">
+          {translationWarningVisible && (
+            <Alert className="border-amber-300/40 bg-amber-500/15 text-amber-50">
+              <Languages className="h-4 w-4" />
+              <AlertTitle>Tradução automática detectada</AlertTitle>
+              <AlertDescription>
+                Para evitar falhas na arbitragem, desative a tradução automática do navegador nesta página.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <Link to="/referee" className="w-fit">
               <Button
@@ -162,16 +221,31 @@ const RefereeTournamentMatches = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-2 md:col-span-2 xl:col-span-1">
+                  <span className="text-sm font-medium text-white/70">Busca por dupla</span>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+                    <Input
+                      value={searchFilter}
+                      onChange={(event) => setSearchFilter(event.target.value)}
+                      placeholder="Digite nome da equipe..."
+                      className="border-white/30 bg-white/10 pl-10 text-white placeholder:text-white/50"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <span className="text-sm font-medium text-white/70">Status</span>
                   <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
                     <SelectTrigger className="bg-white/10 border-white/30 text-white focus:ring-white/40">
-                      <SelectValue placeholder="Todos os status" />
+                      <SelectValue placeholder="Status do jogo" />
                     </SelectTrigger>
                     <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
+                      <SelectItem value="not_started">Somente não iniciados (padrão)</SelectItem>
+                      <SelectItem value="in_progress">Em andamento</SelectItem>
+                      <SelectItem value="completed">Finalizados</SelectItem>
+                      <SelectItem value="canceled">Sinalizados / cancelados</SelectItem>
                       <SelectItem value="all">Todos os status</SelectItem>
-                      <SelectItem value="not_started">Somente não iniciados</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
