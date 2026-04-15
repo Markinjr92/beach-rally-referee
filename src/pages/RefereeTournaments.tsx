@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Filter, MapPin, ShieldCheck, Trophy, Users } from 'lucide-react'
+import { ArrowLeft, Calendar, Filter, MapPin, Search, ShieldCheck, Trophy, Users } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { parseLocalDateTime } from '@/utils/date'
 import { isMatchCompleted } from '@/utils/matchStatus'
+import { loadLocalValue, saveLocalValue } from '@/lib/localStorage'
 
 type Tournament = Tables<'tournaments'>
 type UserProfile = Tables<'users'>
@@ -79,6 +80,17 @@ const STATUS_MAP: Record<string, StatusLabel> = {
   scheduled: { value: 'upcoming', label: 'Agendado', badgeVariant: 'secondary' },
 }
 
+type RefereeMainFilters = {
+  activeSearch: string
+  activeStartDate: string
+  activeEndDate: string
+  historyStartDate: string
+  historyEndDate: string
+}
+
+const REFEREE_MAIN_FILTERS_KEY = 'beach-rally:referee:main-filters'
+const REFEREE_FILTERS_TTL_MS = 24 * 60 * 60 * 1000
+
 const RefereeTournaments = () => {
   const { toast } = useToast()
   const { user, loading: authLoading } = useAuth()
@@ -89,8 +101,36 @@ const RefereeTournaments = () => {
   const [loadingHistory, setLoadingHistory] = useState(true)
 
   const [refereedMatches, setRefereedMatches] = useState<RefereedMatch[]>([])
+  const [activeSearchFilter, setActiveSearchFilter] = useState('')
+  const [activeStartDateFilter, setActiveStartDateFilter] = useState('')
+  const [activeEndDateFilter, setActiveEndDateFilter] = useState('')
   const [startDateFilter, setStartDateFilter] = useState('')
   const [endDateFilter, setEndDateFilter] = useState('')
+
+  useEffect(() => {
+    const storedFilters = loadLocalValue<RefereeMainFilters>(REFEREE_MAIN_FILTERS_KEY)
+    if (!storedFilters) return
+
+    setActiveSearchFilter(storedFilters.activeSearch || '')
+    setActiveStartDateFilter(storedFilters.activeStartDate || '')
+    setActiveEndDateFilter(storedFilters.activeEndDate || '')
+    setStartDateFilter(storedFilters.historyStartDate || '')
+    setEndDateFilter(storedFilters.historyEndDate || '')
+  }, [])
+
+  useEffect(() => {
+    saveLocalValue<RefereeMainFilters>(
+      REFEREE_MAIN_FILTERS_KEY,
+      {
+        activeSearch: activeSearchFilter,
+        activeStartDate: activeStartDateFilter,
+        activeEndDate: activeEndDateFilter,
+        historyStartDate: startDateFilter,
+        historyEndDate: endDateFilter,
+      },
+      REFEREE_FILTERS_TTL_MS,
+    )
+  }, [activeEndDateFilter, activeSearchFilter, activeStartDateFilter, endDateFilter, startDateFilter])
 
   useEffect(() => {
     const load = async () => {
@@ -201,6 +241,25 @@ const RefereeTournaments = () => {
     return `${tournaments.length} torneio${tournaments.length > 1 ? 's' : ''} disponível(is) para arbitragem.`
   }, [loadingTournaments, tournaments.length])
 
+  const filteredTournaments = useMemo(() => {
+    const search = activeSearchFilter.trim().toLowerCase()
+    const start = activeStartDateFilter ? new Date(`${activeStartDateFilter}T00:00:00`) : null
+    const end = activeEndDateFilter ? new Date(`${activeEndDateFilter}T23:59:59`) : null
+
+    return tournaments.filter((tournament) => {
+      const tournamentStart = tournament.start_date ? parseLocalDateTime(tournament.start_date) : null
+      const tournamentEnd = tournament.end_date ? parseLocalDateTime(tournament.end_date) : null
+      const tournamentName = tournament.name?.toLowerCase() || ''
+      const tournamentLocation = tournament.location?.toLowerCase() || ''
+
+      const matchesSearch = !search || tournamentName.includes(search) || tournamentLocation.includes(search)
+      const matchesStartDate = !start || Boolean(tournamentEnd && tournamentEnd >= start)
+      const matchesEndDate = !end || Boolean(tournamentStart && tournamentStart <= end)
+
+      return matchesSearch && matchesStartDate && matchesEndDate
+    })
+  }, [activeEndDateFilter, activeSearchFilter, activeStartDateFilter, tournaments])
+
   const filteredMatches = useMemo(() => {
     const start = startDateFilter ? new Date(`${startDateFilter}T00:00:00`) : null
     const end = endDateFilter ? new Date(`${endDateFilter}T23:59:59`) : null
@@ -279,6 +338,45 @@ const RefereeTournaments = () => {
           </TabsList>
 
           <TabsContent value="active" className="space-y-6">
+            <Card className="bg-slate-900/60 border border-white/20 text-white">
+              <CardContent className="pt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm text-white/80">Busca por torneio ou local</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+                    <Input
+                      value={activeSearchFilter}
+                      onChange={(event) => setActiveSearchFilter(event.target.value)}
+                      placeholder="Digite nome do campeonato ou local..."
+                      className="bg-white/10 border-white/30 pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-white/80">Data inicial</label>
+                  <Input type="date" value={activeStartDateFilter} onChange={(event) => setActiveStartDateFilter(event.target.value)} className="bg-white/10 border-white/30" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-white/80">Data final</label>
+                  <Input type="date" value={activeEndDateFilter} onChange={(event) => setActiveEndDateFilter(event.target.value)} className="bg-white/10 border-white/30" />
+                </div>
+                <div className="md:col-span-2 xl:col-span-4 flex items-end">
+                  <Button
+                    variant="outline"
+                    className="w-full bg-white/10 border-white/30 text-white hover:bg-white/20"
+                    onClick={() => {
+                      setActiveSearchFilter('')
+                      setActiveStartDateFilter('')
+                      setActiveEndDateFilter('')
+                    }}
+                  >
+                    <Filter size={16} />
+                    Limpar filtros dos torneios ativos
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {loadingTournaments && (
                 <Card className="bg-white/10 border border-white/20 text-white backdrop-blur-lg">
@@ -293,15 +391,15 @@ const RefereeTournaments = () => {
                 </Card>
               )}
 
-              {!loadingTournaments && tournaments.length === 0 && (
+              {!loadingTournaments && filteredTournaments.length === 0 && (
                 <Card className="bg-white/10 border border-white/20 text-white backdrop-blur-lg md:col-span-2 xl:col-span-3">
                   <CardContent className="py-10 text-center text-white/80">
-                    Nenhum torneio ativo ou agendado foi encontrado. Volte mais tarde.
+                    Nenhum torneio ativo encontrado com os filtros atuais.
                   </CardContent>
                 </Card>
               )}
 
-              {tournaments.map((tournament) => {
+              {filteredTournaments.map((tournament) => {
                 const statusInfo = tournament.status ? STATUS_MAP[tournament.status] : undefined
 
                 return (
