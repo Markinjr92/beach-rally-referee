@@ -264,8 +264,18 @@ const RefereeTournaments = () => {
 
         <Tabs defaultValue="active" className="space-y-6">
           <TabsList className="bg-white/15 border border-white/20 h-auto p-1">
-            <TabsTrigger value="active">Torneios ativos</TabsTrigger>
-            <TabsTrigger value="history">Jogos arbitrados</TabsTrigger>
+            <TabsTrigger
+              value="active"
+              className="text-white/80 data-[state=active]:text-white data-[state=active]:bg-white/20"
+            >
+              Torneios ativos
+            </TabsTrigger>
+            <TabsTrigger
+              value="history"
+              className="text-white/80 data-[state=active]:text-white data-[state=active]:bg-white/20"
+            >
+              Jogos arbitrados
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="active" className="space-y-6">
