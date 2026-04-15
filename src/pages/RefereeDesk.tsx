@@ -2238,6 +2238,8 @@ export default function RefereeDesk() {
   const rightScoreButtonVariant = rightTeam === 'A' ? 'team' : 'teamB';
   const leftHasPossession = isCurrentSetConfigured && gameState.possession === leftTeam;
   const rightHasPossession = isCurrentSetConfigured && gameState.possession === rightTeam;
+  const leftIsServing = isCurrentSetConfigured && gameState.currentServerTeam === leftTeam;
+  const rightIsServing = isCurrentSetConfigured && gameState.currentServerTeam === rightTeam;
   const possessionGlow = 'shadow-[0_0_35px_rgba(250,204,21,0.4)]';
   const possessionTeamName = isCurrentSetConfigured
     ? gameState.possession === 'A'
@@ -2705,10 +2707,16 @@ export default function RefereeDesk() {
                     </Badge>
                   ))}
                 </div>
-                {isCurrentSetConfigured && gameState.currentServerTeam === leftTeam && (
-                  <Badge className="border border-white/30 bg-white/25 text-white">
+                {leftIsServing && (
+                  <Badge className="border border-amber-200/70 bg-amber-300/25 text-amber-50 shadow-[0_0_18px_rgba(252,211,77,0.45)]">
                     <Zap className="mr-1 h-4 w-4" />
                     Sacando ({serverPlayerDisplay})
+                  </Badge>
+                )}
+                {leftHasPossession && (
+                  <Badge className="border border-cyan-200/70 bg-cyan-300/20 text-cyan-50 shadow-[0_0_14px_rgba(125,211,252,0.4)]">
+                    <ArrowLeftRight className="mr-1 h-4 w-4" />
+                    Posse da bola
                   </Badge>
                 )}
               </div>
@@ -2734,10 +2742,16 @@ export default function RefereeDesk() {
                     </Badge>
                   ))}
                 </div>
-                {isCurrentSetConfigured && gameState.currentServerTeam === rightTeam && (
-                  <Badge className="border border-white/30 bg-white/25 text-white">
+                {rightIsServing && (
+                  <Badge className="border border-amber-200/70 bg-amber-300/25 text-amber-50 shadow-[0_0_18px_rgba(252,211,77,0.45)]">
                     <Zap className="mr-1 h-4 w-4" />
                     Sacando ({serverPlayerDisplay})
+                  </Badge>
+                )}
+                {rightHasPossession && (
+                  <Badge className="border border-cyan-200/70 bg-cyan-300/20 text-cyan-50 shadow-[0_0_14px_rgba(125,211,252,0.4)]">
+                    <ArrowLeftRight className="mr-1 h-4 w-4" />
+                    Posse da bola
                   </Badge>
                 )}
               </div>
@@ -2745,20 +2759,24 @@ export default function RefereeDesk() {
             <div className="space-y-2 bg-slate-900/80 px-4 py-3 text-center text-sm text-white/80">
               <div className="text-base font-semibold text-white">Set {gameState.currentSet}</div>
               <div>Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</div>
-              <div className="flex items-center justify-center gap-2 text-amber-200">
-                <Zap className="h-4 w-4" />
-                Sacando: {serverTeamName} ({serverPlayerDisplay})
-              </div>
+              {isCurrentSetConfigured && (
+                <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-2 text-xs font-semibold sm:text-sm">
+                  <div className="flex items-center justify-center gap-1 rounded-xl border border-amber-200/70 bg-amber-300/20 px-2 py-2 text-amber-50 shadow-[0_0_16px_rgba(252,211,77,0.35)]">
+                    <Zap className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Saque: {serverTeamName}</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-1 rounded-xl border border-cyan-200/70 bg-cyan-300/20 px-2 py-2 text-cyan-50 shadow-[0_0_14px_rgba(125,211,252,0.35)]">
+                    <ArrowLeftRight className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Posse: {possessionTeamName}</span>
+                  </div>
+                </div>
+              )}
               {timer !== null && (
                 <div className="mx-auto flex w-full max-w-[200px] items-center justify-center gap-2 rounded-full border border-amber-200/60 bg-amber-200/10 px-3 py-1 text-base font-semibold text-amber-100 shadow-inner">
                   <Clock className="h-4 w-4" />
                   {formatTime(timer)}
                 </div>
               )}
-              <div className="flex items-center justify-center gap-2 text-amber-200">
-                <ArrowLeftRight className="h-4 w-4" />
-                Posse: {possessionTeamName}
-              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
