@@ -10,8 +10,15 @@ export interface StoredGameConfig {
   savedAt: number;
 }
 
+interface StoredLocalValue<T> {
+  value: T;
+  savedAt: number;
+  expiresAt: number;
+}
+
 const MATCH_STATE_PREFIX = "beach-rally-match-state:";
 const GAME_CONFIG_PREFIX = "beach-rally-game-config:";
+const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 const isBrowser = () => typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
@@ -77,3 +84,37 @@ export const loadLocalGameConfig = (gameId: string): StoredGameConfig | null => 
   return safeParse<StoredGameConfig>(window.localStorage.getItem(`${GAME_CONFIG_PREFIX}${gameId}`));
 };
 
+export const saveLocalValue = <T>(key: string, value: T, ttlMs = DEFAULT_TTL_MS) => {
+  if (!isBrowser()) return;
+  const now = Date.now();
+  const payload: StoredLocalValue<T> = {
+    value,
+    savedAt: now,
+    expiresAt: now + ttlMs,
+  };
+  const serialized = safeStringify(payload);
+  if (!serialized) return;
+
+  try {
+    window.localStorage.setItem(key, serialized);
+  } catch (error) {
+    console.warn("Failed to store local value", error);
+  }
+};
+
+export const loadLocalValue = <T>(key: string): T | null => {
+  if (!isBrowser()) return null;
+  const payload = safeParse<StoredLocalValue<T>>(window.localStorage.getItem(key));
+  if (!payload) return null;
+
+  if (!payload.expiresAt || Date.now() > payload.expiresAt) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      console.warn("Failed to clear expired local value", error);
+    }
+    return null;
+  }
+
+  return payload.value;
+};

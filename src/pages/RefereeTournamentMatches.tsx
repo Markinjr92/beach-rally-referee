@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDateShortPtBr, formatDateTimePtBr, parseLocalDateTime } from '@/utils/date'
+import { loadLocalValue, saveLocalValue } from '@/lib/localStorage'
 
 type Tournament = Tables<'tournaments'>
 type Team = Pick<Tables<'teams'>, 'id' | 'name'>
@@ -23,6 +24,16 @@ type MatchWithTeams = Tables<'matches'> & {
 
 type StatusFilter = 'all' | 'not_started' | 'in_progress' | 'completed' | 'canceled'
 type OrderFilter = 'asc' | 'desc'
+
+type RefereeTournamentFilters = {
+  statusFilter: StatusFilter
+  courtFilter: string
+  order: OrderFilter
+  searchFilter: string
+}
+
+const REFEREE_TOURNAMENT_FILTERS_PREFIX = 'beach-rally:referee:tournament-filters:'
+const REFEREE_FILTERS_TTL_MS = 24 * 60 * 60 * 1000
 
 const statusLabels: Record<string, string> = {
   scheduled: 'Não iniciado',
@@ -42,6 +53,34 @@ const RefereeTournamentMatches = () => {
   const [order, setOrder] = useState<OrderFilter>('asc')
   const [searchFilter, setSearchFilter] = useState('')
   const [translationWarningVisible, setTranslationWarningVisible] = useState(false)
+
+  useEffect(() => {
+    if (!tournamentId) return
+
+    const storageKey = `${REFEREE_TOURNAMENT_FILTERS_PREFIX}${tournamentId}`
+    const storedFilters = loadLocalValue<RefereeTournamentFilters>(storageKey)
+    if (!storedFilters) return
+
+    setStatusFilter(storedFilters.statusFilter || 'not_started')
+    setCourtFilter(storedFilters.courtFilter || 'all')
+    setOrder(storedFilters.order || 'asc')
+    setSearchFilter(storedFilters.searchFilter || '')
+  }, [tournamentId])
+
+  useEffect(() => {
+    if (!tournamentId) return
+
+    saveLocalValue<RefereeTournamentFilters>(
+      `${REFEREE_TOURNAMENT_FILTERS_PREFIX}${tournamentId}`,
+      {
+        statusFilter,
+        courtFilter,
+        order,
+        searchFilter,
+      },
+      REFEREE_FILTERS_TTL_MS,
+    )
+  }, [courtFilter, order, searchFilter, statusFilter, tournamentId])
 
   useEffect(() => {
     const load = async () => {
@@ -123,6 +162,12 @@ const RefereeTournamentMatches = () => {
       .filter((value): value is string => Boolean(value))
     return Array.from(new Set(courts))
   }, [matches])
+
+  useEffect(() => {
+    if (courtFilter !== 'all' && !availableCourts.includes(courtFilter)) {
+      setCourtFilter('all')
+    }
+  }, [availableCourts, courtFilter])
 
   const filteredMatches = useMemo(() => {
     const filtered = matches.filter((match) => {
