@@ -20,6 +20,16 @@ const userSchema = z.object({
   ).optional(),
   roleIds: z.array(z.string()),
   isActive: z.boolean().default(true),
+  accessMode: z.enum(["keep", "days", "permanent"]).default("keep"),
+  accessDays: z.number().int().min(1, "Mínimo 1 dia").max(3650, "Máximo 3650 dias").optional(),
+}).superRefine((data, ctx) => {
+  if (data.accessMode === "days" && data.accessDays === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["accessDays"],
+      message: "Informe quantos dias liberar",
+    });
+  }
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -39,6 +49,7 @@ type UserFormDialogProps = {
     email: string;
     roles: string[];
     isActive?: boolean;
+    accessExpiresAt?: string | null;
   };
   onSuccess: () => void;
 };
@@ -65,6 +76,8 @@ export const UserFormDialog = ({
       password: "",
       roleIds: [],
       isActive: true,
+      accessMode: "keep",
+      accessDays: undefined,
     },
   });
 
@@ -110,6 +123,8 @@ export const UserFormDialog = ({
           password: "",
           roleIds,
           isActive: userData.isActive ?? true,
+          accessMode: "keep",
+          accessDays: undefined,
         });
       };
       void fetchUserRoles();
@@ -120,6 +135,8 @@ export const UserFormDialog = ({
         password: "",
         roleIds: [],
         isActive: true,
+        accessMode: "keep",
+        accessDays: undefined,
       });
     }
   }, [userData, isEdit, userId, form]);
@@ -136,6 +153,8 @@ export const UserFormDialog = ({
             email: data.email,
             roleIds: data.roleIds || [],
             isActive: data.isActive,
+            accessMode: data.accessMode,
+            accessDays: data.accessMode === "days" ? data.accessDays : undefined,
           }
         : {
             email: data.email,
@@ -262,6 +281,61 @@ export const UserFormDialog = ({
                 </FormItem>
               )}
             />
+            {isEdit && (
+              <div className="space-y-3 rounded-md border p-3">
+                <FormLabel>Liberação de acesso</FormLabel>
+                <FormField
+                  control={form.control}
+                  name="accessMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <select
+                          className="w-full rounded-md border px-3 py-2 text-sm"
+                          value={field.value}
+                          onChange={(event) => field.onChange(event.target.value)}
+                        >
+                          <option value="keep">Manter como está</option>
+                          <option value="days">Liberar por mais X dias</option>
+                          <option value="permanent">Liberar permanente</option>
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {form.watch("accessMode") === "days" && (
+                  <FormField
+                    control={form.control}
+                    name="accessDays"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dias adicionais</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={3650}
+                            value={field.value ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              field.onChange(value ? Number(value) : undefined);
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Atual:{" "}
+                  {userData?.accessExpiresAt
+                    ? `válido até ${new Date(userData.accessExpiresAt).toLocaleDateString("pt-BR")}`
+                    : "acesso permanente"}
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <FormLabel>Permissões</FormLabel>
               <div className="space-y-2 max-h-40 overflow-y-auto border rounded p-2">
