@@ -2,6 +2,37 @@ import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+const rolesRequestCache = new Map<string, Promise<{ data: string[] | null; error: { message: string } | null }>>();
+const rolesValueCache = new Map<string, string[]>();
+
+const normalizeRoles = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  const normalizedRoles = value
+    .map((item) => (typeof item === 'string' ? item.trim().toLowerCase() : ''))
+    .filter((item) => item.length > 0);
+
+  return [...new Set(normalizedRoles)];
+};
+
+const getUserRoles = async (userId: string) => {
+  const cachedRequest = rolesRequestCache.get(userId);
+  if (cachedRequest) return cachedRequest;
+
+  const request = supabase
+    .rpc('get_user_roles', { user_uuid: userId })
+    .then(({ data, error }) => ({
+      data: normalizeRoles(data),
+      error: error ? { message: error.message } : null,
+    }))
+    .finally(() => {
+      rolesRequestCache.delete(userId);
+    });
+
+  rolesRequestCache.set(userId, request);
+  return request;
+};
+
 export const useUserRoles = (user: User | null, authLoading: boolean) => {
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -9,7 +40,6 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
 
   const fetchRoles = useCallback(async () => {
     if (!user?.id) {
-      console.log('[useUserRoles] No authenticated user found when fetching roles.');
       setRoles([]);
       setError(null);
       setLoading(false);
@@ -17,28 +47,39 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
     }
 
     setLoading(true);
-    const { data, error } = await supabase.rpc("get_user_roles", {
-      user_uuid: user.id,
-    });
 
-    console.log('[useUserRoles] Result from get_user_roles RPC', {
-      userId: user.id,
-      email: user.email,
-      data,
-      error,
-    });
+    const cachedRoles = rolesValueCache.get(user.id);
+    if (cachedRoles) {
+      setRoles(cachedRoles);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await getUserRoles(user.id);
+
+    if (import.meta.env.DEV) {
+      console.debug('[useUserRoles] Result from get_user_roles RPC', {
+        userId: user.id,
+        email: user.email,
+        data,
+        error,
+      });
+    }
 
     if (error) {
       console.error('Failed to fetch user roles', error);
       setRoles([]);
       setError(error.message);
     } else {
-      setRoles(Array.isArray(data) ? data : []);
+      const sanitizedRoles = normalizeRoles(data);
+      rolesValueCache.set(user.id, sanitizedRoles);
+      setRoles(sanitizedRoles);
       setError(null);
     }
 
     setLoading(false);
-  }, [user?.id, user?.email]);
+  }, [user?.email, user?.id]);
 
   useEffect(() => {
     if (authLoading) {
@@ -53,11 +94,7 @@ export const useUserRoles = (user: User | null, authLoading: boolean) => {
       return;
     }
 
-    const loadRoles = async () => {
-      await fetchRoles();
-    };
-
-    loadRoles();
+    void fetchRoles();
   }, [authLoading, fetchRoles, user?.id]);
 
   return {
