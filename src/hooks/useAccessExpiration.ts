@@ -30,41 +30,36 @@ export const useAccessExpiration = (user: User | null, authLoading: boolean): Ac
     const checkAccess = async () => {
       setLoading(true);
       try {
-        // Verificar se o acesso está expirado usando a função RPC
-        const { data: isExpiredData, error: rpcError } = await supabase.rpc('is_user_access_expired', {
-          user_uuid: user.id,
-        });
-
-        if (rpcError) {
-          console.error('Erro ao verificar acesso:', rpcError);
-          setLoading(false);
-          return;
-        }
-
-        const expired = isExpiredData === true;
-
-        // Buscar data de expiração
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('access_expires_at')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-        if (userData) {
-          setExpiresAt(userData.access_expires_at);
-          
-          if (userData.access_expires_at) {
-            const expires = new Date(userData.access_expires_at);
-            const now = new Date();
-            const diffTime = expires.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            setDaysRemaining(diffDays);
-          } else {
-            setDaysRemaining(null); // Acesso vitalício
-          }
+        if (userError) {
+          console.error('Erro ao buscar data de expiração de acesso:', userError);
+          setIsExpired(false);
+          setExpiresAt(null);
+          setDaysRemaining(null);
+          return;
         }
 
-        setIsExpired(expired);
+        const accessExpiresAt = userData?.access_expires_at ?? null;
+        setExpiresAt(accessExpiresAt);
+
+        if (!accessExpiresAt) {
+          setIsExpired(false);
+          setDaysRemaining(null);
+          return;
+        }
+
+        const expires = new Date(accessExpiresAt);
+        const now = new Date();
+        const diffTime = expires.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        setDaysRemaining(diffDays);
+        setIsExpired(diffTime < 0);
       } catch (error) {
         console.error('Erro ao verificar acesso:', error);
       } finally {
