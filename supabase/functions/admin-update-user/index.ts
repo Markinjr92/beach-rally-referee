@@ -13,6 +13,16 @@ const updateUserSchema = z.object({
   email: z.string().email('Email inválido').max(255, 'Email muito longo').optional(),
   roleIds: z.array(z.string().uuid('ID de role inválido')).optional().default([]),
   isActive: z.boolean().optional(),
+  accessMode: z.enum(['keep', 'days', 'permanent']).optional().default('keep'),
+  accessDays: z.number().int().min(1, 'Dias deve ser maior que zero').max(3650, 'Dias muito alto').optional(),
+}).superRefine((data, ctx) => {
+  if (data.accessMode === 'days' && (data.accessDays === undefined || Number.isNaN(data.accessDays))) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accessDays'],
+      message: 'Informe a quantidade de dias para estender o acesso',
+    });
+  }
 });
 
 Deno.serve(async (req) => {
@@ -102,20 +112,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { userId, name, email, roleIds, isActive } = validation.data;
+    const { userId, name, email, roleIds, isActive, accessMode, accessDays } = validation.data;
     
     // Filtrar roleIds vazios ou inválidos
     const validRoleIds = Array.isArray(roleIds) 
       ? roleIds.filter(id => id && typeof id === 'string' && id.length > 0)
       : [];
     
-    console.log('Dados validados:', { userId, name, email, validRoleIds, isActive });
+    console.log('Dados validados:', { userId, name, email, validRoleIds, isActive, accessMode, accessDays });
 
-    // Atualizar informações do usuário (name e/ou isActive)
-    if (name !== undefined || isActive !== undefined) {
-      const updateData: { name?: string; is_active?: boolean } = {};
+    // Atualizar informações do usuário (name, isActive e acesso)
+    if (name !== undefined || isActive !== undefined || accessMode !== 'keep') {
+      const updateData: { name?: string; is_active?: boolean; access_expires_at?: string | null } = {};
       if (name !== undefined) updateData.name = name;
       if (isActive !== undefined) updateData.is_active = isActive;
+
+      if (accessMode === 'permanent') {
+        updateData.access_expires_at = null;
+      }
+
+      if (accessMode === 'days') {
+        const extensionDays = accessDays ?? 0;
+
+        const { data: currentUser, error: currentUserError } = await supabaseAdmin
+          .from('users')
+          .select('access_expires_at')
+          .eq('id', userId)
+          .single();
+
+        if (currentUserError) {
+          return new Response(
+            JSON.stringify({ ok: false, message: 'Erro ao consultar acesso atual do usuário' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const now = new Date();
+        const currentExpiresAt = currentUser?.access_expires_at ? new Date(currentUser.access_expires_at) : null;
+        const baseDate = currentExpiresAt && currentExpiresAt > now ? currentExpiresAt : now;
+        const nextExpiresAt = new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+
+        updateData.access_expires_at = nextExpiresAt.toISOString();
+      }
 
       const { error: updateError } = await supabaseAdmin
         .from('users')

@@ -19,6 +19,44 @@ const jsonResponse = (status: number, body: ListUsersResponse, headers: HeadersI
     headers: { ...headers, "Content-Type": "application/json" },
   });
 
+const listAdminUsers = async (serviceClient: ReturnType<typeof createClient>) => {
+  const { data: users, error: usersError } = await serviceClient
+    .from("users")
+    .select("id, email, name, is_active, access_expires_at")
+    .order("email", { ascending: true });
+
+  if (usersError) throw usersError;
+
+  const { data: userRoles, error: rolesError } = await serviceClient
+    .from("user_roles")
+    .select("user_id, roles(name)");
+
+  if (rolesError) throw rolesError;
+
+  const rolesByUser = new Map<string, string[]>();
+
+  for (const row of userRoles ?? []) {
+    const roleData = row.roles as { name?: string } | { name?: string }[] | null;
+    const roleName = Array.isArray(roleData) ? roleData[0]?.name : roleData?.name;
+    if (!roleName) continue;
+
+    const existing = rolesByUser.get(row.user_id) ?? [];
+    if (!existing.includes(roleName)) {
+      existing.push(roleName);
+      rolesByUser.set(row.user_id, existing);
+    }
+  }
+
+  return (users ?? []).map((user) => ({
+    user_id: user.id,
+    email: user.email,
+    name: user.name,
+    is_active: user.is_active ?? true,
+    access_expires_at: user.access_expires_at,
+    roles: rolesByUser.get(user.id) ?? [],
+  }));
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -83,10 +121,8 @@ Deno.serve(async (req) => {
     }
 
     if (req.method === "GET") {
-      const { data, error } = await serviceClient.rpc("get_admin_user_list");
-      if (error) throw error;
-
-      return jsonResponse(200, { ok: true, users: data ?? [] }, corsHeaders);
+      const users = await listAdminUsers(serviceClient);
+      return jsonResponse(200, { ok: true, users }, corsHeaders);
     }
 
     const body = await req
@@ -94,10 +130,8 @@ Deno.serve(async (req) => {
       .catch(() => ({})) as { action?: string };
 
     if (body.action === "list-users") {
-      const { data, error } = await serviceClient.rpc("get_admin_user_list");
-      if (error) throw error;
-
-      return jsonResponse(200, { ok: true, users: data ?? [] }, corsHeaders);
+      const users = await listAdminUsers(serviceClient);
+      return jsonResponse(200, { ok: true, users }, corsHeaders);
     }
 
     return jsonResponse(400, { ok: false, message: "Unknown action" }, corsHeaders);

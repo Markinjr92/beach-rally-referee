@@ -17,6 +17,7 @@ type AdminListUser = {
   name: string | null;
   roles: string[];
   is_active?: boolean;
+  access_expires_at?: string | null;
 };
 
 type AdminFunctionUser = Partial<AdminListUser> & {
@@ -116,6 +117,7 @@ export const AdminUserManagement = () => {
       name: user.name ?? null,
       roles: Array.isArray(user.roles) ? user.roles : [],
       is_active: typeof user.is_active === "boolean" ? user.is_active : true,
+      access_expires_at: user.access_expires_at ?? null,
     }));
 
     setUsers(normalizedUsers);
@@ -205,6 +207,7 @@ export const AdminUserManagement = () => {
                   <TableHead>Email</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Acesso</TableHead>
                   <TableHead>Perfis</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -218,6 +221,17 @@ export const AdminUserManagement = () => {
                       <Badge variant={user.is_active ? "default" : "secondary"}>
                         {user.is_active ? "Ativo" : "Inativo"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.access_expires_at ? (
+                        <Badge variant={new Date(user.access_expires_at) < new Date() ? "destructive" : "secondary"}>
+                          {new Date(user.access_expires_at) < new Date()
+                            ? "Expirado"
+                            : `Até ${new Date(user.access_expires_at).toLocaleDateString("pt-BR")}`}
+                        </Badge>
+                      ) : (
+                        <Badge variant="default">Permanente</Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {user.roles.length === 0 ? (
@@ -281,6 +295,7 @@ export const AdminUserManagement = () => {
         email: selectedUser.email || "",
         roles: selectedUser.roles,
         isActive: selectedUser.is_active,
+        accessExpiresAt: selectedUser.access_expires_at,
       } : undefined}
       onSuccess={handleSuccess}
     />
