@@ -20,16 +20,6 @@ type AdminListUser = {
   access_expires_at?: string | null;
 };
 
-type AdminFunctionUser = Partial<AdminListUser> & {
-  id?: string | null;
-};
-
-type AdminUserManagementResponse = {
-  ok: boolean;
-  users?: AdminFunctionUser[];
-  message?: string;
-};
-
 export const AdminUserManagement = () => {
   const [users, setUsers] = useState<AdminListUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,7 +47,7 @@ export const AdminUserManagement = () => {
     setIsLoading(true);
     setErrorMessage(null);
 
-    // Verificar se há sessão antes de chamar a função
+    // Verificar se há sessão antes de carregar dados
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
@@ -68,54 +58,63 @@ export const AdminUserManagement = () => {
       return;
     }
 
-    console.log("Chamando admin-user-management com sessão:", {
-      userId: session.user.id,
-      hasToken: !!session.access_token,
+    const { data: hasPermission, error: permissionError } = await supabase.rpc("user_has_permission", {
+      user_uuid: session.user.id,
+      permission_name: "user.manage",
     });
 
-    const { data, error } = await supabase.functions.invoke<AdminUserManagementResponse>(
-      "admin-user-management",
-      {
-        body: { action: "list-users" },
-      },
-    );
+    if (permissionError || !hasPermission) {
+      console.error("Erro ao validar permissão de administração", permissionError);
+      handleError("Você não tem permissão para acessar esta funcionalidade.");
+      setUsers([]);
+      setIsLoading(false);
+      return;
+    }
 
-    if (error) {
-      console.error("Erro ao chamar a função admin-user-management", {
-        error,
-        message: error.message,
-        context: error.context,
-      });
-      
-      // Mensagem mais específica baseada no tipo de erro
-      let errorMessage = error.message || "Erro ao carregar usuários";
-      if (error.message?.includes("401") || error.message?.includes("Unauthorized")) {
-        errorMessage = "Sessão expirada. Por favor, faça login novamente.";
-      } else if (error.message?.includes("403") || error.message?.includes("Forbidden")) {
-        errorMessage = "Você não tem permissão para acessar esta funcionalidade.";
+    const { data: usersData, error: usersError } = await supabase
+      .from("users")
+      .select("id, email, name, is_active, access_expires_at")
+      .order("email", { ascending: true });
+
+    if (usersError) {
+      console.error("Erro ao carregar usuários:", usersError);
+      handleError(usersError.message);
+      setUsers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const { data: userRoles, error: rolesError } = await supabase
+      .from("user_roles")
+      .select("user_id, roles(name)");
+
+    if (rolesError) {
+      console.error("Erro ao carregar roles dos usuários:", rolesError);
+      handleError(rolesError.message);
+      setUsers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const rolesByUser = new Map<string, string[]>();
+
+    for (const row of userRoles ?? []) {
+      const roleData = row.roles as { name?: string } | { name?: string }[] | null;
+      const roleName = Array.isArray(roleData) ? roleData[0]?.name : roleData?.name;
+      if (!roleName) continue;
+
+      const existing = rolesByUser.get(row.user_id) ?? [];
+      if (!existing.includes(roleName)) {
+        existing.push(roleName);
+        rolesByUser.set(row.user_id, existing);
       }
-      
-      handleError(errorMessage);
-      setUsers([]);
-      setIsLoading(false);
-      return;
     }
 
-    if (!data?.ok || !Array.isArray(data.users)) {
-      console.error("Resposta inesperada da função admin-user-management", data);
-      handleError(data?.message);
-      setUsers([]);
-      setIsLoading(false);
-      return;
-    }
-
-    // Normalize API response: ensure we always have user_id for keys/edit/reset
-    const apiUsers = data.users ?? [];
-    const normalizedUsers: AdminListUser[] = apiUsers.map((user) => ({
-      user_id: user.user_id ?? user.id ?? "",
+    const normalizedUsers: AdminListUser[] = (usersData ?? []).map((user) => ({
+      user_id: user.id,
       email: user.email ?? null,
       name: user.name ?? null,
-      roles: Array.isArray(user.roles) ? user.roles : [],
+      roles: rolesByUser.get(user.id) ?? [],
       is_active: typeof user.is_active === "boolean" ? user.is_active : true,
       access_expires_at: user.access_expires_at ?? null,
     }));

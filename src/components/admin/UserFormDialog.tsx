@@ -187,6 +187,20 @@ export const UserFormDialog = ({
         throw new Error(errorMessage);
       }
 
+      // Garante que "acesso permanente" seja aplicado mesmo quando a Edge Function
+      // não propaga accessMode corretamente em ambientes desatualizados.
+      if (isEdit && userId && data.accessMode === "permanent") {
+        const { error: accessError } = await supabase
+          .from("users")
+          .update({ access_expires_at: null })
+          .eq("id", userId);
+
+        if (accessError) {
+          console.error("Falha ao aplicar acesso permanente diretamente:", accessError);
+          throw new Error("Usuário atualizado, mas não foi possível aplicar acesso permanente.");
+        }
+      }
+
       toast({
         title: isEdit ? "Usuário atualizado" : "Usuário criado",
         description: isEdit 
