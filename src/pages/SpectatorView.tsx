@@ -423,6 +423,7 @@ export default function SpectatorView() {
   const formatModalityCategory = (modality: Game['modality'], category: string): string => {
     const modalityLabels: Record<Game['modality'], string> = {
       'dupla': 'Dupla',
+      'trio': 'Trio',
       'quarteto': 'Quarteto'
     };
     

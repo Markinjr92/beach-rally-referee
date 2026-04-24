@@ -1,5 +1,6 @@
 export type TournamentFormatId =
   | 'groups_and_knockout'
+  | '4_groups_3_3_4_4_quarterfinals'
   | 'double_elimination'
   | 'global_semis'
   | 'series_gold_silver'
@@ -124,7 +125,7 @@ export interface GameConfiguration {
   tournamentId: string;
   title: string;
   category: string; // F/M/Misto
-  modality: 'dupla' | 'quarteto';
+  modality: 'dupla' | 'trio' | 'quarteto';
   format: 'melhorDe1' | 'melhorDe3' | 'melhorDe3_15' | 'melhorDe3_15_10';
   teamA: Team;
   teamB: Team;

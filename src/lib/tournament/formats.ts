@@ -112,6 +112,12 @@ const ensureFifteenTeams = (teams: TournamentTeam[]) => {
   }
 };
 
+const ensureFourteenTeams = (teams: TournamentTeam[]) => {
+  if (teams.length !== 14) {
+    throw new Error('Este formato suporta exatamente 14 equipes inscritas.');
+  }
+};
+
 /**
  * Gera jogos cruzados entre dois grupos
  * Cada equipe de um grupo joga contra todas as equipes do outro grupo
@@ -393,6 +399,139 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
 
       knockoutMatches.push(
         ...semifinals.map((match) =>
+          createMatch(options, phaseKnockout, {
+            round: 2,
+            title: match.title,
+            teamA: match.teamA,
+            teamB: match.teamB,
+          }),
+        ),
+      );
+
+      if (options.includeThirdPlaceMatch) {
+        knockoutMatches.push(
+          createMatch(options, phaseKnockout, {
+            round: 3,
+            title: 'Decisão 3º lugar',
+            teamA: placeholder('Perdedor Semifinal 1'),
+            teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
+          }),
+        );
+      }
+
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 4,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseKnockout],
+        groups,
+        matches: [...groupMatches, ...knockoutMatches],
+      };
+    },
+  },
+  '4_groups_3_3_4_4_quarterfinals': {
+    id: '4_groups_3_3_4_4_quarterfinals',
+    name: '4 Grupos (3-3-4-4) + Quartas, Semi e Final',
+    description:
+      'Quatro grupos com tamanhos diferentes (A/B com 3, C/D com 4). Todos contra todos em cada grupo. Avançam os 2 melhores de cada grupo para quartas.',
+    generate: (options) => {
+      ensureFourteenTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Eliminatórias',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-c', name: 'Grupo C', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-d', name: 'Grupo D', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      const groupSeeds: Record<string, number[]> = {
+        'grupo-a': [1, 8, 9],
+        'grupo-b': [2, 7, 10],
+        'grupo-c': [3, 6, 11, 14],
+        'grupo-d': [4, 5, 12, 13],
+      };
+
+      groups.forEach((group) => {
+        group.teamIds = groupSeeds[group.id].map((seed) => {
+          const team = teamsBySeed.get(seed);
+          if (!team) {
+            throw new Error(`Não foi possível encontrar a equipe com seed ${seed}`);
+          }
+          return team.id;
+        });
+      });
+
+      const groupMatches = generateGroupStageMatches(options, phaseGroup, groups, teamsBySeed);
+
+      const placeholder = placeholderTeam;
+      const quarterfinals = [
+        {
+          title: 'Quartas de final 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('2º Grupo B'),
+        },
+        {
+          title: 'Quartas de final 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('2º Grupo A'),
+        },
+        {
+          title: 'Quartas de final 3',
+          teamA: placeholder('1º Grupo C'),
+          teamB: placeholder('2º Grupo D'),
+        },
+        {
+          title: 'Quartas de final 4',
+          teamA: placeholder('1º Grupo D'),
+          teamB: placeholder('2º Grupo C'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = quarterfinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+        }),
+      );
+
+      knockoutMatches.push(
+        ...[
+          {
+            title: 'Semifinal 1',
+            teamA: placeholder('Vencedor Quartas 1'),
+            teamB: placeholder('Vencedor Quartas 2'),
+          },
+          {
+            title: 'Semifinal 2',
+            teamA: placeholder('Vencedor Quartas 3'),
+            teamB: placeholder('Vencedor Quartas 4'),
+          },
+        ].map((match) =>
           createMatch(options, phaseKnockout, {
             round: 2,
             title: match.title,

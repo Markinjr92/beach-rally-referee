@@ -225,6 +225,12 @@ export default function TournamentsDB() {
         { key: 'semifinals', label: 'Semifinais' },
         { key: 'final', label: 'Final' },
       ],
+      '4_groups_3_3_4_4_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
       '3_groups_quarterfinals': [
         { key: 'groups', label: 'Fase de Grupos' },
         { key: 'quarterfinals', label: 'Quartas de Final' },
@@ -349,6 +355,7 @@ export default function TournamentsDB() {
   const getRequiredTeamCount = (formatId: TournamentFormatId): number => {
     const teamCounts: Record<TournamentFormatId, number> = {
       groups_and_knockout: 12,
+      '4_groups_3_3_4_4_quarterfinals': 14,
       double_elimination: 12,
       global_semis: 12,
       series_gold_silver: 12,
@@ -376,7 +383,7 @@ export default function TournamentsDB() {
   const initializeTournamentStructure = async (tournament: Tables<'tournaments'>, teamNamesData?: TeamNameEntry[]) => {
     try {
       const requiredTeamCount = form.teamCount || getRequiredTeamCount(form.formatId || 'groups_and_knockout')
-      const teamLabel = form.modality === 'quarteto' ? 'Quarteto' : 'Dupla'
+      const teamLabel = form.modality === 'quarteto' ? 'Quarteto' : form.modality === 'trio' ? 'Trio' : 'Dupla'
       
       // Criar mapa de nomes por seed se teamNamesData foi fornecido
       const namesBySeed = new Map<number, TeamNameEntry>()
@@ -396,8 +403,10 @@ export default function TournamentsDB() {
             name: customName.teamName,
             player_a: customName.playerA,
             player_b: customName.playerB,
-            ...(form.modality === 'quarteto' && {
+            ...((form.modality === 'trio' || form.modality === 'quarteto') && {
               player_c: customName.playerC || null,
+            }),
+            ...(form.modality === 'quarteto' && {
               player_d: customName.playerD || null,
             }),
           }
@@ -409,6 +418,12 @@ export default function TournamentsDB() {
             name: `${teamLabel} Seed ${seed}`,
             player_a: `Atleta ${seed}A`,
             player_b: `Atleta ${seed}B`,
+            ...((form.modality === 'trio' || form.modality === 'quarteto') && {
+              player_c: `Atleta ${seed}C`,
+            }),
+            ...(form.modality === 'quarteto' && {
+              player_d: `Atleta ${seed}D`,
+            }),
           }
         }
       })
@@ -447,6 +462,12 @@ export default function TournamentsDB() {
           players: [
             { name: createdTeams[index]?.player_a ?? 'A definir', number: 1 },
             { name: createdTeams[index]?.player_b ?? 'A definir', number: 2 },
+            ...((form.modality === 'trio' || form.modality === 'quarteto')
+              ? [{ name: createdTeams[index]?.player_c ?? 'A definir', number: 3 }]
+              : []),
+            ...(form.modality === 'quarteto'
+              ? [{ name: createdTeams[index]?.player_d ?? 'A definir', number: 4 }]
+              : []),
           ],
         },
       }))
@@ -477,7 +498,7 @@ export default function TournamentsDB() {
         includeThirdPlaceMatch: form.includeThirdPlace,
         baseGameConfig: {
           category: form.category || 'Misto',
-          modality: (form.modality as 'dupla' | 'quarteto') || 'dupla',
+          modality: (form.modality as 'dupla' | 'trio' | 'quarteto') || 'dupla',
           hasStatistics: form.hasStatistics,
           directWinFormat: form.directWinFormat,
           pointsPerSet: [...finalPreset.pointsPerSet],
@@ -835,13 +856,16 @@ export default function TournamentsDB() {
                 <SelectTrigger className="bg-white/15 border-white/30 text-white focus:ring-white/70 focus:ring-offset-0">
                   <SelectValue placeholder="Selecione a modalidade" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
-                  <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">
-                    Dupla
-                  </SelectItem>
-                  <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">
-                    Quarteto
-                  </SelectItem>
+                  <SelectContent className="bg-slate-950/80 text-white border-white/30 backdrop-blur-xl">
+                    <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">
+                      Dupla
+                    </SelectItem>
+                    <SelectItem value="trio" className="focus:bg-white/10 focus:text-white">
+                      Trio
+                    </SelectItem>
+                    <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">
+                      Quarteto
+                    </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1503,7 +1527,8 @@ export default function TournamentsDB() {
                   entry.teamName.trim() !== '' &&
                   entry.playerA.trim() !== '' &&
                   entry.playerB.trim() !== '' &&
-                  (form.modality !== 'quarteto' || (entry.playerC?.trim() !== '' && entry.playerD?.trim() !== ''))
+                  ((form.modality !== 'trio' && form.modality !== 'quarteto') || entry.playerC?.trim() !== '') &&
+                  (form.modality !== 'quarteto' || entry.playerD?.trim() !== '')
                 )
                 
                 if (!isValid) {
@@ -1544,6 +1569,8 @@ function TeamNamesForm({
   setTeamNamesData: (data: TeamNameEntry[]) => void
 }) {
   const isQuarteto = modality === 'quarteto'
+  const isTrio = modality === 'trio'
+  const needsPlayerC = isTrio || isQuarteto
 
   // Inicializar dados se estiver vazio
   useEffect(() => {
@@ -1561,7 +1588,7 @@ function TeamNamesForm({
               teamName: '',
               playerA: '',
               playerB: '',
-              playerC: isQuarteto ? '' : undefined,
+              playerC: needsPlayerC ? '' : undefined,
               playerD: isQuarteto ? '' : undefined,
             })
           })
@@ -1573,8 +1600,8 @@ function TeamNamesForm({
             teamName: '',
             playerA: '',
             playerB: '',
-            playerC: isQuarteto ? '' : undefined,
-            playerD: isQuarteto ? '' : undefined,
+              playerC: needsPlayerC ? '' : undefined,
+              playerD: isQuarteto ? '' : undefined,
           })
         })
       }
@@ -1644,7 +1671,7 @@ function TeamNamesForm({
                           />
                         </div>
                       </div>
-                      {isQuarteto && (
+                      {needsPlayerC && (
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <Label className="text-white/80">Atleta C</Label>
@@ -1655,15 +1682,17 @@ function TeamNamesForm({
                               className="bg-white/10 border-white/20 text-white"
                             />
                           </div>
-                          <div>
-                            <Label className="text-white/80">Atleta D</Label>
-                            <Input
-                              value={entry.playerD || ''}
-                              onChange={(e) => updateEntry(entry.seed, 'playerD', e.target.value)}
-                              placeholder="Nome do atleta D"
-                              className="bg-white/10 border-white/20 text-white"
-                            />
-                          </div>
+                          {isQuarteto && (
+                            <div>
+                              <Label className="text-white/80">Atleta D</Label>
+                              <Input
+                                value={entry.playerD || ''}
+                                onChange={(e) => updateEntry(entry.seed, 'playerD', e.target.value)}
+                                placeholder="Nome do atleta D"
+                                className="bg-white/10 border-white/20 text-white"
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1712,7 +1741,7 @@ function TeamNamesForm({
                   />
                 </div>
               </div>
-              {isQuarteto && (
+              {needsPlayerC && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-white/80">Atleta C</Label>
@@ -1723,15 +1752,17 @@ function TeamNamesForm({
                       className="bg-white/10 border-white/20 text-white"
                     />
                   </div>
-                  <div>
-                    <Label className="text-white/80">Atleta D</Label>
-                    <Input
-                      value={entry.playerD || ''}
-                      onChange={(e) => updateEntry(entry.seed, 'playerD', e.target.value)}
-                      placeholder="Nome do atleta D"
-                      className="bg-white/10 border-white/20 text-white"
-                    />
-                  </div>
+                  {isQuarteto && (
+                    <div>
+                      <Label className="text-white/80">Atleta D</Label>
+                      <Input
+                        value={entry.playerD || ''}
+                        onChange={(e) => updateEntry(entry.seed, 'playerD', e.target.value)}
+                        placeholder="Nome do atleta D"
+                        className="bg-white/10 border-white/20 text-white"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

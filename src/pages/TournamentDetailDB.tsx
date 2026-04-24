@@ -1046,19 +1046,28 @@ export default function TournamentDetailDB() {
     ? tournamentConfig.tieBreakerOrder
     : defaultTieBreakerOrder
 
+  const isTrioTournament = tournament?.modality === 'trio'
+  const isQuartetoTournament = tournament?.modality === 'quarteto'
+
   const handleSaveTeamEdit = async () => {
     if (!editingTeam) return
     
-    // Validar campos obrigatórios para quarteto
-    if (tournament?.modality === 'quarteto') {
-      if (!editingTeam.player_c || !editingTeam.player_d) {
+    // Validar campos obrigatórios por modalidade
+    if (isTrioTournament && !editingTeam.player_c) {
+      toast({ 
+        title: 'Campos obrigatórios', 
+        description: 'Para modalidade trio, o jogador 3 é obrigatório',
+        variant: 'destructive'
+      })
+      return
+    }
+    if (isQuartetoTournament && (!editingTeam.player_c || !editingTeam.player_d)) {
         toast({ 
           title: 'Campos obrigatórios', 
           description: 'Para modalidade quarteto, os jogadores 3 e 4 são obrigatórios',
           variant: 'destructive'
         })
         return
-      }
     }
     
     const updateData: {
@@ -1073,8 +1082,10 @@ export default function TournamentDetailDB() {
       player_b: editingTeam.player_b,
     }
     
-    if (tournament?.modality === 'quarteto') {
+    if (isTrioTournament || isQuartetoTournament) {
       updateData.player_c = editingTeam.player_c || null
+    }
+    if (isQuartetoTournament) {
       updateData.player_d = editingTeam.player_d || null
     }
     
@@ -1357,9 +1368,9 @@ export default function TournamentDetailDB() {
                               value={editingTeam.name}
                               onChange={(e) => setEditingTeam({ ...editingTeam, name: e.target.value })}
                               className="bg-white/10 border-white/20 text-white"
-                              placeholder="Nome da dupla"
+                              placeholder="Nome da equipe"
                             />
-                            <div className={`grid gap-2 ${tournament?.modality === 'quarteto' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                            <div className={`grid gap-2 grid-cols-2`}>
                               <Input
                                 value={editingTeam.player_a}
                                 onChange={(e) => setEditingTeam({ ...editingTeam, player_a: e.target.value })}
@@ -1372,7 +1383,7 @@ export default function TournamentDetailDB() {
                                 className="bg-white/10 border-white/20 text-white"
                                 placeholder="Jogador 2"
                               />
-                              {tournament?.modality === 'quarteto' && (
+                              {(isTrioTournament || isQuartetoTournament) && (
                                 <>
                                   <Input
                                     value={editingTeam.player_c || ''}
@@ -1381,13 +1392,15 @@ export default function TournamentDetailDB() {
                                     placeholder="Jogador 3 *"
                                     required
                                   />
-                                  <Input
-                                    value={editingTeam.player_d || ''}
-                                    onChange={(e) => setEditingTeam({ ...editingTeam, player_d: e.target.value })}
-                                    className="bg-white/10 border-white/20 text-white"
-                                    placeholder="Jogador 4 *"
-                                    required
-                                  />
+                                  {isQuartetoTournament && (
+                                    <Input
+                                      value={editingTeam.player_d || ''}
+                                      onChange={(e) => setEditingTeam({ ...editingTeam, player_d: e.target.value })}
+                                      className="bg-white/10 border-white/20 text-white"
+                                      placeholder="Jogador 4 *"
+                                      required
+                                    />
+                                  )}
                                 </>
                               )}
                             </div>
@@ -1419,9 +1432,10 @@ export default function TournamentDetailDB() {
                               <div className="font-semibold">{team.name}</div>
                               <div className="text-xs text-white/70">
                                 {team.player_a} / {team.player_b}
-                                {tournament?.modality === 'quarteto' && team.player_c && team.player_d && (
-                                  <> / {team.player_c} / {team.player_d}</>
+                                {(isTrioTournament || isQuartetoTournament) && team.player_c && (
+                                  <> / {team.player_c}</>
                                 )}
+                                {isQuartetoTournament && team.player_d && <> / {team.player_d}</>}
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -1474,7 +1488,7 @@ export default function TournamentDetailDB() {
                     ))}
                     {teams.length === 0 && <p className="text-sm text-white/70">Nenhuma equipe.</p>}
                   </div>
-                  <div className={`grid gap-3 ${tournament?.modality === 'quarteto' ? 'md:grid-cols-6' : 'md:grid-cols-4'}`}>
+                  <div className={`grid gap-3 ${isQuartetoTournament ? 'md:grid-cols-6' : (isTrioTournament ? 'md:grid-cols-5' : 'md:grid-cols-4')}`}>
                     <Input
                       placeholder="Nome da equipe"
                       value={teamForm.name}
@@ -1493,7 +1507,7 @@ export default function TournamentDetailDB() {
                       onChange={(e) => setTeamForm({ ...teamForm, player_b: e.target.value })}
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                     />
-                    {tournament?.modality === 'quarteto' && (
+                    {(isTrioTournament || isQuartetoTournament) && (
                       <>
                         <Input
                           placeholder="Jogador 3 *"
@@ -1502,13 +1516,15 @@ export default function TournamentDetailDB() {
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
                           required
                         />
-                        <Input
-                          placeholder="Jogador 4 *"
-                          value={teamForm.player_d}
-                          onChange={(e) => setTeamForm({ ...teamForm, player_d: e.target.value })}
-                          className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                          required
-                        />
+                        {isQuartetoTournament && (
+                          <Input
+                            placeholder="Jogador 4 *"
+                            value={teamForm.player_d}
+                            onChange={(e) => setTeamForm({ ...teamForm, player_d: e.target.value })}
+                            className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                            required
+                          />
+                        )}
                       </>
                     )}
                     <Button
@@ -1519,7 +1535,15 @@ export default function TournamentDetailDB() {
                           toast({ title: 'Preencha os campos obrigatórios' }); 
                           return 
                         }
-                        if (tournament?.modality === 'quarteto' && (!teamForm.player_c || !teamForm.player_d)) {
+                        if (isTrioTournament && !teamForm.player_c) {
+                          toast({ 
+                            title: 'Campos obrigatórios', 
+                            description: 'Para modalidade trio, o jogador 3 é obrigatório',
+                            variant: 'destructive'
+                          }); 
+                          return 
+                        }
+                        if (isQuartetoTournament && (!teamForm.player_c || !teamForm.player_d)) {
                           toast({ 
                             title: 'Campos obrigatórios', 
                             description: 'Para modalidade quarteto, os jogadores 3 e 4 são obrigatórios',
@@ -1532,8 +1556,10 @@ export default function TournamentDetailDB() {
                           player_a: teamForm.player_a,
                           player_b: teamForm.player_b,
                         }
-                        if (tournament?.modality === 'quarteto') {
+                        if (isTrioTournament || isQuartetoTournament) {
                           insertData.player_c = teamForm.player_c
+                        }
+                        if (isQuartetoTournament) {
                           insertData.player_d = teamForm.player_d
                         }
                         const { data: team, error: terr } = await supabase.from('teams').insert(insertData).select('*').single()
@@ -1913,7 +1939,7 @@ export default function TournamentDetailDB() {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <h3 className="text-lg font-semibold text-white">{group.label}</h3>
                             <Badge variant="outline" className="border-white/30 text-white/80">
-                              {group.standings.length} {group.standings.length === 1 ? 'dupla' : 'duplas'}
+                              {group.standings.length} {group.standings.length === 1 ? 'equipe' : 'equipes'}
                             </Badge>
                           </div>
                           <div className="overflow-x-auto">
@@ -1998,7 +2024,7 @@ export default function TournamentDetailDB() {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <h3 className="text-lg font-semibold text-white">{phase.label}</h3>
                             <Badge variant="outline" className="border-white/30 text-white/80">
-                              {phase.standings.length} {phase.standings.length === 1 ? 'dupla' : 'duplas'}
+                              {phase.standings.length} {phase.standings.length === 1 ? 'equipe' : 'equipes'}
                             </Badge>
                           </div>
                           <div className="overflow-x-auto">

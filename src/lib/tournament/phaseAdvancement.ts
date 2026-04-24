@@ -275,6 +275,89 @@ const createKnockoutMatches = async (
   return newMatches;
 };
 
+const createKnockoutMatchesFourGroups3344 = async (
+  options: AdvancePhaseOptions,
+  qualifiers: Map<string, GroupQualifierEntry>,
+): Promise<TablesInsert<'matches'>[]> => {
+  const newMatches: TablesInsert<'matches'>[] = [];
+
+  const sortedGroups = Array.from(qualifiers.entries()).sort(([labelA], [labelB]) =>
+    labelA.localeCompare(labelB, 'pt-BR'),
+  );
+
+  if (sortedGroups.length !== 4) {
+    throw new Error('O formato 4 grupos (3-3-4-4) requer exatamente 4 grupos.');
+  }
+
+  const [groupA, groupB, groupC, groupD] = sortedGroups.map(([, value]) => value);
+
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('match_format_quarterfinals')
+    .eq('id', options.tournamentId)
+    .single();
+
+  const matchConfig = getMatchConfigFromFormat(tournament?.match_format_quarterfinals);
+  const pointsPerSet = options.pointsPerSet || matchConfig.pointsPerSet;
+  const sideSwitchSum = options.sideSwitchSum || matchConfig.sideSwitchSum;
+  const bestOf = options.bestOf || matchConfig.bestOf;
+  const modality = options.modality || 'dupla';
+  const directWinFormat = options.directWinFormat ?? false;
+
+  newMatches.push(
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupA.first,
+      team_b_id: groupB.second,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupB.first,
+      team_b_id: groupA.second,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupC.first,
+      team_b_id: groupD.second,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+    {
+      tournament_id: options.tournamentId,
+      team_a_id: groupD.first,
+      team_b_id: groupC.second,
+      phase: 'Quartas de final',
+      status: 'scheduled',
+      points_per_set: pointsPerSet,
+      side_switch_sum: sideSwitchSum,
+      best_of: bestOf,
+      modality,
+      direct_win_format: directWinFormat,
+    },
+  );
+
+  return newMatches;
+};
+
 type ThirdPlaceCandidate = {
   groupLabel: string;
   teamId: string;
@@ -1086,6 +1169,7 @@ export const advanceToNextPhase = async (
   try {
     const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
       groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+      '4_groups_3_3_4_4_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
       '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
       '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
       '5_teams_round_robin': ['Fase de Grupos', 'Finais'],
@@ -1109,6 +1193,26 @@ export const advanceToNextPhase = async (
             context.options.tieBreakerOrder || [],
           );
           return createKnockoutMatches(context.options, qualifiers);
+        },
+        'Quartas de final': async (context) => {
+          const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+          return createSemifinalMatches(context.options, quarterfinalsMatches);
+        },
+        Semifinal: async (context) => {
+          const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+          return createFinalMatches(context.options, semifinalMatches);
+        },
+      },
+      '4_groups_3_3_4_4_quarterfinals': {
+        'Fase de Grupos': async (context) => {
+          const qualifiers = await calculateGroupQualifiers(
+            context.options.tournamentId,
+            context.teams,
+            context.matches,
+            context.matchScores,
+            context.options.tieBreakerOrder || [],
+          );
+          return createKnockoutMatchesFourGroups3344(context.options, qualifiers);
         },
         'Quartas de final': async (context) => {
           const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
@@ -1315,6 +1419,7 @@ export const suggestNextPhaseMatches = async (
 ): Promise<TablesInsert<'matches'>[]> => {
   const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
     groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+    '4_groups_3_3_4_4_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
     '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
     '2_groups_5_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
     '2_groups_6_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
@@ -1345,6 +1450,26 @@ export const suggestNextPhaseMatches = async (
           context.options.tieBreakerOrder || [],
         );
         return createKnockoutMatches(context.options, qualifiers);
+      },
+      'Quartas de final': async (context) => {
+        const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');
+        return createSemifinalMatches(context.options, quarterfinalsMatches);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '4_groups_3_3_4_4_quarterfinals': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createKnockoutMatchesFourGroups3344(context.options, qualifiers);
       },
       'Quartas de final': async (context) => {
         const quarterfinalsMatches = context.matches.filter((m) => m.phase === 'Quartas de final');

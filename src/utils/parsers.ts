@@ -6,7 +6,7 @@ const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
 export const parseGameModality = (value: unknown): Game["modality"] =>
-  value === "quarteto" ? "quarteto" : "dupla";
+  value === "quarteto" || value === "trio" ? value : "dupla";
 
 export const parseNumberArray = (
   value: unknown,

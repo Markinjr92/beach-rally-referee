@@ -61,6 +61,7 @@ describe('novos formatos de torneio', () => {
 
   it('valida quantidade de equipes para os novos formatos', () => {
     const invalidFormats: Array<{ formatId: TournamentFormatId; teams: number }> = [
+      { formatId: '4_groups_3_3_4_4_quarterfinals', teams: 13 },
       { formatId: '3_groups_4_repechage_quarterfinals', teams: 11 },
       { formatId: '2_groups_cross_full_repechage_semis', teams: 7 },
       { formatId: '2_groups_double_bracket_final', teams: 7 },
@@ -83,6 +84,10 @@ describe('novos formatos de torneio', () => {
       true,
     );
     assert.deepEqual(
+      getFormatsByTeamCount(14).includes('4_groups_3_3_4_4_quarterfinals'),
+      true,
+    );
+    assert.deepEqual(
       getFormatsByTeamCount(8).includes('2_groups_cross_full_repechage_semis'),
       true,
     );
@@ -90,5 +95,22 @@ describe('novos formatos de torneio', () => {
       getFormatsByTeamCount(8).includes('2_groups_double_bracket_final'),
       true,
     );
+  });
+
+  it('gera grupos e quartas do formato 4_groups_3_3_4_4_quarterfinals', () => {
+    const structure = generateTournamentStructure({
+      tournamentId: 't-4',
+      formatId: '4_groups_3_3_4_4_quarterfinals',
+      teams: buildTeams(14),
+      includeThirdPlaceMatch: true,
+    });
+
+    assert.equal(structure.groups.length, 4);
+    assert.equal(structure.groups[0].teamIds.length, 3);
+    assert.equal(structure.groups[1].teamIds.length, 3);
+    assert.equal(structure.groups[2].teamIds.length, 4);
+    assert.equal(structure.groups[3].teamIds.length, 4);
+    assert.equal(structure.matches.filter((match) => match.phaseName === 'Fase de Grupos').length, 18);
+    assert.equal(structure.matches.filter((match) => match.phaseName === 'Eliminatórias').length >= 8, true);
   });
 });
