@@ -2262,8 +2262,8 @@ export default function RefereeDesk() {
   const isLastStep = totalSteps ? safeStepIndex === totalSteps - 1 : true;
   
   // Helper para retornar o termo correto baseado na modalidade
-  const getTeamTerm = () => game.modality === 'quarteto' ? 'equipe' : 'dupla';
-  const getTeamTermCapitalized = () => game.modality === 'quarteto' ? 'Equipe' : 'Dupla';
+  const getTeamTerm = () => game.modality === 'dupla' ? 'dupla' : 'equipe';
+  const getTeamTermCapitalized = () => game.modality === 'dupla' ? 'Dupla' : 'Equipe';
   
   const questionTitle = currentConfigStep
     ? (() => {
@@ -3073,7 +3073,7 @@ export default function RefereeDesk() {
                 >
                   <UserCheck className="mr-2 h-4 w-4" />
                   {isCurrentSetConfigured
-                    ? `Próximo Sacador (${gameState.currentServerTeam} - ${((gameState.currentServerPlayer % (game.modality === 'dupla' ? 2 : 4)) + 1)})`
+                    ? `Próximo Sacador (${gameState.currentServerTeam} - ${((gameState.currentServerPlayer % getDefaultServiceOrder(gameState.currentServerTeam).length) + 1)})`
                     : 'Próximo Sacador (definir início)'}
                 </Button>
                 <Button

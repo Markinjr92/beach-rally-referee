@@ -52,6 +52,51 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
         ],
       };
 
+    case '4_groups_3_3_4_4_quarterfinals':
+      return {
+        type: 'groups',
+        groups: [
+          {
+            name: 'Grupo A',
+            id: 'grupo-a',
+            teams: [
+              { seed: 1, label: 'Equipe 1 do Grupo A' },
+              { seed: 8, label: 'Equipe 2 do Grupo A' },
+              { seed: 9, label: 'Equipe 3 do Grupo A' },
+            ],
+          },
+          {
+            name: 'Grupo B',
+            id: 'grupo-b',
+            teams: [
+              { seed: 2, label: 'Equipe 1 do Grupo B' },
+              { seed: 7, label: 'Equipe 2 do Grupo B' },
+              { seed: 10, label: 'Equipe 3 do Grupo B' },
+            ],
+          },
+          {
+            name: 'Grupo C',
+            id: 'grupo-c',
+            teams: [
+              { seed: 3, label: 'Equipe 1 do Grupo C' },
+              { seed: 6, label: 'Equipe 2 do Grupo C' },
+              { seed: 11, label: 'Equipe 3 do Grupo C' },
+              { seed: 14, label: 'Equipe 4 do Grupo C' },
+            ],
+          },
+          {
+            name: 'Grupo D',
+            id: 'grupo-d',
+            teams: [
+              { seed: 4, label: 'Equipe 1 do Grupo D' },
+              { seed: 5, label: 'Equipe 2 do Grupo D' },
+              { seed: 12, label: 'Equipe 3 do Grupo D' },
+              { seed: 13, label: 'Equipe 4 do Grupo D' },
+            ],
+          },
+        ],
+      };
+
     case 'global_semis':
       return {
         type: 'groups',

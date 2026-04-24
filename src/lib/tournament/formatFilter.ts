@@ -21,6 +21,7 @@ export const getFormatsByTeamCount = (teamCount: number): TournamentFormatId[] =
       '3_groups_4_repechage_quarterfinals',
       '2_groups_6_cross_semis',
     ],
+    14: ['4_groups_3_3_4_4_quarterfinals'],
     15: ['5_groups_3_quarterfinals'],
   };
   return formatMap[teamCount] || [];
@@ -30,5 +31,5 @@ export const getFormatsByTeamCount = (teamCount: number): TournamentFormatId[] =
  * Retorna todas as quantidades de equipes suportadas pelos formatos
  */
 export const getSupportedTeamCounts = (): number[] => {
-  return [4, 5, 6, 8, 9, 10, 12, 15];
+  return [4, 5, 6, 8, 9, 10, 12, 14, 15];
 };

@@ -197,6 +197,7 @@ export default function TournamentList() {
                       </SelectTrigger>
                       <SelectContent className="bg-slate-900/90 text-white border-white/20">
                         <SelectItem value="dupla" className="focus:bg-white/10 focus:text-white">Dupla</SelectItem>
+                        <SelectItem value="trio" className="focus:bg-white/10 focus:text-white">Trio</SelectItem>
                         <SelectItem value="quarteto" className="focus:bg-white/10 focus:text-white">Quarteto</SelectItem>
                       </SelectContent>
                     </Select>

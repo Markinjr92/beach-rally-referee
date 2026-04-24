@@ -60,6 +60,49 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '4_groups_3_3_4_4_quarterfinals': {
+    title: '4 Grupos (3-3-4-4) + Quartas',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', 'Grupo A: 3, Grupo B: 3, Grupo C: 4, Grupo D: 4'),
+          match('Formato', 'Todos contra todos em cada grupo'),
+          match('Total', 'A/B com 3 jogos cada e C/D com 6 jogos cada (18 no total)'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Avanço', 'Classificam 1º e 2º de cada grupo'),
+          match('Total', '8 equipes nas quartas de final'),
+        ],
+      },
+      {
+        phase: 'Quartas de Final',
+        matches: [
+          match('QF1', '1º Grupo A × 2º Grupo B'),
+          match('QF2', '1º Grupo B × 2º Grupo A'),
+          match('QF3', '1º Grupo C × 2º Grupo D'),
+          match('QF4', '1º Grupo D × 2º Grupo C'),
+        ],
+      },
+      {
+        phase: 'Semifinais',
+        matches: [
+          match('SF1', 'Venc. QF1 × Venc. QF2'),
+          match('SF2', 'Venc. QF3 × Venc. QF4'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Venc. SF1 × Venc. SF2', 'Final'),
+          match('3º lugar', 'Perd. SF1 × Perd. SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
   '3_groups_quarterfinals': {
     title: '3 Grupos + Quartas com melhores 3º',
     sections: [

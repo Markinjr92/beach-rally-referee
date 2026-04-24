@@ -38,7 +38,7 @@ export const casualMatchToGame = (casualMatch: CasualMatch): Game => {
     tournamentId: '', // Jogos avulsos não têm torneio
     title: `${casualMatch.team_a_name} vs ${casualMatch.team_b_name}`,
     category: casualMatch.category,
-    modality: casualMatch.modality as 'dupla' | 'quarteto',
+    modality: casualMatch.modality as 'dupla' | 'trio' | 'quarteto',
     format: preset ? 'melhorDe3' : 'melhorDe3', // Mapear conforme necessário
     teamA,
     teamB,
@@ -267,4 +267,3 @@ export const getCasualMatchByToken = async (token: string): Promise<CasualMatch 
 
   return data;
 };
-
