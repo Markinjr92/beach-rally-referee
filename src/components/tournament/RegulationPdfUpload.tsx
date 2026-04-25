@@ -36,16 +36,17 @@ interface PdfExtractionResult {
   totalPages: number
 }
 
-let workerSrcConfigured = false
+let workerPortConfigured = false
 
 async function extractPdfText(file: File): Promise<PdfExtractionResult> {
   const pdfjs = await import('pdfjs-dist')
 
-  if (!workerSrcConfigured) {
-    // Vite resolve este import como URL final do bundle (chunk separado).
-    const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
-    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
-    workerSrcConfigured = true
+  if (!workerPortConfigured) {
+    // Vite empacota o worker como blob inline (?worker&inline). Nao depende do servidor
+    // servir arquivos .mjs com o MIME correto (problema comum em hospedagens diversas).
+    const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline')).default
+    pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker()
+    workerPortConfigured = true
   }
 
   const arrayBuffer = await file.arrayBuffer()
