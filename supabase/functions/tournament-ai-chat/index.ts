@@ -170,6 +170,16 @@ Deno.serve(async (req) => {
     teamsLink,
   });
 
+  // Limite opcional de palavras na resposta (configuravel via env AI_MAX_RESPONSE_WORDS).
+  // Quando definido, e instruido ao modelo no system prompt. O teto de tokens
+  // (AI_MAX_OUTPUT_TOKENS) continua agindo como cinto de seguranca.
+  const maxWordsRaw = Deno.env.get('AI_MAX_RESPONSE_WORDS');
+  const maxWords = maxWordsRaw ? Number.parseInt(maxWordsRaw, 10) : NaN;
+  const wordLimitInstruction =
+    Number.isFinite(maxWords) && maxWords > 0
+      ? `IMPORTANTE: limite cada resposta a no maximo ${maxWords} palavras. Se a pergunta exigir mais detalhe do que cabe, priorize as informacoes mais importantes e termine com "... (resuma; pergunte para detalhar mais)".`
+      : null;
+
   // 3. System prompt (restritivo)
   const systemPrompt = [
     `Voce e um assistente que responde EXCLUSIVAMENTE sobre o torneio "${tournament.name}".`,
@@ -177,7 +187,10 @@ Deno.serve(async (req) => {
     `Se a pergunta nao for sobre este torneio especifico (regras, formato, equipes, jogos, classificacao, horarios, locais, premiacao),`,
     `responda EXATAMENTE com a frase: "Desculpe, so posso responder perguntas sobre o torneio ${tournament.name}."`,
     `Nao invente dados. Se a informacao nao estiver no regulamento ou nos dados, diga claramente que nao tem essa informacao.`,
-    `Responda em portugues brasileiro, de forma curta, direta e cordial.`,
+    `Responda em portugues brasileiro, de forma direta, cordial e completa.`,
+    `Use o nivel de detalhe necessario para responder bem: para perguntas simples, seja conciso; para perguntas que exigem listar varios jogos, equipes ou explicar regras, NAO resuma a ponto de omitir informacoes.`,
+    `Quando listar jogos ou classificacao, use formatacao em lista (markdown com -) para ficar legivel.`,
+    ...(wordLimitInstruction ? [wordLimitInstruction] : []),
     ``,
     `==== REGULAMENTO DO TORNEIO ====`,
     truncatedRegulation,

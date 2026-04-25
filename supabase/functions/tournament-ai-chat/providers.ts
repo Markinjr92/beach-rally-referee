@@ -6,7 +6,17 @@ export type ChatRole = 'system' | 'user' | 'assistant';
 export type ChatMessage = { role: ChatRole; content: string };
 
 const TEMPERATURE = 0.2;
-const MAX_OUTPUT_TOKENS = 500;
+// Limite de tokens de saida. Pode ser sobrescrito via env AI_MAX_OUTPUT_TOKENS.
+// Gemini 2.5 Flash suporta ate 8192. gpt-4o-mini ate 16384. Llama 3.3 70B ate 8192.
+const DEFAULT_MAX_OUTPUT_TOKENS = 2000;
+
+function getMaxOutputTokens(): number {
+  const raw = Deno.env.get('AI_MAX_OUTPUT_TOKENS');
+  if (!raw) return DEFAULT_MAX_OUTPUT_TOKENS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_OUTPUT_TOKENS;
+  return Math.min(parsed, 8000);
+}
 
 export class ProviderError extends Error {
   status: number;
@@ -59,7 +69,7 @@ async function callGemini(messages: ChatMessage[], model: string): Promise<strin
     contents,
     generationConfig: {
       temperature: TEMPERATURE,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      maxOutputTokens: getMaxOutputTokens(),
     },
   };
 
@@ -112,7 +122,7 @@ async function callOpenAICompat(
     body: JSON.stringify({
       model,
       temperature: TEMPERATURE,
-      max_tokens: MAX_OUTPUT_TOKENS,
+      max_tokens: getMaxOutputTokens(),
       messages,
     }),
   });
