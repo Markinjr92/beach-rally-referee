@@ -39,21 +39,34 @@ interface TournamentTeamRow {
 const COMPLETED_STATUSES = new Set(['completed', 'finished', 'finalizado', 'encerrado']);
 const LIVE_STATUSES = new Set(['live', 'in_progress', 'em_andamento']);
 
+// Replica a logica de src/utils/date.ts: descarta o timezone presente no ISO
+// e formata os componentes (data/hora) literalmente como aparece no front.
+// Importante para que a IA fale o mesmo horario que o usuario ve nos cards.
+const TIMEZONE_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/i;
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return 'horario nao definido';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
+
+  const trimmed = String(iso).trim();
+  if (!trimmed) return 'horario nao definido';
+
+  const normalized = trimmed.replace(' ', 'T');
+  const [datePartRaw, timePartRaw = ''] = normalized.split('T');
+  if (!datePartRaw) return iso;
+
+  const [yearStr, monthStr, dayStr] = datePartRaw.split('-');
+  if (!yearStr || !monthStr || !dayStr) return iso;
+
+  const timeWithoutTz = timePartRaw.replace(TIMEZONE_PATTERN, '');
+  const [hourStr = '00', minuteStr = '00'] = timeWithoutTz.split(':');
+
+  const dd = dayStr.padStart(2, '0');
+  const mm = monthStr.padStart(2, '0');
+  const yyyy = yearStr.padStart(4, '0');
+  const hh = hourStr.padStart(2, '0');
+  const mi = minuteStr.padStart(2, '0');
+
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
 }
 
 function formatScores(scores: MatchScoreRow[]): string {

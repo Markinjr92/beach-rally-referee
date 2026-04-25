@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FileText, Loader2, Trash2, Upload, X } from 'lucide-react'
+import { FileText, Loader2, Trash2, Upload } from 'lucide-react'
 
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -300,38 +300,23 @@ export function RegulationPdfUpload({
 
       {state.url ? (
         <div className="rounded-lg border border-white/20 bg-white/5 p-3 space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <FileText size={18} className="text-emerald-300 shrink-0" />
-                <a
-                  href={state.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-white underline decoration-dotted hover:text-emerald-200 truncate"
-                  title={state.filename ?? 'regulamento.pdf'}
-                >
-                  {state.filename ?? 'regulamento.pdf'}
-                </a>
-              </div>
-              <div className="mt-1 text-xs text-white/60 space-y-0.5">
-                {formattedUploadedAt && <div>Enviado em {formattedUploadedAt}</div>}
-                {state.textLength > 0 && (
-                  <div>{state.textLength.toLocaleString('pt-BR')} caracteres extraidos</div>
-                )}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleRemove}
-              disabled={busy}
-              aria-label="Remover regulamento"
-              className="border-red-400/50 bg-red-500/10 text-red-100 hover:bg-red-500/20"
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText size={18} className="text-emerald-300 shrink-0" />
+            <a
+              href={state.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-white underline decoration-dotted hover:text-emerald-200 truncate"
+              title={state.filename ?? 'regulamento.pdf'}
             >
-              <Trash2 size={14} className="sm:mr-1" />
-              <span className="hidden sm:inline">Remover</span>
-            </Button>
+              {state.filename ?? 'regulamento.pdf'}
+            </a>
+          </div>
+          <div className="text-xs text-white/60 space-y-0.5">
+            {formattedUploadedAt && <div>Enviado em {formattedUploadedAt}</div>}
+            {state.textLength > 0 && (
+              <div>{state.textLength.toLocaleString('pt-BR')} caracteres extraidos</div>
+            )}
           </div>
         </div>
       ) : (
@@ -340,39 +325,60 @@ export function RegulationPdfUpload({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           onClick={triggerPicker}
           disabled={busy}
           className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
         >
           {busy ? (
-            <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           ) : (
-            <Upload className="h-4 w-4 sm:mr-2" />
+            <Upload className="h-4 w-4 mr-2" />
           )}
-          <span className="hidden sm:inline">{state.url ? 'Substituir PDF' : 'Enviar PDF'}</span>
+          {state.url ? 'Substituir PDF' : 'Enviar PDF'}
         </Button>
-        {progress && (
-          <span className="text-xs text-white/70 inline-flex items-center gap-2">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {progress}
-          </span>
+
+        {state.url && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleRemove}
+            disabled={busy}
+            aria-label="Remover regulamento"
+            className="border-red-400/60 bg-red-500/15 text-red-100 hover:bg-red-500/25"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Remover regulamento
+          </Button>
         )}
+
         {!busy && state.url && (
           <Button
+            type="button"
             variant="outline"
-            size="sm"
             onClick={() => {
               if (state.url) window.open(state.url, '_blank', 'noopener,noreferrer')
             }}
             className="border-white/30 bg-white/10 text-white hover:bg-white/20"
           >
             Abrir PDF
-            <X className="hidden" />
           </Button>
         )}
+
+        {progress && (
+          <span className="text-xs text-white/70 inline-flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {progress}
+          </span>
+        )}
       </div>
+
+      {state.url && (
+        <p className="text-xs text-white/50">
+          Para enviar outro PDF, clique em <span className="text-white/80">Substituir PDF</span>. Para deixar o agente sem regulamento, clique em <span className="text-red-200">Remover regulamento</span>.
+        </p>
+      )}
     </div>
   )
 }
