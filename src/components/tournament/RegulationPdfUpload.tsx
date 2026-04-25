@@ -30,38 +30,65 @@ interface RegulationState {
   textLength: number
 }
 
-async function extractPdfText(file: File): Promise<string> {
+interface PdfExtractionResult {
+  text: string
+  pagesWithText: number
+  totalPages: number
+}
+
+let workerSrcConfigured = false
+
+async function extractPdfText(file: File): Promise<PdfExtractionResult> {
   const pdfjs = await import('pdfjs-dist')
-  // Disable worker (vite + workers exigem setup adicional). Roda inline.
-  // O parsing fica um pouco mais lento, mas para PDFs de regulamento (poucas paginas) e suficiente.
-  pdfjs.GlobalWorkerOptions.workerSrc = ''
+
+  if (!workerSrcConfigured) {
+    // Vite resolve este import como URL final do bundle (chunk separado).
+    const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
+    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+    workerSrcConfigured = true
+  }
 
   const arrayBuffer = await file.arrayBuffer()
   const loadingTask = pdfjs.getDocument({
-    data: arrayBuffer,
-    disableWorker: true,
+    data: new Uint8Array(arrayBuffer),
     isEvalSupported: false,
     useSystemFonts: true,
-  } as Parameters<typeof pdfjs.getDocument>[0])
+  })
 
   const pdf = await loadingTask.promise
 
   const pages: string[] = []
+  let pagesWithText = 0
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
     const page = await pdf.getPage(pageNumber)
     const content = await page.getTextContent()
     const pageText = content.items
       .map((item: unknown) => {
         if (item && typeof item === 'object' && 'str' in item) {
-          return (item as { str: string }).str
+          return String((item as { str: string }).str ?? '')
         }
         return ''
       })
       .join(' ')
-    pages.push(pageText.trim())
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (pageText.length > 10) {
+      pagesWithText++
+    }
+    pages.push(pageText)
+    page.cleanup()
   }
 
-  return pages.join('\n\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+  await pdf.destroy()
+
+  const text = pages
+    .filter((p) => p.length > 0)
+    .join('\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  return { text, pagesWithText, totalPages: pdf.numPages }
 }
 
 export function RegulationPdfUpload({
@@ -109,19 +136,21 @@ export function RegulationPdfUpload({
     setBusy(true)
     try {
       setProgress('Extraindo texto do PDF...')
-      let text = ''
+      let extraction: PdfExtractionResult
       try {
-        text = await extractPdfText(file)
+        extraction = await extractPdfText(file)
       } catch (extractError) {
         console.error('Falha ao extrair texto do PDF', extractError)
+        const message = extractError instanceof Error ? extractError.message : 'Erro desconhecido'
         toast({
           title: 'Nao foi possivel extrair texto do PDF',
-          description: 'O arquivo pode estar protegido ou ser apenas imagem (escaneado). O agente de IA precisa do texto para responder.',
+          description: `Detalhes tecnicos: ${message}`,
           variant: 'destructive',
         })
         return
       }
 
+      let text = extraction.text
       let truncated = false
       if (text.length > MAX_TEXT_CHARS) {
         text = text.slice(0, MAX_TEXT_CHARS)
@@ -131,7 +160,10 @@ export function RegulationPdfUpload({
       if (text.trim().length < 50) {
         toast({
           title: 'PDF sem texto extraivel',
-          description: 'O arquivo parece estar vazio ou ser apenas imagem. Use um PDF com texto selecionavel.',
+          description:
+            extraction.totalPages > 0 && extraction.pagesWithText === 0
+              ? 'O arquivo parece ser apenas imagem (escaneado). Use um PDF com texto selecionavel.'
+              : 'O arquivo parece estar vazio.',
           variant: 'destructive',
         })
         return
