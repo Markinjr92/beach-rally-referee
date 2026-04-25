@@ -82,6 +82,7 @@ import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteri
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
 import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
+import { RegulationPdfUpload } from '@/components/tournament/RegulationPdfUpload'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -2277,6 +2278,26 @@ export default function TournamentDetailDB() {
                       <span className="hidden sm:inline">Adicionar</span>
                     </Button>
                   </div>
+                </div>
+
+                {/* Regulamento (PDF) - usado pelo agente de IA */}
+                <div className="pt-2">
+                  <RegulationPdfUpload
+                    tournamentId={tournament.id}
+                    initialUrl={tournament.regulation_pdf_url ?? null}
+                    initialFilename={tournament.regulation_filename ?? null}
+                    initialUploadedAt={tournament.regulation_uploaded_at ?? null}
+                    initialTextLength={tournament.regulation_text?.length ?? 0}
+                    onChange={(data) => {
+                      setTournament(prev => prev ? {
+                        ...prev,
+                        regulation_pdf_url: data.url,
+                        regulation_filename: data.filename,
+                        regulation_uploaded_at: data.uploadedAt,
+                        regulation_text: data.textLength > 0 ? (prev.regulation_text ?? '') : null,
+                      } : prev)
+                    }}
+                  />
                 </div>
 
                 {/* Tournament Info */}

@@ -30,6 +30,7 @@ import { TournamentBracketCriteria } from '@/components/TournamentBracketCriteri
 import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
 import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
 import { SponsorLogoGrid } from '@/components/SponsorLogoGrid'
+import { TournamentChatBot } from '@/components/tournament/TournamentChatBot'
 
 type Tournament = Tables<'tournaments'>
 type Match = Tables<'matches'>
@@ -1257,6 +1258,12 @@ const PublicTournamentView = () => {
         teamName={selectedTeamName}
         summaries={selectedTeamSummaries}
       />
+      {tournament?.id && tournament.regulation_text && (
+        <TournamentChatBot
+          tournamentId={tournament.id}
+          tournamentName={tournament.name || 'Torneio'}
+        />
+      )}
     </div>
   )
 }

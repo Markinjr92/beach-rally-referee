@@ -477,6 +477,10 @@ export type Database = {
           match_format_third_place: string | null
           modality: string | null
           name: string
+          regulation_filename: string | null
+          regulation_pdf_url: string | null
+          regulation_text: string | null
+          regulation_uploaded_at: string | null
           sponsor_logos: Json | null
           start_date: string | null
           status: string | null
@@ -500,6 +504,10 @@ export type Database = {
           match_format_third_place?: string | null
           modality?: string | null
           name: string
+          regulation_filename?: string | null
+          regulation_pdf_url?: string | null
+          regulation_text?: string | null
+          regulation_uploaded_at?: string | null
           sponsor_logos?: Json | null
           start_date?: string | null
           status?: string | null
@@ -523,6 +531,10 @@ export type Database = {
           match_format_third_place?: string | null
           modality?: string | null
           name?: string
+          regulation_filename?: string | null
+          regulation_pdf_url?: string | null
+          regulation_text?: string | null
+          regulation_uploaded_at?: string | null
           sponsor_logos?: Json | null
           start_date?: string | null
           status?: string | null
