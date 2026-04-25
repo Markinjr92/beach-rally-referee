@@ -62,6 +62,16 @@ async function callGemini(messages: ChatMessage[], model: string): Promise<strin
       parts: [{ text: m.content }],
     }));
 
+  // Gemini 2.5 vem com "thinking" ligado por padrao. Esse pensamento interno
+  // CONSOME tokens do maxOutputTokens, fazendo respostas curtas serem cortadas
+  // antes mesmo de comecar. Para um chat de FAQ de torneio nao precisamos de
+  // raciocinio profundo, entao desabilitamos por padrao.
+  // Pode ser sobrescrito via env GEMINI_THINKING_BUDGET (em tokens).
+  const thinkingBudgetRaw = Deno.env.get('GEMINI_THINKING_BUDGET');
+  const thinkingBudget = thinkingBudgetRaw
+    ? Math.max(0, Number.parseInt(thinkingBudgetRaw, 10) || 0)
+    : 0;
+
   const body = {
     systemInstruction: systemText
       ? { role: 'system', parts: [{ text: systemText }] }
@@ -70,6 +80,7 @@ async function callGemini(messages: ChatMessage[], model: string): Promise<strin
     generationConfig: {
       temperature: TEMPERATURE,
       maxOutputTokens: getMaxOutputTokens(),
+      thinkingConfig: { thinkingBudget },
     },
   };
 
@@ -95,13 +106,26 @@ async function callGemini(messages: ChatMessage[], model: string): Promise<strin
     throw new ProviderError(`Gemini bloqueou a resposta (${candidate.finishReason}).`, 502, candidate);
   }
   const parts = candidate.content?.parts;
-  if (!Array.isArray(parts)) {
-    throw new ProviderError('Resposta do Gemini sem parts.', 502, data);
+  const text = Array.isArray(parts)
+    ? parts
+        .map((p: unknown) =>
+          p && typeof p === 'object' && 'text' in p ? String((p as { text: string }).text ?? '') : '',
+        )
+        .join('')
+        .trim()
+    : '';
+
+  if (!text) {
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      throw new ProviderError(
+        'A resposta excedeu o limite de tokens antes mesmo de comecar (provavelmente o thinking budget consumiu tudo). Aumente AI_MAX_OUTPUT_TOKENS ou diminua GEMINI_THINKING_BUDGET.',
+        502,
+        data,
+      );
+    }
+    throw new ProviderError('Gemini retornou resposta vazia.', 502, data);
   }
-  const text = parts
-    .map((p: unknown) => (p && typeof p === 'object' && 'text' in p ? String((p as { text: string }).text ?? '') : ''))
-    .join('');
-  return text.trim();
+  return text;
 }
 
 // ----- OpenAI / Groq (mesmo schema) -----------------------------------------
