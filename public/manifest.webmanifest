@@ -1,0 +1,19 @@
+{
+  "name": "Beach Rally Referee",
+  "short_name": "Beach Rally",
+  "description": "Aplicativo de arbitragem e acompanhamento de partidas de vôlei de praia.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
