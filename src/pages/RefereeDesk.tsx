@@ -127,6 +127,7 @@ export default function RefereeDesk() {
   const fallbackWarningDisplayed = useRef(false);
   const offlineNoticeDisplayed = useRef(false);
   const isAutoCheckingRef = useRef(false);
+  const isFinalizingRef = useRef(false);
   const [setConfigDialogOpen, setSetConfigDialogOpen] = useState(false);
   const [setConfigStep, setSetConfigStep] = useState(0);
   const [teamSetupForm, setTeamSetupForm] = useState<Record<'A' | 'B', { jerseyAssignment: Record<string, number | null>; serviceOrder: number[] }>>({
@@ -1092,7 +1093,7 @@ export default function RefereeDesk() {
   // Verificação automática de finalização do jogo
   useEffect(() => {
     // Prevenir execução simultânea
-    if (isAutoCheckingRef.current) {
+    if (isAutoCheckingRef.current || isFinalizingRef.current) {
       return;
     }
     
@@ -1164,6 +1165,7 @@ export default function RefereeDesk() {
     
     // Marcar que estamos processando para evitar loops
     isAutoCheckingRef.current = true;
+    isFinalizingRef.current = true;
     
     const updatedState: GameState = {
       ...gameState,
@@ -1178,7 +1180,7 @@ export default function RefereeDesk() {
     void (async () => {
       try {
         await persistState(updatedState);
-        if (needsEndUpdate) {
+        if (needsEndUpdate && game.status !== 'finalizado') {
           // Marcar o jogo como finalizado no banco
           if (isCasualMatch && user) {
             await updateCasualMatch(game.id, user.id, { status: 'completed' });
@@ -1186,6 +1188,7 @@ export default function RefereeDesk() {
             const { error: matchUpdateError } = await supabase
               .from('matches')
               .update(getCompletedMatchUpdatePayload())
+              .neq('status', 'finalizado')
               .eq('id', game.id);
             if (matchUpdateError) {
               throw matchUpdateError;
@@ -1201,10 +1204,8 @@ export default function RefereeDesk() {
       } catch (error) {
         console.error('[RefereeDesk] Erro ao atualizar estado do jogo:', error);
       } finally {
-        // Liberar o lock após um pequeno delay para permitir que o estado seja atualizado
-        setTimeout(() => {
-          isAutoCheckingRef.current = false;
-        }, 100);
+        isAutoCheckingRef.current = false;
+        isFinalizingRef.current = false;
       }
     })();
   }, [game, gameState, getCompletedMatchUpdatePayload, isCasualMatch, user, persistState, toast]);
@@ -1315,6 +1316,7 @@ export default function RefereeDesk() {
 
   const addPoint = async (team: 'A' | 'B', category?: PointCategory, options?: { bypassConfirmation?: boolean }) => {
     if (!gameState || !game || timer !== null || isSyncing) return;
+    if (isFinalizingRef.current) return;
     if (!isCurrentSetConfigured) {
       toast({
         title: 'Configuração pendente',
@@ -1589,7 +1591,8 @@ export default function RefereeDesk() {
         await logMatchEvent(event);
       }
 
-      if (shouldUpdateMatchRecord) {
+      if (shouldUpdateMatchRecord && game.status !== 'finalizado') {
+        isFinalizingRef.current = true;
         try {
           if (isCasualMatch && user) {
             await updateCasualMatch(game.id, user.id, { status: 'completed' });
@@ -1597,6 +1600,7 @@ export default function RefereeDesk() {
           const { error: matchUpdateError } = await supabase
             .from('matches')
             .update(getCompletedMatchUpdatePayload())
+            .neq('status', 'finalizado')
             .eq('id', game.id);
           if (matchUpdateError) {
             throw matchUpdateError;
@@ -1618,6 +1622,7 @@ export default function RefereeDesk() {
           }
         }
         setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
+        isFinalizingRef.current = false;
       }
 
       if (shouldOpenNextSetConfig) {
@@ -1625,6 +1630,7 @@ export default function RefereeDesk() {
       }
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
+      isFinalizingRef.current = false;
     }
 
     setShowPointCategories(null);
