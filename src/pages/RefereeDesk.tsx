@@ -1188,7 +1188,6 @@ export default function RefereeDesk() {
             const { error: matchUpdateError } = await supabase
               .from('matches')
               .update(getCompletedMatchUpdatePayload())
-              .neq('status', 'finalizado')
               .eq('id', game.id);
             if (matchUpdateError) {
               throw matchUpdateError;
@@ -1600,7 +1599,6 @@ export default function RefereeDesk() {
           const { error: matchUpdateError } = await supabase
             .from('matches')
             .update(getCompletedMatchUpdatePayload())
-            .neq('status', 'finalizado')
             .eq('id', game.id);
           if (matchUpdateError) {
             throw matchUpdateError;
