@@ -10,9 +10,9 @@
   "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "/placeholder.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "https://i.postimg.cc/SQHJ2c0V/vb-jukin-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
