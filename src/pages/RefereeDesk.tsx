@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Coins,
+  CircleDot,
   UserCheck,
   Stethoscope,
   Square,
@@ -2319,7 +2320,7 @@ export default function RefereeDesk() {
                 <Button
                   key={`${teamKey}-order-option-${index}`}
                   variant="outline"
-                  className={`h-full rounded-2xl border-slate-400/40 p-4 text-left transition ${
+                  className={`h-full min-w-0 whitespace-normal break-words rounded-2xl border-slate-400/40 p-4 text-left transition ${
                     isActive
                       ? 'bg-white text-slate-900 hover:bg-white/90'
                       : 'bg-slate-600/40 text-white hover:bg-slate-600/60 border-slate-400/50'
@@ -2327,7 +2328,7 @@ export default function RefereeDesk() {
                   onClick={() => handleServiceOrderPreset(teamKey, order)}
                 >
                   <span className="text-lg font-extrabold">{label}</span>
-                  <span className="mt-2 block text-xs font-semibold opacity-80">{description}</span>
+                  <span className="mt-2 block break-words text-xs font-semibold leading-relaxed opacity-80">{description}</span>
                 </Button>
               );
             })}
@@ -2589,13 +2590,13 @@ export default function RefereeDesk() {
       icon: ArrowLeftRight,
       label: 'Trocar Posse',
       onClick: () => void switchServerTeam(),
-      disabled: gameIsEnded,
+      disabled: gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: UserCheck,
       label: 'Trocar Sacador',
       onClick: () => void changeCurrentServer(),
-      disabled: gameIsEnded,
+      disabled: gameIsEnded || !isCurrentSetConfigured,
     },
     {
       icon: Coins,
@@ -2610,7 +2611,7 @@ export default function RefereeDesk() {
       icon: ArrowLeftRight,
       label: 'Trocar Lado',
       onClick: () => void switchCourtSides(),
-      disabled: gameIsEnded,
+      disabled: gameIsEnded || !isCurrentSetConfigured,
     }
   ];
 
@@ -2712,15 +2713,9 @@ export default function RefereeDesk() {
                   ))}
                 </div>
                 {leftIsServing && (
-                  <Badge className="border border-amber-200/70 bg-amber-300/25 text-amber-50 shadow-[0_0_18px_rgba(252,211,77,0.45)]">
-                    <Zap className="mr-1 h-4 w-4" />
+                  <Badge className="border border-amber-200/80 bg-amber-300/35 px-3 py-1 text-base font-extrabold text-amber-50 shadow-[0_0_22px_rgba(252,211,77,0.55)]">
+                    <CircleDot className="mr-1 h-4 w-4" />
                     Sacando ({serverPlayerDisplay})
-                  </Badge>
-                )}
-                {leftHasPossession && (
-                  <Badge className="border border-cyan-200/70 bg-cyan-300/20 text-cyan-50 shadow-[0_0_14px_rgba(125,211,252,0.4)]">
-                    <ArrowLeftRight className="mr-1 h-4 w-4" />
-                    Posse da bola
                   </Badge>
                 )}
               </div>
@@ -2747,15 +2742,9 @@ export default function RefereeDesk() {
                   ))}
                 </div>
                 {rightIsServing && (
-                  <Badge className="border border-amber-200/70 bg-amber-300/25 text-amber-50 shadow-[0_0_18px_rgba(252,211,77,0.45)]">
-                    <Zap className="mr-1 h-4 w-4" />
+                  <Badge className="border border-amber-200/80 bg-amber-300/35 px-3 py-1 text-base font-extrabold text-amber-50 shadow-[0_0_22px_rgba(252,211,77,0.55)]">
+                    <CircleDot className="mr-1 h-4 w-4" />
                     Sacando ({serverPlayerDisplay})
-                  </Badge>
-                )}
-                {rightHasPossession && (
-                  <Badge className="border border-cyan-200/70 bg-cyan-300/20 text-cyan-50 shadow-[0_0_14px_rgba(125,211,252,0.4)]">
-                    <ArrowLeftRight className="mr-1 h-4 w-4" />
-                    Posse da bola
                   </Badge>
                 )}
               </div>
@@ -2763,18 +2752,6 @@ export default function RefereeDesk() {
             <div className="space-y-2 bg-slate-900/80 px-4 py-3 text-center text-sm text-white/80">
               <div className="text-base font-semibold text-white">Set {gameState.currentSet}</div>
               <div>Sets: {gameState.setsWon.teamA} - {gameState.setsWon.teamB}</div>
-              {isCurrentSetConfigured && (
-                <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-2 text-xs font-semibold sm:text-sm">
-                  <div className="flex items-center justify-center gap-1 rounded-xl border border-amber-200/70 bg-amber-300/20 px-2 py-2 text-amber-50 shadow-[0_0_16px_rgba(252,211,77,0.35)]">
-                    <Zap className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Saque: {serverTeamName}</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-1 rounded-xl border border-cyan-200/70 bg-cyan-300/20 px-2 py-2 text-cyan-50 shadow-[0_0_14px_rgba(125,211,252,0.35)]">
-                    <ArrowLeftRight className="h-4 w-4 shrink-0" />
-                    <span className="truncate">Posse: {possessionTeamName}</span>
-                  </div>
-                </div>
-              )}
               {timer !== null && (
                 <div className="mx-auto flex w-full max-w-[200px] items-center justify-center gap-2 rounded-full border border-amber-200/60 bg-amber-200/10 px-3 py-1 text-base font-semibold text-amber-100 shadow-inner">
                   <Clock className="h-4 w-4" />
@@ -3063,7 +3040,7 @@ export default function RefereeDesk() {
                   size="sm"
                   className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
                   onClick={() => void switchServerTeam()}
-                  disabled={gameIsEnded}
+                  disabled={gameIsEnded || !isCurrentSetConfigured}
                 >
                   <ArrowLeftRight className="mr-2 h-4 w-4" />
                   Trocar Posse ({gameState.currentServerTeam === 'A' ? 'B' : 'A'})
@@ -3073,7 +3050,7 @@ export default function RefereeDesk() {
                   size="sm"
                   className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
                   onClick={() => void changeCurrentServer()}
-                  disabled={gameIsEnded}
+                  disabled={gameIsEnded || !isCurrentSetConfigured}
                 >
                   <UserCheck className="mr-2 h-4 w-4" />
                   {isCurrentSetConfigured
@@ -3085,7 +3062,7 @@ export default function RefereeDesk() {
                   size="sm"
                   className="w-full border-transparent bg-white/25 text-white font-semibold hover:bg-white/35"
                   onClick={() => void switchCourtSides()}
-                  disabled={gameIsEnded}
+                  disabled={gameIsEnded || !isCurrentSetConfigured}
                 >
                   <ArrowLeftRight className="mr-2 h-4 w-4" />
                   Trocar Lado da Quadra
@@ -3138,7 +3115,7 @@ export default function RefereeDesk() {
           }}
         >
           <DialogContent
-            className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-300/30 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 p-6 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8 backdrop-blur-xl"
+            className="w-[92vw] max-w-3xl md:w-[85vw] lg:max-w-4xl xl:max-w-5xl max-h-[85dvh] overflow-y-auto overflow-x-hidden rounded-3xl border border-slate-300/30 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 p-5 text-white shadow-[0_40px_80px_rgba(15,23,42,0.45)] sm:p-8 backdrop-blur-xl"
           >
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-xl font-extrabold text-white">
