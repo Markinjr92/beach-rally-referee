@@ -20,6 +20,7 @@ type Tournament = Tables<'tournaments'>
 type UserProfile = Tables<'users'>
 type MatchRow = Tables<'matches'>
 type MatchScore = Tables<'match_scores'>
+type MatchState = Tables<'match_states'>
 
 type RefereedMatch = MatchRow & {
   tournament_name: string
@@ -84,6 +85,23 @@ const formatMatchScoreSummary = (scores: MatchScore[]) => {
   })
 
   return `${setsA} x ${setsB} (${setScores.join(', ')})`
+}
+
+const extractScoresFromState = (state: MatchState | null): MatchScore[] => {
+  const teamA = Array.isArray(state?.scores?.teamA) ? state.scores.teamA : []
+  const teamB = Array.isArray(state?.scores?.teamB) ? state.scores.teamB : []
+  const maxSets = Math.max(teamA.length, teamB.length)
+
+  if (maxSets === 0) return []
+
+  return Array.from({ length: maxSets }, (_, index) => ({
+    id: `${state?.match_id ?? 'state'}-set-${index + 1}`,
+    match_id: state?.match_id ?? '',
+    set_number: index + 1,
+    team_a_points: Number(teamA[index] ?? 0),
+    team_b_points: Number(teamB[index] ?? 0),
+    created_at: state?.updated_at ?? new Date().toISOString(),
+  }))
 }
 
 type StatusLabel = {
@@ -209,10 +227,16 @@ const RefereeTournaments = () => {
       const finalizedMatchIds = finalizedMatches.map((match) => match.id)
 
       if (finalizedMatchIds.length > 0) {
-        const { data: scoreData, error: scoreError } = await supabase
-          .from('match_scores')
-          .select('match_id,set_number,team_a_points,team_b_points,id,created_at')
-          .in('match_id', finalizedMatchIds)
+        const [{ data: scoreData, error: scoreError }, { data: matchStatesData, error: matchStatesError }] = await Promise.all([
+          supabase
+            .from('match_scores')
+            .select('match_id,set_number,team_a_points,team_b_points,id,created_at')
+            .in('match_id', finalizedMatchIds),
+          supabase
+            .from('match_states')
+            .select('match_id,scores,updated_at')
+            .in('match_id', finalizedMatchIds),
+        ])
 
         if (scoreError) {
           toast({ title: 'Erro ao carregar placares dos jogos', description: scoreError.message })
@@ -222,6 +246,15 @@ const RefereeTournaments = () => {
             if (!groupedScores.has(score.match_id)) groupedScores.set(score.match_id, [])
             groupedScores.get(score.match_id)?.push(score)
           })
+
+          if (!matchStatesError) {
+            ;(matchStatesData || []).forEach((state) => {
+              if (groupedScores.has(state.match_id)) return
+              const extractedScores = extractScoresFromState(state)
+              if (extractedScores.length > 0) groupedScores.set(state.match_id, extractedScores)
+            })
+          }
+
           groupedScores.forEach((scores) => scores.sort((a, b) => a.set_number - b.set_number))
           setScoresByMatch(groupedScores)
         }
