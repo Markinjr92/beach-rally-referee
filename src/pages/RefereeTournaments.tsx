@@ -122,6 +122,26 @@ type RefereeMainFilters = {
   activeEndDate: string
   historyStartDate: string
   historyEndDate: string
+  historyTournamentSearch: string
+}
+
+
+const formatDateInputValue = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getDefaultHistoryDateRange = () => {
+  const end = new Date()
+  const start = new Date(end)
+  start.setDate(end.getDate() - 6)
+
+  return {
+    startDate: formatDateInputValue(start),
+    endDate: formatDateInputValue(end),
+  }
 }
 
 const REFEREE_MAIN_FILTERS_KEY = 'beach-rally:referee:main-filters'
@@ -141,8 +161,10 @@ const RefereeTournaments = () => {
   const [activeSearchFilter, setActiveSearchFilter] = useState('')
   const [activeStartDateFilter, setActiveStartDateFilter] = useState('')
   const [activeEndDateFilter, setActiveEndDateFilter] = useState('')
-  const [startDateFilter, setStartDateFilter] = useState('')
-  const [endDateFilter, setEndDateFilter] = useState('')
+  const defaultHistoryRange = useMemo(() => getDefaultHistoryDateRange(), [])
+  const [startDateFilter, setStartDateFilter] = useState(defaultHistoryRange.startDate)
+  const [endDateFilter, setEndDateFilter] = useState(defaultHistoryRange.endDate)
+  const [historyTournamentSearchFilter, setHistoryTournamentSearchFilter] = useState('')
 
   useEffect(() => {
     const storedFilters = loadLocalValue<RefereeMainFilters>(REFEREE_MAIN_FILTERS_KEY)
@@ -151,9 +173,10 @@ const RefereeTournaments = () => {
     setActiveSearchFilter(storedFilters.activeSearch || '')
     setActiveStartDateFilter(storedFilters.activeStartDate || '')
     setActiveEndDateFilter(storedFilters.activeEndDate || '')
-    setStartDateFilter(storedFilters.historyStartDate || '')
-    setEndDateFilter(storedFilters.historyEndDate || '')
-  }, [])
+    setStartDateFilter(storedFilters.historyStartDate || defaultHistoryRange.startDate)
+    setEndDateFilter(storedFilters.historyEndDate || defaultHistoryRange.endDate)
+    setHistoryTournamentSearchFilter(storedFilters.historyTournamentSearch || '')
+  }, [defaultHistoryRange.endDate, defaultHistoryRange.startDate])
 
   useEffect(() => {
     saveLocalValue<RefereeMainFilters>(
@@ -164,10 +187,11 @@ const RefereeTournaments = () => {
         activeEndDate: activeEndDateFilter,
         historyStartDate: startDateFilter,
         historyEndDate: endDateFilter,
+        historyTournamentSearch: historyTournamentSearchFilter,
       },
       REFEREE_FILTERS_TTL_MS,
     )
-  }, [activeEndDateFilter, activeSearchFilter, activeStartDateFilter, endDateFilter, startDateFilter])
+  }, [activeEndDateFilter, activeSearchFilter, activeStartDateFilter, endDateFilter, historyTournamentSearchFilter, startDateFilter])
 
   useEffect(() => {
     const load = async () => {
@@ -337,15 +361,17 @@ const RefereeTournaments = () => {
   const filteredMatches = useMemo(() => {
     const start = startDateFilter ? new Date(`${startDateFilter}T00:00:00`) : null
     const end = endDateFilter ? new Date(`${endDateFilter}T23:59:59`) : null
+    const tournamentSearch = historyTournamentSearchFilter.trim().toLowerCase()
 
     return refereedMatches.filter((match) => {
       if (!match.reference_date) return false
       const matchDate = parseLocalDateTime(match.reference_date)
       if (start && matchDate < start) return false
       if (end && matchDate > end) return false
+      if (tournamentSearch && !match.tournament_name.toLowerCase().includes(tournamentSearch)) return false
       return true
     })
-  }, [endDateFilter, refereedMatches, startDateFilter])
+  }, [endDateFilter, historyTournamentSearchFilter, refereedMatches, startDateFilter])
 
   const matchesByDate = useMemo(() => {
     return filteredMatches.reduce<Record<string, number>>((acc, match) => {
@@ -547,6 +573,18 @@ const RefereeTournaments = () => {
 
             <Card className="bg-slate-900/60 border border-white/20 text-white">
               <CardContent className="pt-6 grid gap-4 md:grid-cols-3">
+                <div className="space-y-2 md:col-span-3">
+                  <label className="text-sm text-white/80">Nome do torneio</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+                    <Input
+                      value={historyTournamentSearchFilter}
+                      onChange={(event) => setHistoryTournamentSearchFilter(event.target.value)}
+                      placeholder="Digite o nome do torneio..."
+                      className="bg-white/10 border-white/30 pl-10"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm text-white/80">Data inicial</label>
                   <Input type="date" value={startDateFilter} onChange={(event) => setStartDateFilter(event.target.value)} className="bg-white/10 border-white/30" />
@@ -560,8 +598,9 @@ const RefereeTournaments = () => {
                     variant="outline"
                     className="w-full bg-white/10 border-white/30 text-white hover:bg-white/20"
                     onClick={() => {
-                      setStartDateFilter('')
-                      setEndDateFilter('')
+                      setStartDateFilter(defaultHistoryRange.startDate)
+                      setEndDateFilter(defaultHistoryRange.endDate)
+                      setHistoryTournamentSearchFilter('')
                     }}
                   >
                     <Filter size={16} />
