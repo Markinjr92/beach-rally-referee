@@ -19,6 +19,7 @@ import { loadLocalValue, saveLocalValue } from '@/lib/localStorage'
 type Tournament = Tables<'tournaments'>
 type UserProfile = Tables<'users'>
 type MatchRow = Tables<'matches'>
+type MatchScore = Tables<'match_scores'>
 
 type RefereedMatch = MatchRow & {
   tournament_name: string
@@ -68,6 +69,23 @@ const formatMatchFormat = (match: MatchRow) => {
   return `${mdLabel} (${points.join(' / ')})`
 }
 
+
+const formatMatchScoreSummary = (scores: MatchScore[]) => {
+  if (scores.length === 0) return 'Placar indisponível'
+
+  let setsA = 0
+  let setsB = 0
+  const setScores: string[] = []
+
+  scores.forEach((score) => {
+    if (score.team_a_points > score.team_b_points) setsA += 1
+    if (score.team_b_points > score.team_a_points) setsB += 1
+    setScores.push(`${score.team_a_points}x${score.team_b_points}`)
+  })
+
+  return `${setsA} x ${setsB} (${setScores.join(', ')})`
+}
+
 type StatusLabel = {
   value: string
   label: string
@@ -101,6 +119,7 @@ const RefereeTournaments = () => {
   const [loadingHistory, setLoadingHistory] = useState(true)
 
   const [refereedMatches, setRefereedMatches] = useState<RefereedMatch[]>([])
+  const [scoresByMatch, setScoresByMatch] = useState<Map<string, MatchScore[]>>(new Map())
   const [activeSearchFilter, setActiveSearchFilter] = useState('')
   const [activeStartDateFilter, setActiveStartDateFilter] = useState('')
   const [activeEndDateFilter, setActiveEndDateFilter] = useState('')
@@ -187,6 +206,28 @@ const RefereeTournaments = () => {
       }
 
       const finalizedMatches = (completedMatches || []).filter((match) => isMatchCompleted(match.status))
+      const finalizedMatchIds = finalizedMatches.map((match) => match.id)
+
+      if (finalizedMatchIds.length > 0) {
+        const { data: scoreData, error: scoreError } = await supabase
+          .from('match_scores')
+          .select('match_id,set_number,team_a_points,team_b_points,id,created_at')
+          .in('match_id', finalizedMatchIds)
+
+        if (scoreError) {
+          toast({ title: 'Erro ao carregar placares dos jogos', description: scoreError.message })
+        } else {
+          const groupedScores = new Map<string, MatchScore[]>()
+          ;(scoreData || []).forEach((score) => {
+            if (!groupedScores.has(score.match_id)) groupedScores.set(score.match_id, [])
+            groupedScores.get(score.match_id)?.push(score)
+          })
+          groupedScores.forEach((scores) => scores.sort((a, b) => a.set_number - b.set_number))
+          setScoresByMatch(groupedScores)
+        }
+      } else {
+        setScoresByMatch(new Map())
+      }
 
       const tournamentIds = Array.from(new Set(finalizedMatches.map((match) => match.tournament_id)))
       const refereeIds = Array.from(
@@ -510,7 +551,9 @@ const RefereeTournaments = () => {
                 </Card>
               )}
 
-              {!loadingHistory && filteredMatches.map((match) => (
+              {!loadingHistory && filteredMatches.map((match) => {
+                const matchScores = scoresByMatch.get(match.id) ?? []
+                return (
                 <Card key={match.id} className="bg-white/10 border border-white/20 text-white">
                   <CardContent className="py-4 grid gap-3 md:grid-cols-4">
                     <div>
@@ -529,9 +572,13 @@ const RefereeTournaments = () => {
                       <p className="text-xs text-white/60 uppercase">Data</p>
                       <p className="font-semibold">{formatShortDate(match.reference_date)}</p>
                     </div>
+                    <div className="md:col-span-4">
+                      <p className="text-xs text-white/60 uppercase">Placar</p>
+                      <p className="font-semibold">{formatMatchScoreSummary(matchScores)}</p>
+                    </div>
                   </CardContent>
                 </Card>
-              ))}
+              )})}
             </div>
           </TabsContent>
         </Tabs>
