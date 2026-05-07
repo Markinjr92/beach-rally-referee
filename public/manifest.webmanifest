@@ -1,6 +1,6 @@
 {
-  "name": "Beach Rally Referee",
-  "short_name": "Beach Rally",
+  "name": "Jukin Torneio",
+  "short_name": "Jukin Torneio",
   "description": "Aplicativo de arbitragem e acompanhamento de partidas de vôlei de praia.",
   "start_url": "/",
   "scope": "/",
