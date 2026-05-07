@@ -74,7 +74,7 @@ import {
   checkPhaseCompletion,
   getTournamentPhases,
 } from '@/lib/tournament'
-import { suggestNextPhaseMatches } from '@/lib/tournament/phaseAdvancement'
+import { suggestNextPhaseMatches, suggestPartialNextPhaseMatches } from '@/lib/tournament/phaseAdvancement'
 import { getBracketSectionForPhase, type BracketSection } from '@/lib/tournament/bracketCriteria'
 import { getNextPhaseLabel, phaseFormatKeyMap } from '@/lib/tournament/phaseConfig'
 import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
@@ -621,8 +621,8 @@ export default function TournamentDetailDB() {
     setMatchSetupEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
   }
 
-  const handlePrepareMatchSetup = async () => {
-    if (!phaseCheckResult?.canAdvance || !tournamentConfig?.formatId) {
+  const handlePrepareMatchSetup = async (allowPartial = false) => {
+    if ((!phaseCheckResult?.canAdvance && !allowPartial) || !tournamentConfig?.formatId) {
       toast({
         title: 'Fase não disponível',
         description: 'Finalize todos os jogos antes de configurar os confrontos.',
@@ -649,7 +649,19 @@ export default function TournamentDetailDB() {
     const suggestionsByPhase = new Map<string, { teamAId: string | null; teamBId: string | null }>()
     
     try {
-      const suggestedMatches = await suggestNextPhaseMatches({
+      const suggestedMatches = allowPartial
+        ? (await suggestPartialNextPhaseMatches({
+        tournamentId: tournamentId!,
+        currentPhase: phaseCheckResult.currentPhase,
+        formatId: tournamentConfig.formatId,
+        includeThirdPlace: tournamentConfig.includeThirdPlace ?? false,
+        tieBreakerOrder: tournamentConfig.tieBreakerOrder,
+        pointsPerSet: tournament?.match_format_semifinals ? undefined : [21, 21, 15],
+        sideSwitchSum: tournament?.match_format_semifinals ? undefined : [7, 7, 5],
+        bestOf: tournament?.match_format_semifinals ? undefined : 3,
+        modality: tournament?.modality || 'dupla',
+      })).filter((item) => item.isReady).map((item) => item.match)
+        : await suggestNextPhaseMatches({
         tournamentId: tournamentId!,
         currentPhase: phaseCheckResult.currentPhase,
         formatId: tournamentConfig.formatId,
@@ -2472,9 +2484,20 @@ export default function TournamentDetailDB() {
               <X className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Cancelar</span>
             </Button>
+            {(phaseCheckResult?.canAdvance || (phaseCheckResult && phaseCheckResult.completedMatches > 0)) && (
+              <Button
+                variant="secondary"
+                onClick={() => handlePrepareMatchSetup(true)}
+                className="bg-amber-500/90 text-white hover:bg-amber-600"
+                aria-label="Gerar disponíveis"
+              >
+                <ClipboardList className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Gerar disponíveis</span>
+              </Button>
+            )}
             {phaseCheckResult?.canAdvance && (
               <Button
-                onClick={handlePrepareMatchSetup}
+                onClick={() => handlePrepareMatchSetup(false)}
                 className="bg-emerald-500/90 text-white hover:bg-emerald-600"
                 aria-label="Definir confrontos"
               >

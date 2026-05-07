@@ -53,6 +53,11 @@ export interface AdvancePhaseResult {
   newMatches?: Match[];
   error?: string;
 }
+export interface PartialNextPhaseSuggestion {
+  match: TablesInsert<'matches'>;
+  isReady: boolean;
+  blockedReason?: string;
+}
 
 type PhaseHandlerContext = {
   options: AdvancePhaseOptions;
@@ -1787,6 +1792,72 @@ export const suggestNextPhaseMatches = async (
   }
 
   return result;
+};
+
+export const suggestPartialNextPhaseMatches = async (
+  options: AdvancePhaseOptions,
+): Promise<PartialNextPhaseSuggestion[]> => {
+  const suggestions = await suggestNextPhaseMatches(options);
+  if (!suggestions.length) return [];
+
+  const { data: tournamentTeams } = await supabase
+    .from('tournament_teams')
+    .select('team_id, group_label')
+    .eq('tournament_id', options.tournamentId);
+
+  const { data: phaseMatches } = await supabase
+    .from('matches')
+    .select('team_a_id, team_b_id, status')
+    .eq('tournament_id', options.tournamentId)
+    .eq('phase', options.currentPhase);
+
+  if (!tournamentTeams || !phaseMatches) {
+    return suggestions.map((match) => ({ match, isReady: false, blockedReason: 'Dados insuficientes para validação parcial.' }));
+  }
+
+  const teamGroupMap = new Map<string, string | null>();
+  tournamentTeams.forEach((row) => teamGroupMap.set(row.team_id, row.group_label));
+
+  const groupCompletion = new Map<string, boolean>();
+  const groups = Array.from(new Set(tournamentTeams.map((row) => row.group_label).filter((g): g is string => Boolean(g))));
+  groups.forEach((group) => {
+    const groupTeamIds = new Set(
+      tournamentTeams.filter((tt) => tt.group_label === group).map((tt) => tt.team_id),
+    );
+    const groupGames = phaseMatches.filter(
+      (match) =>
+        match.team_a_id &&
+        match.team_b_id &&
+        groupTeamIds.has(match.team_a_id) &&
+        groupTeamIds.has(match.team_b_id),
+    );
+    groupCompletion.set(group, groupGames.length > 0 && groupGames.every((m) => isMatchCompleted(m.status)));
+  });
+
+  return suggestions.map((match) => {
+    const usedGroups = new Set<string>();
+    if (match.team_a_id) {
+      const g = teamGroupMap.get(match.team_a_id);
+      if (g) usedGroups.add(g);
+    }
+    if (match.team_b_id) {
+      const g = teamGroupMap.get(match.team_b_id);
+      if (g) usedGroups.add(g);
+    }
+
+    if (!usedGroups.size) {
+      return { match, isReady: true };
+    }
+
+    const pendingGroups = Array.from(usedGroups).filter((g) => !groupCompletion.get(g));
+    return pendingGroups.length
+      ? {
+          match,
+          isReady: false,
+          blockedReason: `Aguardando fechamento dos grupos: ${pendingGroups.join(', ')}`,
+        }
+      : { match, isReady: true };
+  });
 };
 
 /**
