@@ -26,6 +26,7 @@ import CasualMatchDetail from "./pages/CasualMatchDetail";
 import UserProfile from "./pages/UserProfile";
 import SystemData from "./pages/SystemData";
 import SystemAllGames from "./pages/SystemAllGames";
+import MatchAssignments from "./pages/MatchAssignments";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="/profile" element={<UserProfile />} />
               <Route path="/system-data" element={<SystemData />} />
               <Route path="/system-data/all-games" element={<SystemAllGames />} />
+              <Route path="/match-assignments" element={<MatchAssignments />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

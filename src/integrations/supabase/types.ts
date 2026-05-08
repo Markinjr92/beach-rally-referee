@@ -58,6 +58,103 @@ export type Database = {
           },
         ]
       }
+      match_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          created_at: string
+          id: string
+          match_id: string
+          referee_email: string
+          referee_user_id: string | null
+          revoked_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          match_id: string
+          referee_email: string
+          referee_user_id?: string | null
+          revoked_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          match_id?: string
+          referee_email?: string
+          referee_user_id?: string | null
+          revoked_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_assignments_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_result_submissions: {
+        Row: {
+          error_message: string | null
+          id: string
+          match_id: string
+          operation_id: string
+          payload_json: Json
+          processed_at: string | null
+          referee_email: string
+          source_device_id: string | null
+          status: string
+          submitted_at: string
+          submitted_by_user_id: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          match_id: string
+          operation_id: string
+          payload_json: Json
+          processed_at?: string | null
+          referee_email: string
+          source_device_id?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by_user_id?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          match_id?: string
+          operation_id?: string
+          payload_json?: Json
+          processed_at?: string | null
+          referee_email?: string
+          source_device_id?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_result_submissions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_scores: {
         Row: {
           created_at: string | null
@@ -646,6 +743,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_referee_to_matches: {
+        Args: { p_match_ids: string[]; p_referee_emails: string[] }
+        Returns: Json
+      }
       get_admin_user_list: {
         Args: never
         Returns: {
@@ -662,6 +763,16 @@ export type Database = {
       get_user_roles: { Args: { user_uuid: string }; Returns: string[] }
       has_role: { Args: { role_name: string; uid?: string }; Returns: boolean }
       is_admin: { Args: { uid?: string }; Returns: boolean }
+      list_assigned_matches: { Args: never; Returns: Json }
+      submit_match_result: {
+        Args: {
+          p_match_id: string
+          p_operation_id: string
+          p_payload_json: Json
+          p_source_device_id?: string | null
+        }
+        Returns: Json
+      }
       user_has_permission: {
         Args: { permission_name: string; user_uuid: string }
         Returns: boolean

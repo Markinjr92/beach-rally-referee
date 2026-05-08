@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Trophy, Users, Settings, Shield, Gamepad2, BarChart3, Database } from "lucide-react";
+import { Activity, Trophy, Users, Settings, Shield, Gamepad2, BarChart3, Database, ClipboardCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,6 +54,15 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: Settings,
     roles: ["organizador", "admin_sistema"],
     iconClass: "text-sky-300",
+  },
+  {
+    key: "match-assignments",
+    title: "Liberar Jogos",
+    description: "Atribua partidas a emails de árbitros",
+    to: "/match-assignments",
+    icon: ClipboardCheck,
+    roles: ["organizador", "admin_sistema"],
+    iconClass: "text-lime-200",
   },
   {
     key: "arbitration",
