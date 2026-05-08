@@ -265,7 +265,7 @@ begin
       return jsonb_build_object('success', false, 'error', 'match_not_found', 'match_id', v_match_id);
     end if;
 
-    if v_match_status in ('completed', 'canceled') then
+    if v_match_status is distinct from 'scheduled' then
       return jsonb_build_object(
         'success', false,
         'error', 'match_not_assignable',
@@ -368,6 +368,7 @@ as $$
   where auth.uid() is not null
     and ma.status = 'active'
     and ma.revoked_at is null
+    and coalesce(m.status, 'scheduled') = 'scheduled'
     and (
       ma.referee_user_id = auth.uid()
       or lower(ma.referee_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
@@ -490,8 +491,12 @@ begin
     return jsonb_build_object('success', false, 'error', 'duplicate_operation_id');
   end if;
 
-  if coalesce(v_match.status, 'scheduled') in ('completed', 'canceled') then
-    return jsonb_build_object('success', false, 'error', 'match_not_open_for_result', 'match_status', v_match.status);
+  if coalesce(v_match.status, 'scheduled') is distinct from 'scheduled' then
+    return jsonb_build_object(
+      'success', false,
+      'error', 'match_already_in_progress_or_completed',
+      'match_status', v_match.status
+    );
   end if;
 
   if jsonb_typeof(p_payload_json) <> 'object' then

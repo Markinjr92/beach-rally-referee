@@ -45,6 +45,8 @@ const assignmentStatusLabels: Record<string, string> = {
   revoked: 'Revogado',
 }
 
+const isMatchAvailableForApp = (status: string | null) => (status || 'scheduled') === 'scheduled'
+
 const splitEmails = (value: string) =>
   Array.from(
     new Set(
@@ -205,7 +207,7 @@ const MatchAssignments = () => {
 
   const toggleMatchSelection = (matchId: string) => {
     const match = matches.find((item) => item.id === matchId)
-    if (match && ['completed', 'canceled'].includes(match.status || 'scheduled')) {
+    if (match && !isMatchAvailableForApp(match.status)) {
       return
     }
 
@@ -220,7 +222,7 @@ const MatchAssignments = () => {
     const emails = splitEmails(emailText)
     const assignableSelectedMatchIds = selectedMatchIds.filter((matchId) => {
       const match = matches.find((item) => item.id === matchId)
-      return match && !['completed', 'canceled'].includes(match.status || 'scheduled')
+      return match && isMatchAvailableForApp(match.status)
     })
 
     if (assignableSelectedMatchIds.length === 0) {
@@ -396,7 +398,7 @@ const MatchAssignments = () => {
                     {matches.map((match) => {
                       const matchAssignments = assignmentsByMatchId[match.id] || []
                       const isSelected = selectedMatchIds.includes(match.id)
-                      const isAssignable = !['completed', 'canceled'].includes(match.status || 'scheduled')
+                      const isAssignable = isMatchAvailableForApp(match.status)
                       return (
 	                        <TableRow key={match.id} className="border-white/10 hover:bg-white/5">
 	                          <TableCell>
@@ -439,9 +441,16 @@ const MatchAssignments = () => {
                                   <Badge
                                     key={assignment.id}
                                     variant="secondary"
-                                    className="bg-white/10 text-white hover:bg-white/10"
+                                    className={
+                                      isAssignable
+                                        ? 'bg-white/10 text-white hover:bg-white/10'
+                                        : 'bg-amber-500/15 text-amber-100 hover:bg-amber-500/15'
+                                    }
                                   >
-                                    {assignment.referee_email} · {assignmentStatusLabels[assignment.status] || assignment.status}
+                                    {assignment.referee_email} ·{' '}
+                                    {isAssignable
+                                      ? assignmentStatusLabels[assignment.status] || assignment.status
+                                      : 'Indisponível para app'}
                                   </Badge>
                                 ))}
                               </div>
