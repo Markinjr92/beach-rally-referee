@@ -69,10 +69,12 @@ const MatchAssignments = () => {
   const [loading, setLoading] = useState(true)
   const [matchesLoading, setMatchesLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [permissionLoading, setPermissionLoading] = useState(true)
+  const [canManageByPermission, setCanManageByPermission] = useState(false)
 
   const canManageAssignments = useMemo(
-    () => roles.includes('admin_sistema') || roles.includes('organizador'),
-    [roles],
+    () => canManageByPermission || roles.includes('admin_sistema') || roles.includes('organizador'),
+    [canManageByPermission, roles],
   )
 
   const assignmentsByMatchId = useMemo(() => {
@@ -82,6 +84,34 @@ const MatchAssignments = () => {
       return acc
     }, {})
   }, [assignments])
+
+  useEffect(() => {
+    const loadPermission = async () => {
+      if (!user) {
+        setCanManageByPermission(false)
+        setPermissionLoading(false)
+        return
+      }
+
+      setPermissionLoading(true)
+      const { data, error } = await supabase.rpc('user_has_permission', {
+        user_uuid: user.id,
+        permission_name: 'tournament.manage',
+      })
+
+      if (error) {
+        setCanManageByPermission(false)
+      } else {
+        setCanManageByPermission(Boolean(data))
+      }
+
+      setPermissionLoading(false)
+    }
+
+    if (!authLoading) {
+      void loadPermission()
+    }
+  }, [authLoading, user])
 
   useEffect(() => {
     const loadTournaments = async () => {
@@ -108,10 +138,10 @@ const MatchAssignments = () => {
       setLoading(false)
     }
 
-    if (!authLoading && !rolesLoading) {
+    if (!authLoading && !rolesLoading && !permissionLoading) {
       void loadTournaments()
     }
-  }, [authLoading, canManageAssignments, rolesLoading, toast, user])
+  }, [authLoading, canManageAssignments, permissionLoading, rolesLoading, toast, user])
 
   const loadTournamentMatches = useCallback(async () => {
     if (!selectedTournamentId) {
@@ -174,6 +204,11 @@ const MatchAssignments = () => {
   }, [loadTournamentMatches, selectedTournamentId])
 
   const toggleMatchSelection = (matchId: string) => {
+    const match = matches.find((item) => item.id === matchId)
+    if (match && ['completed', 'canceled'].includes(match.status || 'scheduled')) {
+      return
+    }
+
     setSelectedMatchIds((current) =>
       current.includes(matchId)
         ? current.filter((id) => id !== matchId)
@@ -183,8 +218,12 @@ const MatchAssignments = () => {
 
   const handleAssign = async () => {
     const emails = splitEmails(emailText)
+    const assignableSelectedMatchIds = selectedMatchIds.filter((matchId) => {
+      const match = matches.find((item) => item.id === matchId)
+      return match && !['completed', 'canceled'].includes(match.status || 'scheduled')
+    })
 
-    if (selectedMatchIds.length === 0) {
+    if (assignableSelectedMatchIds.length === 0) {
       toast({ title: 'Selecione ao menos um jogo' })
       return
     }
@@ -196,7 +235,7 @@ const MatchAssignments = () => {
 
     setSubmitting(true)
     const { data, error } = await supabase.rpc('assign_referee_to_matches', {
-      p_match_ids: selectedMatchIds,
+      p_match_ids: assignableSelectedMatchIds,
       p_referee_emails: emails,
     })
 
@@ -225,7 +264,7 @@ const MatchAssignments = () => {
     await loadTournamentMatches()
   }
 
-  if (authLoading || rolesLoading || loading) {
+  if (authLoading || rolesLoading || permissionLoading || loading) {
     return (
       <div className="min-h-screen bg-gradient-ocean flex items-center justify-center text-white">
         Carregando...
@@ -357,16 +396,18 @@ const MatchAssignments = () => {
                     {matches.map((match) => {
                       const matchAssignments = assignmentsByMatchId[match.id] || []
                       const isSelected = selectedMatchIds.includes(match.id)
+                      const isAssignable = !['completed', 'canceled'].includes(match.status || 'scheduled')
                       return (
-                        <TableRow key={match.id} className="border-white/10 hover:bg-white/5">
-                          <TableCell>
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleMatchSelection(match.id)}
-                              aria-label={`Selecionar ${match.team_a?.name || 'Equipe A'} contra ${match.team_b?.name || 'Equipe B'}`}
-                              className="border-white/50 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-slate-950"
-                            />
-                          </TableCell>
+	                        <TableRow key={match.id} className="border-white/10 hover:bg-white/5">
+	                          <TableCell>
+	                            <Checkbox
+	                              checked={isSelected}
+                              disabled={!isAssignable}
+	                              onCheckedChange={() => toggleMatchSelection(match.id)}
+	                              aria-label={`Selecionar ${match.team_a?.name || 'Equipe A'} contra ${match.team_b?.name || 'Equipe B'}`}
+	                              className="border-white/50 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-slate-950"
+	                            />
+	                          </TableCell>
                           <TableCell className="min-w-[260px]">
                             <div className="font-medium text-white">
                               {match.team_a?.name || 'Equipe A'} vs {match.team_b?.name || 'Equipe B'}
@@ -383,6 +424,11 @@ const MatchAssignments = () => {
                             <Badge variant="outline" className="border-white/40 text-white">
                               {statusLabels[match.status || 'scheduled'] || match.status || 'Agendado'}
                             </Badge>
+                            {!isAssignable && (
+                              <div className="mt-2 text-xs text-white/50">
+                                Não liberável
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="min-w-[260px]">
                             {matchAssignments.length === 0 ? (

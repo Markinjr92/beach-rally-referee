@@ -50,6 +50,10 @@ create index if not exists match_result_submissions_match_id_idx
 create index if not exists match_result_submissions_referee_email_idx
   on public.match_result_submissions (lower(referee_email));
 
+create unique index if not exists match_result_submissions_one_accepted_per_match_idx
+  on public.match_result_submissions (match_id)
+  where status = 'accepted';
+
 alter table public.match_assignments enable row level security;
 alter table public.match_result_submissions enable row level security;
 
@@ -103,27 +107,8 @@ create policy "assigned referees can read own submissions"
   );
 
 drop policy if exists "assigned referees can create own submissions" on public.match_result_submissions;
-create policy "assigned referees can create own submissions"
-  on public.match_result_submissions
-  for insert
-  with check (
-    auth.uid() is not null
-    and (
-      submitted_by_user_id = auth.uid()
-      or lower(referee_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-    )
-    and exists (
-      select 1
-      from public.match_assignments ma
-      where ma.match_id = match_result_submissions.match_id
-        and ma.status = 'active'
-        and ma.revoked_at is null
-        and (
-          ma.referee_user_id = auth.uid()
-          or lower(ma.referee_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-        )
-    )
-  );
+-- Final-result writes must go through submit_match_result(), which validates
+-- assignment, idempotency, match status and score rules transactionally.
 
 drop policy if exists "tournament managers can manage submissions" on public.match_result_submissions;
 create policy "tournament managers can manage submissions"
@@ -131,6 +116,109 @@ create policy "tournament managers can manage submissions"
   for all
   using (public.user_has_permission(auth.uid(), 'tournament.manage'))
   with check (public.user_has_permission(auth.uid(), 'tournament.manage'));
+
+-- Harden broad operational write policies added before assignments existed.
+-- Tournament match operation remains available to referee-role users and tournament managers.
+-- Casual-match owner policies are left intact in their original migrations.
+drop policy if exists "authenticated can insert match_states" on public.match_states;
+drop policy if exists "authenticated can update match_states" on public.match_states;
+drop policy if exists "authenticated can insert match_events" on public.match_events;
+drop policy if exists "authenticated can update match_events" on public.match_events;
+drop policy if exists "authenticated can insert match_timeouts" on public.match_timeouts;
+drop policy if exists "authenticated can update match_timeouts" on public.match_timeouts;
+
+drop policy if exists "referee role can insert tournament match_states" on public.match_states;
+create policy "referee role can insert tournament match_states"
+  on public.match_states
+  for insert
+  with check (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  );
+
+drop policy if exists "referee role can update tournament match_states" on public.match_states;
+create policy "referee role can update tournament match_states"
+  on public.match_states
+  for update
+  using (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  )
+  with check (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  );
+
+drop policy if exists "referee role can insert tournament match_events" on public.match_events;
+create policy "referee role can insert tournament match_events"
+  on public.match_events
+  for insert
+  with check (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  );
+
+drop policy if exists "referee role can update tournament match_events" on public.match_events;
+create policy "referee role can update tournament match_events"
+  on public.match_events
+  for update
+  using (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  )
+  with check (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  );
+
+drop policy if exists "referee role can insert tournament match_timeouts" on public.match_timeouts;
+create policy "referee role can insert tournament match_timeouts"
+  on public.match_timeouts
+  for insert
+  with check (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  );
+
+drop policy if exists "referee role can update tournament match_timeouts" on public.match_timeouts;
+create policy "referee role can update tournament match_timeouts"
+  on public.match_timeouts
+  for update
+  using (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  )
+  with check (
+    match_id is not null
+    and (
+      public.user_has_permission(auth.uid(), 'tournament.manage')
+      or public.has_role('arbitro', auth.uid())
+    )
+  );
 
 create or replace function public.assign_referee_to_matches(
   p_match_ids uuid[],
@@ -147,6 +235,7 @@ declare
   v_normalized_email text;
   v_referee_user_id uuid;
   v_assignment_id uuid;
+  v_match_status text;
   v_created_count integer := 0;
   v_existing_count integer := 0;
 begin
@@ -167,8 +256,22 @@ begin
   end if;
 
   foreach v_match_id in array p_match_ids loop
-    if not exists (select 1 from public.matches m where m.id = v_match_id) then
+    select coalesce(m.status, 'scheduled')
+      into v_match_status
+    from public.matches m
+    where m.id = v_match_id;
+
+    if v_match_status is null then
       return jsonb_build_object('success', false, 'error', 'match_not_found', 'match_id', v_match_id);
+    end if;
+
+    if v_match_status in ('completed', 'canceled') then
+      return jsonb_build_object(
+        'success', false,
+        'error', 'match_not_assignable',
+        'match_id', v_match_id,
+        'match_status', v_match_status
+      );
     end if;
 
     foreach v_email in array p_referee_emails loop
@@ -295,6 +398,12 @@ declare
   v_sets_won_a integer := 0;
   v_sets_won_b integer := 0;
   v_current_set integer := 1;
+  v_best_of integer;
+  v_sets_to_win integer;
+  v_target_points integer;
+  v_min_points integer;
+  v_point_diff integer;
+  v_seen_set_numbers integer[] := '{}';
   v_submission_id uuid;
 begin
   if auth.uid() is null then
@@ -350,10 +459,35 @@ begin
     into v_match
   from public.matches
   where id = p_match_id
-  limit 1;
+  limit 1
+  for update;
 
   if v_match.id is null then
     return jsonb_build_object('success', false, 'error', 'match_not_found');
+  end if;
+
+  select *
+    into v_existing
+  from public.match_result_submissions
+  where operation_id = p_operation_id
+  limit 1;
+
+  if v_existing.id is not null then
+    if v_existing.match_id = p_match_id
+      and (
+        v_existing.submitted_by_user_id = auth.uid()
+        or lower(v_existing.referee_email) = v_auth_email
+      ) then
+      return jsonb_build_object(
+        'success', v_existing.status = 'accepted',
+        'idempotent', true,
+        'submission_id', v_existing.id,
+        'status', v_existing.status,
+        'error', v_existing.error_message
+      );
+    end if;
+
+    return jsonb_build_object('success', false, 'error', 'duplicate_operation_id');
   end if;
 
   if coalesce(v_match.status, 'scheduled') in ('completed', 'canceled') then
@@ -388,6 +522,13 @@ begin
     return jsonb_build_object('success', false, 'error', 'empty_result');
   end if;
 
+  v_best_of := coalesce(v_match.best_of, coalesce(array_length(v_match.points_per_set, 1), 3));
+  if v_best_of not in (1, 3, 5) then
+    return jsonb_build_object('success', false, 'error', 'unsupported_best_of', 'best_of', v_best_of);
+  end if;
+
+  v_sets_to_win := floor(v_best_of::numeric / 2)::int + 1;
+
   for v_set in
     select *
     from jsonb_to_recordset(v_sets) as x(set_number int, team_a_points int, team_b_points int)
@@ -402,8 +543,60 @@ begin
       return jsonb_build_object('success', false, 'error', 'invalid_set_score');
     end if;
 
+    if v_set.set_number = any(v_seen_set_numbers) then
+      return jsonb_build_object('success', false, 'error', 'duplicate_set_number', 'set_number', v_set.set_number);
+    end if;
+
+    if v_set.set_number > v_best_of then
+      return jsonb_build_object('success', false, 'error', 'too_many_sets_for_format', 'set_number', v_set.set_number, 'best_of', v_best_of);
+    end if;
+
+    if v_set.set_number <> coalesce(array_length(v_seen_set_numbers, 1), 0) + 1 then
+      return jsonb_build_object('success', false, 'error', 'non_sequential_set_number', 'set_number', v_set.set_number);
+    end if;
+
     if v_set.team_a_points = v_set.team_b_points then
       return jsonb_build_object('success', false, 'error', 'tied_set_score', 'set_number', v_set.set_number);
+    end if;
+
+    v_target_points := coalesce(
+      v_match.points_per_set[least(v_set.set_number, coalesce(array_length(v_match.points_per_set, 1), 0))],
+      case
+        when v_best_of = 1 then 21
+        when v_set.set_number = v_best_of then 15
+        else 21
+      end
+    );
+    v_min_points := greatest(v_set.team_a_points, v_set.team_b_points);
+    v_point_diff := abs(v_set.team_a_points - v_set.team_b_points);
+
+    if v_min_points < v_target_points then
+      return jsonb_build_object(
+        'success', false,
+        'error', 'set_target_not_reached',
+        'set_number', v_set.set_number,
+        'target_points', v_target_points
+      );
+    end if;
+
+    if v_point_diff < 2 then
+      return jsonb_build_object(
+        'success', false,
+        'error', 'set_point_difference_too_small',
+        'set_number', v_set.set_number,
+        'minimum_difference', 2
+      );
+    end if;
+
+    if coalesce(v_match.direct_win_format, false)
+      and least(v_set.team_a_points, v_set.team_b_points) = v_target_points - 1
+      and greatest(v_set.team_a_points, v_set.team_b_points) < v_target_points + 2 then
+      return jsonb_build_object(
+        'success', false,
+        'error', 'direct_win_target_not_reached',
+        'set_number', v_set.set_number,
+        'target_points', v_target_points + 2
+      );
     end if;
 
     if v_set.team_a_points > v_set.team_b_points then
@@ -412,10 +605,37 @@ begin
       v_sets_won_b := v_sets_won_b + 1;
     end if;
 
+    if greatest(v_sets_won_a, v_sets_won_b) > v_sets_to_win then
+      return jsonb_build_object('success', false, 'error', 'too_many_won_sets');
+    end if;
+
+    if greatest(v_sets_won_a, v_sets_won_b) = v_sets_to_win
+      and v_set.set_number < jsonb_array_length(v_sets) then
+      return jsonb_build_object('success', false, 'error', 'sets_after_match_winner', 'set_number', v_set.set_number);
+    end if;
+
     v_current_set := greatest(v_current_set, v_set.set_number);
     v_scores_team_a := v_scores_team_a || to_jsonb(v_set.team_a_points);
     v_scores_team_b := v_scores_team_b || to_jsonb(v_set.team_b_points);
+    v_seen_set_numbers := array_append(v_seen_set_numbers, v_set.set_number);
   end loop;
+
+  if jsonb_array_length(v_sets) > v_best_of then
+    return jsonb_build_object('success', false, 'error', 'too_many_sets_for_format', 'best_of', v_best_of);
+  end if;
+
+  if greatest(v_sets_won_a, v_sets_won_b) <> v_sets_to_win then
+    return jsonb_build_object(
+      'success', false,
+      'error', 'match_winner_not_reached',
+      'sets_to_win', v_sets_to_win,
+      'sets_won', jsonb_build_object('teamA', v_sets_won_a, 'teamB', v_sets_won_b)
+    );
+  end if;
+
+  if v_sets_won_a = v_sets_won_b then
+    return jsonb_build_object('success', false, 'error', 'match_winner_tied');
+  end if;
 
   insert into public.match_result_submissions (
     match_id,
@@ -475,7 +695,8 @@ begin
   end if;
 
   update public.matches
-  set status = 'completed'
+  set status = 'completed',
+      referee_id = coalesce(referee_id, v_assignment.referee_user_id, auth.uid())
   where id = p_match_id;
 
   update public.match_result_submissions
