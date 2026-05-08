@@ -6,29 +6,59 @@ import { MATCH_FORMAT_PRESETS, type MatchFormatPresetKey } from "@/utils/matchCo
 export type CasualMatch = Tables<'casual_matches'>;
 export type CasualMatchInsert = TablesInsert<'casual_matches'>;
 
+const buildCasualPlayers = (
+  player1: string,
+  player2: string,
+  player3: string | null | undefined,
+  player4: string | null | undefined,
+  modality: 'dupla' | 'trio' | 'quarteto',
+) => {
+  const players = [
+    { name: player1, number: 1 },
+    { name: player2, number: 2 },
+  ];
+
+  if (modality === 'trio' || modality === 'quarteto') {
+    players.push({ name: player3 || 'Jogador 3', number: 3 });
+  }
+
+  if (modality === 'quarteto') {
+    players.push({ name: player4 || 'Jogador 4', number: 4 });
+  }
+
+  return players;
+};
+
 /**
  * Converte um casual_match do banco para o tipo Game
  */
 export const casualMatchToGame = (casualMatch: CasualMatch): Game => {
   const preset = MATCH_FORMAT_PRESETS[casualMatch.format_preset as MatchFormatPresetKey];
-  
+  const modality = casualMatch.modality as 'dupla' | 'trio' | 'quarteto';
+
   const teamA: Team = {
     name: casualMatch.team_a_name,
-    players: [
-      { name: casualMatch.team_a_player_1, number: 1 },
-      { name: casualMatch.team_a_player_2, number: 2 },
-    ],
+    players: buildCasualPlayers(
+      casualMatch.team_a_player_1,
+      casualMatch.team_a_player_2,
+      casualMatch.team_a_player_3,
+      casualMatch.team_a_player_4,
+      modality,
+    ),
   };
 
   const teamB: Team = {
     name: casualMatch.team_b_name,
-    players: [
-      { name: casualMatch.team_b_player_1, number: 1 },
-      { name: casualMatch.team_b_player_2, number: 2 },
-    ],
+    players: buildCasualPlayers(
+      casualMatch.team_b_player_1,
+      casualMatch.team_b_player_2,
+      casualMatch.team_b_player_3,
+      casualMatch.team_b_player_4,
+      modality,
+    ),
   };
 
-  const normalizedStatus = 
+  const normalizedStatus =
     casualMatch.status === 'in_progress' ? 'em_andamento' :
     casualMatch.status === 'completed' ? 'finalizado' :
     casualMatch.status === 'canceled' ? 'cancelado' : 'agendado';
@@ -38,7 +68,7 @@ export const casualMatchToGame = (casualMatch: CasualMatch): Game => {
     tournamentId: '', // Jogos avulsos não têm torneio
     title: `${casualMatch.team_a_name} vs ${casualMatch.team_b_name}`,
     category: casualMatch.category,
-    modality: casualMatch.modality as 'dupla' | 'trio' | 'quarteto',
+    modality,
     format: preset ? 'melhorDe3' : 'melhorDe3', // Mapear conforme necessário
     teamA,
     teamB,
@@ -77,7 +107,7 @@ const ensureUserExists = async (userId: string): Promise<void> => {
   // Se não encontrou, tentar criar
   // Buscar informações do usuário no auth
   const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-  
+
   if (authError || !authUser || authUser.id !== userId) {
     throw new Error('Usuário não autenticado ou ID não corresponde');
   }
@@ -98,7 +128,7 @@ const ensureUserExists = async (userId: string): Promise<void> => {
     if (insertError.code === '23505') {
       return; // Usuário já existe, tudo ok
     }
-    
+
     // Se for erro de permissão (RLS), tentar novamente após um pequeno delay
     // (pode ser race condition com o trigger)
     if (insertError.code === '42501') {
@@ -109,7 +139,7 @@ const ensureUserExists = async (userId: string): Promise<void> => {
         .select('id')
         .eq('id', userId)
         .single();
-      
+
       if (!retryCheck) {
         throw new Error(
           'Seu usuário não está registrado no sistema. ' +
@@ -119,7 +149,7 @@ const ensureUserExists = async (userId: string): Promise<void> => {
       // Se agora existe, tudo ok
       return;
     }
-    
+
     console.error('Erro ao criar usuário:', insertError);
     throw new Error(`Falha ao criar registro do usuário: ${insertError.message}`);
   }
@@ -176,7 +206,7 @@ export const listCasualMatches = async (
   if (filters?.search) {
     const searchTerm = `%${filters.search}%`;
     query = query.or(
-      `team_a_name.ilike.${searchTerm},team_b_name.ilike.${searchTerm},team_a_player_1.ilike.${searchTerm},team_a_player_2.ilike.${searchTerm},team_b_player_1.ilike.${searchTerm},team_b_player_2.ilike.${searchTerm}`
+      `team_a_name.ilike.${searchTerm},team_b_name.ilike.${searchTerm},team_a_player_1.ilike.${searchTerm},team_a_player_2.ilike.${searchTerm},team_a_player_3.ilike.${searchTerm},team_a_player_4.ilike.${searchTerm},team_b_player_1.ilike.${searchTerm},team_b_player_2.ilike.${searchTerm},team_b_player_3.ilike.${searchTerm},team_b_player_4.ilike.${searchTerm}`
     );
   }
 

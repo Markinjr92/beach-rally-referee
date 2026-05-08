@@ -32,6 +32,10 @@ const statusBadgeVariants: Record<string, 'default' | 'secondary' | 'outline' | 
   canceled: 'destructive',
 };
 
+const getTeamLabel = (modality: string) => (
+  modality === 'quarteto' ? 'Quarteto' : modality === 'trio' ? 'Trio' : 'Dupla'
+);
+
 export default function CasualMatches() {
   const { user, loading: authLoading } = useAuth();
   const { roles, loading: rolesLoading } = useUserRoles(user, authLoading);
@@ -128,7 +132,7 @@ export default function CasualMatches() {
         // Estado ainda não existe, isso é normal
         console.log('Estado do jogo ainda não criado');
       }
-      
+
       await shareImage(match, gameState);
       // Não mostrar toast se foi compartilhamento (já tem feedback nativo)
       // Só mostrar se foi download
@@ -170,7 +174,7 @@ export default function CasualMatches() {
             <div>
               <h1 className="text-4xl font-bold mb-2">Jogos Avulsos Arbitragem</h1>
               <p className="text-white/80">
-                {isAdmin 
+                {isAdmin
                   ? "Visualize e gerencie todos os jogos avulsos do sistema"
                   : "Gerencie seus jogos avulsos sem necessidade de criar um torneio"}
               </p>
@@ -245,7 +249,8 @@ export default function CasualMatches() {
             {filteredMatches.map((match) => {
               const preset = MATCH_FORMAT_PRESETS[match.format_preset as keyof typeof MATCH_FORMAT_PRESETS];
               const game = casualMatchToGame(match);
-              
+              const teamLabel = getTeamLabel(match.modality);
+
               return (
                 <Card key={match.id} className="bg-white/10 border-white/20 hover:bg-white/15 transition-colors">
                   <CardHeader>
@@ -269,10 +274,10 @@ export default function CasualMatches() {
                   <CardContent>
                     <div className="space-y-3 mb-4">
                       <div className="text-sm text-white/80">
-                        <span className="font-medium">Dupla A:</span> {match.team_a_player_1} / {match.team_a_player_2}
+                        <span className="font-medium">{teamLabel} A:</span> {game.teamA.players.map(player => player.name).join(' / ')}
                       </div>
                       <div className="text-sm text-white/80">
-                        <span className="font-medium">Dupla B:</span> {match.team_b_player_1} / {match.team_b_player_2}
+                        <span className="font-medium">{teamLabel} B:</span> {game.teamB.players.map(player => player.name).join(' / ')}
                       </div>
                       <div className="text-sm text-white/80">
                         <span className="font-medium">Categoria:</span> {match.category} | <span className="font-medium">Modalidade:</span> {match.modality}
@@ -280,8 +285,8 @@ export default function CasualMatches() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Link to={`/casual-matches/${match.id}`} className="flex-1 min-w-[100px]">
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           className="w-full bg-blue-600 hover:bg-blue-700 text-white border-0"
                         >
                           <Eye className="mr-2 h-4 w-4" />
@@ -331,4 +336,3 @@ export default function CasualMatches() {
     </div>
   );
 }
-

@@ -140,6 +140,7 @@ export default function CasualMatchDetail() {
 
   const preset = MATCH_FORMAT_PRESETS[match.format_preset as keyof typeof MATCH_FORMAT_PRESETS];
   const game = casualMatchToGame(match);
+  const teamLabel = match.modality === 'quarteto' ? 'Quarteto' : match.modality === 'trio' ? 'Trio' : 'Dupla';
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -170,14 +171,15 @@ export default function CasualMatchDetail() {
         <div className="grid gap-6 md:grid-cols-2 mb-6">
           <Card className="bg-white/10 border-white/20">
             <CardHeader>
-              <CardTitle className="text-white">Dupla A</CardTitle>
+              <CardTitle className="text-white">{teamLabel} A</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="text-lg font-semibold">{match.team_a_name}</div>
                 <div className="text-white/80">
-                  <div>{match.team_a_player_1}</div>
-                  <div>{match.team_a_player_2}</div>
+                  {game.teamA.players.map((player) => (
+                    <div key={`team-a-${player.number}`}>{player.name}</div>
+                  ))}
                 </div>
               </div>
             </CardContent>
@@ -185,14 +187,15 @@ export default function CasualMatchDetail() {
 
           <Card className="bg-white/10 border-white/20">
             <CardHeader>
-              <CardTitle className="text-white">Dupla B</CardTitle>
+              <CardTitle className="text-white">{teamLabel} B</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="text-lg font-semibold">{match.team_b_name}</div>
                 <div className="text-white/80">
-                  <div>{match.team_b_player_1}</div>
-                  <div>{match.team_b_player_2}</div>
+                  {game.teamB.players.map((player) => (
+                    <div key={`team-b-${player.number}`}>{player.name}</div>
+                  ))}
                 </div>
               </div>
             </CardContent>
@@ -301,4 +304,3 @@ export default function CasualMatchDetail() {
     </div>
   );
 }
-

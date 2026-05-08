@@ -14,6 +14,95 @@ export type Database = {
   }
   public: {
     Tables: {
+      casual_matches: {
+        Row: {
+          best_of: number
+          category: string
+          created_at: string | null
+          deleted_at: string | null
+          direct_win_format: boolean | null
+          format_preset: string
+          id: string
+          modality: string
+          points_per_set: number[]
+          share_token: string | null
+          side_switch_sum: number[]
+          status: string | null
+          team_a_name: string
+          team_a_player_1: string
+          team_a_player_2: string
+          team_a_player_3: string | null
+          team_a_player_4: string | null
+          team_b_name: string
+          team_b_player_1: string
+          team_b_player_2: string
+          team_b_player_3: string | null
+          team_b_player_4: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          best_of: number
+          category: string
+          created_at?: string | null
+          deleted_at?: string | null
+          direct_win_format?: boolean | null
+          format_preset: string
+          id?: string
+          modality?: string
+          points_per_set: number[]
+          share_token?: string | null
+          side_switch_sum: number[]
+          status?: string | null
+          team_a_name: string
+          team_a_player_1: string
+          team_a_player_2: string
+          team_a_player_3?: string | null
+          team_a_player_4?: string | null
+          team_b_name: string
+          team_b_player_1: string
+          team_b_player_2: string
+          team_b_player_3?: string | null
+          team_b_player_4?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          best_of?: number
+          category?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          direct_win_format?: boolean | null
+          format_preset?: string
+          id?: string
+          modality?: string
+          points_per_set?: number[]
+          share_token?: string | null
+          side_switch_sum?: number[]
+          status?: string | null
+          team_a_name?: string
+          team_a_player_1?: string
+          team_a_player_2?: string
+          team_a_player_3?: string | null
+          team_a_player_4?: string | null
+          team_b_name?: string
+          team_b_player_1?: string
+          team_b_player_2?: string
+          team_b_player_3?: string | null
+          team_b_player_4?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "casual_matches_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_events: {
         Row: {
           created_at: string

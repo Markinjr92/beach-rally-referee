@@ -24,12 +24,18 @@ export default function CreateCasualMatch() {
     team_a_name: '',
     team_a_player_1: '',
     team_a_player_2: '',
+    team_a_player_3: '',
+    team_a_player_4: '',
     team_b_name: '',
     team_b_player_1: '',
     team_b_player_2: '',
+    team_b_player_3: '',
+    team_b_player_4: '',
     format_preset: 'best3_21_15' as MatchFormatPresetKey,
     direct_win_format: false,
   });
+  const isQuarteto = formData.modality === 'quarteto';
+  const teamLabel = isQuarteto ? 'Quarteto' : 'Dupla';
 
   const formatOptions = Object.entries(MATCH_FORMAT_PRESETS).map(([key, preset]) => ({
     value: key as MatchFormatPresetKey,
@@ -51,7 +57,7 @@ export default function CreateCasualMatch() {
     if (!formData.team_a_name.trim()) {
       toast({
         title: 'Campo obrigatório',
-        description: 'Informe o nome da Dupla A.',
+        description: `Informe o nome do ${teamLabel} A.`,
         variant: 'destructive',
       });
       return;
@@ -59,7 +65,15 @@ export default function CreateCasualMatch() {
     if (!formData.team_a_player_1.trim() || !formData.team_a_player_2.trim()) {
       toast({
         title: 'Campo obrigatório',
-        description: 'Informe os dois jogadores da Dupla A.',
+        description: `Informe os dois primeiros jogadores do ${teamLabel} A.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isQuarteto && (!formData.team_a_player_3.trim() || !formData.team_a_player_4.trim())) {
+      toast({
+        title: 'Campo obrigatório',
+        description: 'Informe os quatro jogadores do Quarteto A.',
         variant: 'destructive',
       });
       return;
@@ -67,7 +81,7 @@ export default function CreateCasualMatch() {
     if (!formData.team_b_name.trim()) {
       toast({
         title: 'Campo obrigatório',
-        description: 'Informe o nome da Dupla B.',
+        description: `Informe o nome do ${teamLabel} B.`,
         variant: 'destructive',
       });
       return;
@@ -75,7 +89,15 @@ export default function CreateCasualMatch() {
     if (!formData.team_b_player_1.trim() || !formData.team_b_player_2.trim()) {
       toast({
         title: 'Campo obrigatório',
-        description: 'Informe os dois jogadores da Dupla B.',
+        description: `Informe os dois primeiros jogadores do ${teamLabel} B.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isQuarteto && (!formData.team_b_player_3.trim() || !formData.team_b_player_4.trim())) {
+      toast({
+        title: 'Campo obrigatório',
+        description: 'Informe os quatro jogadores do Quarteto B.',
         variant: 'destructive',
       });
       return;
@@ -89,9 +111,13 @@ export default function CreateCasualMatch() {
         team_a_name: formData.team_a_name.trim(),
         team_a_player_1: formData.team_a_player_1.trim(),
         team_a_player_2: formData.team_a_player_2.trim(),
+        team_a_player_3: isQuarteto ? formData.team_a_player_3.trim() : null,
+        team_a_player_4: isQuarteto ? formData.team_a_player_4.trim() : null,
         team_b_name: formData.team_b_name.trim(),
         team_b_player_1: formData.team_b_player_1.trim(),
         team_b_player_2: formData.team_b_player_2.trim(),
+        team_b_player_3: isQuarteto ? formData.team_b_player_3.trim() : null,
+        team_b_player_4: isQuarteto ? formData.team_b_player_4.trim() : null,
         category: formData.category,
         modality: formData.modality,
         format_preset: formData.format_preset,
@@ -142,7 +168,7 @@ export default function CreateCasualMatch() {
               {/* Configurações Gerais */}
               <div className="space-y-4">
                 <h3 className="text-xl font-semibold text-white mb-4">Configurações Gerais</h3>
-                
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="modality" className="text-white">Modalidade</Label>
@@ -209,17 +235,17 @@ export default function CreateCasualMatch() {
                 </div>
               </div>
 
-              {/* Dupla A */}
+              {/* Equipe A */}
               <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-white mb-4">Dupla A</h3>
-                
+                <h3 className="text-xl font-semibold text-white mb-4">{teamLabel} A</h3>
+
                 <div className="space-y-2">
-                  <Label htmlFor="team_a_name" className="text-white">Nome da Dupla A *</Label>
+                  <Label htmlFor="team_a_name" className="text-white">Nome do {teamLabel} A *</Label>
                   <Input
                     id="team_a_name"
                     value={formData.team_a_name}
                     onChange={(e) => setFormData({ ...formData, team_a_name: e.target.value })}
-                    placeholder="Ex: Dupla Alpha"
+                    placeholder={`Ex: ${teamLabel} Alpha`}
                     className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
                     required
                   />
@@ -250,19 +276,47 @@ export default function CreateCasualMatch() {
                     />
                   </div>
                 </div>
+
+                {isQuarteto && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="team_a_player_3" className="text-white">Jogador 3 *</Label>
+                      <Input
+                        id="team_a_player_3"
+                        value={formData.team_a_player_3}
+                        onChange={(e) => setFormData({ ...formData, team_a_player_3: e.target.value })}
+                        placeholder="Nome do jogador 3"
+                        className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
+                        required={isQuarteto}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="team_a_player_4" className="text-white">Jogador 4 *</Label>
+                      <Input
+                        id="team_a_player_4"
+                        value={formData.team_a_player_4}
+                        onChange={(e) => setFormData({ ...formData, team_a_player_4: e.target.value })}
+                        placeholder="Nome do jogador 4"
+                        className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
+                        required={isQuarteto}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Dupla B */}
+              {/* Equipe B */}
               <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-white mb-4">Dupla B</h3>
-                
+                <h3 className="text-xl font-semibold text-white mb-4">{teamLabel} B</h3>
+
                 <div className="space-y-2">
-                  <Label htmlFor="team_b_name" className="text-white">Nome da Dupla B *</Label>
+                  <Label htmlFor="team_b_name" className="text-white">Nome do {teamLabel} B *</Label>
                   <Input
                     id="team_b_name"
                     value={formData.team_b_name}
                     onChange={(e) => setFormData({ ...formData, team_b_name: e.target.value })}
-                    placeholder="Ex: Dupla Beta"
+                    placeholder={`Ex: ${teamLabel} Beta`}
                     className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
                     required
                   />
@@ -293,6 +347,34 @@ export default function CreateCasualMatch() {
                     />
                   </div>
                 </div>
+
+                {isQuarteto && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="team_b_player_3" className="text-white">Jogador 3 *</Label>
+                      <Input
+                        id="team_b_player_3"
+                        value={formData.team_b_player_3}
+                        onChange={(e) => setFormData({ ...formData, team_b_player_3: e.target.value })}
+                        placeholder="Nome do jogador 3"
+                        className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
+                        required={isQuarteto}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="team_b_player_4" className="text-white">Jogador 4 *</Label>
+                      <Input
+                        id="team_b_player_4"
+                        value={formData.team_b_player_4}
+                        onChange={(e) => setFormData({ ...formData, team_b_player_4: e.target.value })}
+                        placeholder="Nome do jogador 4"
+                        className="bg-white/10 border-white/30 text-white placeholder:text-white/50"
+                        required={isQuarteto}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-4 pt-4">
@@ -316,4 +398,3 @@ export default function CreateCasualMatch() {
     </div>
   );
 }
-
