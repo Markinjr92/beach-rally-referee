@@ -262,6 +262,12 @@ export default function TournamentsDB() {
         { key: 'semifinals', label: 'Semifinais' },
         { key: 'final', label: 'Final' },
       ],
+      '2_groups_4_quarterfinals': [
+        { key: 'groups', label: 'Fase de Grupos' },
+        { key: 'quarterfinals', label: 'Quartas de Final' },
+        { key: 'semifinals', label: 'Semifinais' },
+        { key: 'final', label: 'Final' },
+      ],
       '2_groups_6_cross_semis': [
         { key: 'groups', label: 'Fase de Grupos' },
         { key: 'semifinals', label: 'Semifinais' },
