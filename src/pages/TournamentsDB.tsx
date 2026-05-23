@@ -378,6 +378,7 @@ export default function TournamentsDB() {
       '5_groups_3_quarterfinals': 15,
       '2_groups_3_repescagem_semis': 6,
       '2_groups_4_semis': 8,
+      '2_groups_4_quarterfinals': 8,
       '2_groups_5_4_semis': 9,
       '3_groups_4_repechage_quarterfinals': 12,
       '2_groups_cross_full_repechage_semis': 8,
