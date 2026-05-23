@@ -5,6 +5,7 @@ export const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
   '4_groups_3_3_4_4_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
   '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
   '2_groups_5_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
+  '2_groups_4_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
   '2_groups_6_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
   '2_groups_3_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
   global_semis: ['Fase de Grupos', 'Semifinal', 'Final'],
