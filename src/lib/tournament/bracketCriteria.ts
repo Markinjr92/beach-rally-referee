@@ -423,6 +423,51 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '2_groups_4_quarterfinals': {
+    title: '2 Grupos de 4 + Quartas, Semi e Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 4 equipes cada'),
+          match('Formato', 'Todos contra todos dentro de cada grupo'),
+          match('Total', '12 jogos na fase de grupos (6 por grupo)'),
+          match('Grupo A', 'Seeds: 1, 3, 5, 7'),
+          match('Grupo B', 'Seeds: 2, 4, 6, 8'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Avanço', 'Todas as 8 equipes avançam para as quartas de final'),
+          match('Uso da tabela', 'Apenas para definir os confrontos do mata-mata'),
+        ],
+      },
+      {
+        phase: 'Quartas de final',
+        matches: [
+          match('QF1', '1º Grupo A × 4º Grupo B'),
+          match('QF2', '2º Grupo A × 3º Grupo B'),
+          match('QF3', '1º Grupo B × 4º Grupo A'),
+          match('QF4', '2º Grupo B × 3º Grupo A'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('SF1', 'Venc. QF1 × Venc. QF2'),
+          match('SF2', 'Venc. QF3 × Venc. QF4'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor SF1 × Vencedor SF2', 'Final'),
+          match('3º lugar', 'Perdedor SF1 × Perdedor SF2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
   '2_groups_5_4_semis': {
     title: '2 Grupos (5+4) - Semi/Final',
     sections: [
