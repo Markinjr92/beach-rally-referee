@@ -340,6 +340,35 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
         ],
       };
 
+    case '2_groups_5_semis':
+      return {
+        type: 'groups',
+        groups: [
+          {
+            name: 'Grupo A',
+            id: 'grupo-a',
+            teams: [
+              { seed: 1, label: 'Equipe 1 do Grupo A' },
+              { seed: 3, label: 'Equipe 2 do Grupo A' },
+              { seed: 5, label: 'Equipe 3 do Grupo A' },
+              { seed: 7, label: 'Equipe 4 do Grupo A' },
+              { seed: 9, label: 'Equipe 5 do Grupo A' },
+            ],
+          },
+          {
+            name: 'Grupo B',
+            id: 'grupo-b',
+            teams: [
+              { seed: 2, label: 'Equipe 1 do Grupo B' },
+              { seed: 4, label: 'Equipe 2 do Grupo B' },
+              { seed: 6, label: 'Equipe 3 do Grupo B' },
+              { seed: 8, label: 'Equipe 4 do Grupo B' },
+              { seed: 10, label: 'Equipe 5 do Grupo B' },
+            ],
+          },
+        ],
+      };
+
     case '6_teams_round_robin':
       return {
         type: 'groups',

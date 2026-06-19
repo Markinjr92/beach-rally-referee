@@ -2471,6 +2471,113 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
       };
     },
   },
+  '2_groups_5_semis': {
+    id: '2_groups_5_semis',
+    name: '2 Grupos de 5 - Semi/Final',
+    description:
+      'Dois grupos com cinco duplas cada. Todos contra todos dentro de cada grupo. Os 2 primeiros colocados de cada grupo avançam para semifinais (1º A × 2º B, 1º B × 2º A), depois 3º lugar e final.',
+    generate: (options) => {
+      ensureTenTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseGroup: TournamentPhase = {
+        id: 'fase-grupos',
+        name: 'Fase de Grupos',
+        order: 1,
+        type: 'group',
+      };
+
+      const phaseKnockout: TournamentPhase = {
+        id: 'fase-eliminatoria',
+        name: 'Semifinal',
+        order: 2,
+        type: 'knockout',
+      };
+
+      const groups: TournamentGroup[] = [
+        { id: 'grupo-a', name: 'Grupo A', phaseId: phaseGroup.id, teamIds: [] },
+        { id: 'grupo-b', name: 'Grupo B', phaseId: phaseGroup.id, teamIds: [] },
+      ];
+
+      const groupASeeds = [1, 3, 5, 7, 9];
+      const groupBSeeds = [2, 4, 6, 8, 10];
+
+      groups[0].teamIds = groupASeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      groups[1].teamIds = groupBSeeds.map((seed) => {
+        const team = teamsBySeed.get(seed);
+        if (!team) {
+          throw new Error(`Não foi possível encontrar a dupla com seed ${seed}`);
+        }
+        return team.id;
+      });
+
+      const groupMatches = generateGroupStageMatches(
+        options,
+        phaseGroup,
+        groups,
+        teamsBySeed,
+      );
+
+      const placeholder = placeholderTeam;
+      const semifinals = [
+        {
+          title: 'Semifinal 1',
+          teamA: placeholder('1º Grupo A'),
+          teamB: placeholder('2º Grupo B'),
+        },
+        {
+          title: 'Semifinal 2',
+          teamA: placeholder('1º Grupo B'),
+          teamB: placeholder('2º Grupo A'),
+        },
+      ];
+
+      const knockoutMatches: TournamentMatch[] = semifinals.map((match) =>
+        createMatch(options, phaseKnockout, {
+          round: 1,
+          title: match.title,
+          teamA: match.teamA,
+          teamB: match.teamB,
+          configType: 'knockout',
+        }),
+      );
+
+      if (options.includeThirdPlaceMatch) {
+        knockoutMatches.push(
+          createMatch(options, phaseKnockout, {
+            round: 2,
+            title: 'Decisão 3º lugar',
+            teamA: placeholder('Perdedor Semifinal 1'),
+            teamB: placeholder('Perdedor Semifinal 2'),
+            configType: 'thirdPlace',
+          }),
+        );
+      }
+
+      knockoutMatches.push(
+        createMatch(options, phaseKnockout, {
+          round: 3,
+          title: 'Final',
+          teamA: placeholder('Vencedor Semifinal 1'),
+          teamB: placeholder('Vencedor Semifinal 2'),
+        }),
+      );
+
+      return {
+        phases: [phaseGroup, phaseKnockout],
+        groups,
+        matches: [...groupMatches, ...knockoutMatches],
+      };
+    },
+  },
   '2_groups_5_4_semis': {
     id: '2_groups_5_4_semis',
     name: '2 Grupos (5+4) - Semi/Final',

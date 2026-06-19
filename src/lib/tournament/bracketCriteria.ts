@@ -468,6 +468,42 @@ export const bracketCriteriaByFormat: Record<TournamentFormatId, BracketCriteria
       },
     ],
   },
+  '2_groups_5_semis': {
+    title: '2 Grupos de 5 - Semi/Final',
+    sections: [
+      {
+        phase: 'Fase de Grupos',
+        matches: [
+          match('Estrutura', '2 grupos com 5 duplas cada'),
+          match('Formato', 'Todos contra todos dentro de cada grupo'),
+          match('Total', '20 jogos na fase de grupos (10 por grupo)'),
+          match('Grupo A', 'Seeds: 1, 3, 5, 7, 9'),
+          match('Grupo B', 'Seeds: 2, 4, 6, 8, 10'),
+        ],
+      },
+      {
+        phase: 'Classificação',
+        matches: [
+          match('Avanço', 'Os 2 primeiros colocados de cada grupo avançam'),
+          match('Total', '4 duplas nas semifinais'),
+        ],
+      },
+      {
+        phase: 'Semifinal',
+        matches: [
+          match('Semi 1', '1º Grupo A × 2º Grupo B'),
+          match('Semi 2', '1º Grupo B × 2º Grupo A'),
+        ],
+      },
+      {
+        phase: 'Final',
+        matches: [
+          match('Final', 'Vencedor Semi 1 × Vencedor Semi 2', 'Final'),
+          match('3º lugar', 'Perdedor Semi 1 × Perdedor Semi 2', 'Disputa 3º lugar'),
+        ],
+      },
+    ],
+  },
   '2_groups_5_4_semis': {
     title: '2 Grupos (5+4) - Semi/Final',
     sections: [

@@ -19,6 +19,7 @@ export type TournamentFormatId =
   | '2_groups_4_semis'
   | '2_groups_4_quarterfinals'
   | '2_groups_5_4_semis'
+  | '2_groups_5_semis'
   | '3_groups_4_repechage_quarterfinals'
   | '2_groups_cross_full_repechage_semis'
   | '2_groups_double_bracket_final';

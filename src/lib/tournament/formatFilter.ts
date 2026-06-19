@@ -10,7 +10,7 @@ export const getFormatsByTeamCount = (teamCount: number): TournamentFormatId[] =
     6: ['2_groups_3_cross_semis', '2_groups_3_repescagem_semis', '6_teams_round_robin'],
     8: ['2_groups_4_semis', '2_groups_4_quarterfinals', '2_groups_cross_full_repechage_semis', '2_groups_double_bracket_final'],
     9: ['2_groups_5_4_semis', '3_groups_3_semis', '3_groups_3_quarterfinals'],
-    10: ['2_groups_5_quarterfinals'],
+    10: ['2_groups_5_semis', '2_groups_5_quarterfinals'],
     12: [
       'groups_and_knockout',
       'double_elimination',

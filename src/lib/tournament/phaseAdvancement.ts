@@ -1426,6 +1426,7 @@ export const suggestNextPhaseMatches = async (
     '2_groups_3_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
     '2_groups_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
     '2_groups_5_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
+    '2_groups_5_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
     '2_groups_3_repescagem_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
     '3_groups_4_repechage_quarterfinals': ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Final'],
     '2_groups_cross_full_repechage_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
@@ -1569,6 +1570,22 @@ export const suggestNextPhaseMatches = async (
       },
     },
     '2_groups_5_4_semis': {
+      'Fase de Grupos': async (context) => {
+        const qualifiers = await calculateGroupQualifiers(
+          context.options.tournamentId,
+          context.teams,
+          context.matches,
+          context.matchScores,
+          context.options.tieBreakerOrder || [],
+        );
+        return createCrossGroupSemifinalMatches(context.options, qualifiers);
+      },
+      Semifinal: async (context) => {
+        const semifinalMatches = context.matches.filter((m) => m.phase === 'Semifinal');
+        return createFinalMatches(context.options, semifinalMatches);
+      },
+    },
+    '2_groups_5_semis': {
       'Fase de Grupos': async (context) => {
         const qualifiers = await calculateGroupQualifiers(
           context.options.tournamentId,
