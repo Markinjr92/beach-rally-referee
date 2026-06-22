@@ -86,7 +86,8 @@ import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
 import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
 import { RegulationPdfUpload } from '@/components/tournament/RegulationPdfUpload'
 import { ManualMatchScoreDialog } from '@/components/tournament/ManualMatchScoreDialog'
-import { summarizeMatchScores } from '@/utils/matchScoreDisplay'
+import { getMatchScoreSummary, formatMatchScoreLabel } from '@/utils/matchScoreDisplay'
+import { isMatchCompleted } from '@/utils/matchStatus'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -1755,8 +1756,10 @@ export default function TournamentDetailDB() {
                     const teamAName = a?.name || 'Equipe A'
                     const teamBName = b?.name || 'Equipe B'
                     const recordedScores = scoresByMatch.get(m.id) ?? []
-                    const scoreSummary = summarizeMatchScores(recordedScores)
+                    const scoreSummary = getMatchScoreSummary(recordedScores, matchStates[m.id])
                     const statusBadge = getMatchStatusBadge(m.status)
+                    const matchCompleted = isMatchCompleted(m.status)
+                    const scoreLabel = formatMatchScoreLabel(scoreSummary)
 
                     return (
                       <div
@@ -1886,6 +1889,14 @@ export default function TournamentDetailDB() {
                               <Badge variant="outline" className={statusBadge.className}>
                                 {statusBadge.label}
                               </Badge>
+                              {matchCompleted && scoreSummary.hasScores && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-emerald-400/40 bg-emerald-500/15 font-mono text-emerald-100"
+                                >
+                                  {scoreLabel}
+                                </Badge>
+                              )}
                             </div>
 
                             <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
@@ -1911,6 +1922,8 @@ export default function TournamentDetailDB() {
                                       </div>
                                     )}
                                   </div>
+                                ) : matchCompleted ? (
+                                  <div className="text-xs text-white/45">Placar não registrado</div>
                                 ) : (
                                   <div className="text-sm font-medium text-white/50">vs</div>
                                 )}
@@ -2933,7 +2946,21 @@ export default function TournamentDetailDB() {
         }
         existingScores={scoreDialogMatch ? scoresByMatch.get(scoreDialogMatch.id) ?? [] : []}
         onSaved={async () => {
+          const savedMatchId = scoreDialogMatch?.id
           await reloadMatchScores()
+          if (savedMatchId) {
+            const { data } = await supabase
+              .from('match_states')
+              .select('match_id, scores, sets_won')
+              .eq('match_id', savedMatchId)
+              .maybeSingle()
+            if (data) {
+              const mapped = mapMatchStateRowToGameState(data as MatchStateRecord)
+              if (mapped) {
+                setMatchStates((prev) => ({ ...prev, [savedMatchId]: mapped }))
+              }
+            }
+          }
           toast({ title: 'Placar salvo com sucesso' })
         }}
       />
