@@ -25,6 +25,7 @@ import {
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
+import { onMatchCompleted } from "@/lib/tournament/phaseAdvancement";
 import { getCasualMatch, casualMatchToGame, updateCasualMatch } from "@/lib/casualMatches";
 import { TablesInsert, TablesUpdate, Database } from "@/integrations/supabase/types";
 import {
@@ -1604,6 +1605,9 @@ export default function RefereeDesk() {
           if (matchUpdateError) {
             throw matchUpdateError;
             }
+          }
+          if (!isCasualMatch && game.tournamentId) {
+            void onMatchCompleted(game.tournamentId);
           }
         } catch (error) {
           if (isLikelyOfflineError(error)) {

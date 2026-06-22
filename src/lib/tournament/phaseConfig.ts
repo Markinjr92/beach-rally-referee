@@ -1,33 +1,12 @@
 import { TournamentFormatId } from '@/types/volleyball'
+import { getPhaseSequencesFromDefinitions } from './bracket/definitions'
+import { normalizePhaseName, phaseFormatKeyMap } from './bracket/phases'
 
-export const phaseSequences: Partial<Record<TournamentFormatId, string[]>> = {
-  groups_and_knockout: ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '4_groups_3_3_4_4_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '3_groups_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '2_groups_5_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '2_groups_4_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '2_groups_6_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
-  '2_groups_3_cross_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
-  global_semis: ['Fase de Grupos', 'Semifinal', 'Final'],
-  series_gold_silver: ['Fase de Grupos', 'Série Ouro', 'Série Prata'],
-  single_elimination: ['Primeira Rodada', 'Quartas de final', 'Semifinal', 'Final'],
-  double_elimination: ['Chave de Vencedores - R1', 'Chave de Vencedores - R2', 'Semifinal', 'Final'],
-  '6_teams_round_robin': ['Fase de Grupos', 'Finais'],
-  '5_teams_round_robin': ['Fase de Grupos', 'Finais'],
-  '4_teams_round_robin': ['Fase de Grupos', 'Finais'],
-  '3_groups_3_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
-  '3_groups_3_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '5_groups_3_quarterfinals': ['Fase de Grupos', 'Quartas de final', 'Semifinal', 'Final'],
-  '3_groups_4_repechage_quarterfinals': ['Fase de Grupos', 'Repescagem', 'Quartas de final', 'Semifinal', 'Final'],
-  '2_groups_cross_full_repechage_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
-  '2_groups_double_bracket_final': ['Fase de Grupos', 'Semifinal', 'Final'],
-  '2_groups_3_repescagem_semis': ['Fase de Grupos', 'Repescagem', 'Semifinal', 'Final'],
-  '2_groups_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
-  '2_groups_5_4_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
-  '2_groups_5_semis': ['Fase de Grupos', 'Semifinal', 'Final'],
-}
+export { normalizePhaseName, phaseFormatKeyMap }
 
-export const normalizePhaseName = (value: string) => value.trim().toLowerCase()
+/** Sequências de fase derivadas das definições declarativas de bracket */
+export const phaseSequences: Partial<Record<TournamentFormatId, string[]>> =
+  getPhaseSequencesFromDefinitions()
 
 export const getNextPhaseLabel = (
   formatId: TournamentFormatId | null | undefined,
@@ -36,26 +15,9 @@ export const getNextPhaseLabel = (
   if (!formatId || !currentPhase) return null
   const sequence = phaseSequences[formatId]
   if (!sequence || !sequence.length) return null
-  const index = sequence.findIndex((phase) => normalizePhaseName(phase) === normalizePhaseName(currentPhase))
+  const index = sequence.findIndex(
+    (phase) => normalizePhaseName(phase) === normalizePhaseName(currentPhase),
+  )
   if (index === -1 || index >= sequence.length - 1) return null
   return sequence[index + 1]
-}
-
-export const phaseFormatKeyMap: Record<string, 'groups' | 'quarterfinals' | 'semifinals' | 'final' | 'thirdPlace'> = {
-  'fase de grupos': 'groups',
-  'quartas de final': 'quarterfinals',
-  'semifinal': 'semifinals',
-  'semifinais': 'semifinals',
-  repescagem: 'quarterfinals',
-  final: 'final',
-  'final ouro': 'final',
-  'final prata': 'final',
-  'disputa 3º lugar': 'thirdPlace',
-  '3º lugar': 'thirdPlace',
-  '3º lugar ouro': 'thirdPlace',
-  '3º lugar prata': 'thirdPlace',
-  'série ouro': 'semifinals',
-  'série prata': 'semifinals',
-  'primeira rodada': 'groups',
-  'finais': 'final',
 }

@@ -401,6 +401,7 @@ export type Database = {
           created_at: string | null
           direct_win_format: boolean | null
           id: string
+          match_key: string | null
           modality: string | null
           phase: string | null
           points_per_set: number[] | null
@@ -418,6 +419,7 @@ export type Database = {
           created_at?: string | null
           direct_win_format?: boolean | null
           id?: string
+          match_key?: string | null
           modality?: string | null
           phase?: string | null
           points_per_set?: number[] | null
@@ -435,6 +437,7 @@ export type Database = {
           created_at?: string | null
           direct_win_format?: boolean | null
           id?: string
+          match_key?: string | null
           modality?: string | null
           phase?: string | null
           points_per_set?: number[] | null

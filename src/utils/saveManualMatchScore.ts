@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { Tables } from '@/integrations/supabase/types'
 import { mapScoreRowsToGameState } from '@/lib/matchState'
 import { saveMatchState } from '@/lib/matchStateService'
+import { onMatchCompleted } from '@/lib/tournament/phaseAdvancement'
 import type { Game } from '@/types/volleyball'
 
 export type ManualSetScore = {
@@ -133,6 +134,8 @@ export async function saveManualMatchScore(
     if (statusError) {
       return { success: false, error: statusError.message }
     }
+
+    void onMatchCompleted(match.tournament_id)
 
     return { success: true }
   } catch (error) {

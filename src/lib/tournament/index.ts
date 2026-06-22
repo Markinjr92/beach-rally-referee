@@ -3,3 +3,4 @@ export * from './standings';
 export * from './scoring';
 export * from './pdf';
 export * from './phaseAdvancement';
+export * from './bracket';

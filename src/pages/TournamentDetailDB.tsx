@@ -75,8 +75,8 @@ import {
   defaultTieBreakerOrder,
   checkPhaseCompletion,
   getTournamentPhases,
+  syncTournamentBracket,
 } from '@/lib/tournament'
-import { suggestNextPhaseMatches } from '@/lib/tournament/phaseAdvancement'
 import { getBracketSectionForPhase, type BracketSection } from '@/lib/tournament/bracketCriteria'
 import { getNextPhaseLabel, phaseFormatKeyMap } from '@/lib/tournament/phaseConfig'
 import type { GameState, TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball'
@@ -627,6 +627,31 @@ export default function TournamentDetailDB() {
     setMatchSetupEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
   }
 
+  const handleAutoSyncBracket = async () => {
+    if (!tournamentId) return
+    try {
+      const result = await syncTournamentBracket(tournamentId)
+      await reloadMatchScores()
+      const parts: string[] = []
+      if (result.created) parts.push(`${result.created} criado(s)`)
+      if (result.updated) parts.push(`${result.updated} atualizado(s)`)
+      toast({
+        title: 'Confrontos sincronizados',
+        description: parts.length
+          ? parts.join(', ')
+          : 'Nenhum confronto novo — aguarde mais resultados ou edite manualmente.',
+      })
+      setShowAdvancePhaseDialog(false)
+    } catch (error) {
+      console.error('Erro ao sincronizar confrontos:', error)
+      toast({
+        title: 'Erro ao gerar confrontos',
+        description: 'Não foi possível sincronizar os cruzamentos automaticamente.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handlePrepareMatchSetup = async () => {
     if (!phaseCheckResult?.canAdvance || !tournamentConfig?.formatId) {
       toast({
@@ -648,80 +673,35 @@ export default function TournamentDetailDB() {
     }
 
     const section = getBracketSectionForPhase(tournamentConfig.formatId, nextPhaseLabel)
-    
-    // Buscar sugestões de confrontos baseado nos resultados
-    let suggestions: Array<{ teamAId: string | null; teamBId: string | null }> = []
-    // Criar um mapa de sugestões por fase para garantir correspondência correta
-    const suggestionsByPhase = new Map<string, { teamAId: string | null; teamBId: string | null }>()
-    
-    try {
-      const suggestedMatches = await suggestNextPhaseMatches({
-        tournamentId: tournamentId!,
-        currentPhase: phaseCheckResult.currentPhase,
-        formatId: tournamentConfig.formatId,
-        includeThirdPlace: tournamentConfig.includeThirdPlace ?? false,
-        tieBreakerOrder: tournamentConfig.tieBreakerOrder,
-        pointsPerSet: tournament?.match_format_semifinals ? undefined : [21, 21, 15],
-        sideSwitchSum: tournament?.match_format_semifinals ? undefined : [7, 7, 5],
-        bestOf: tournament?.match_format_semifinals ? undefined : 3,
-        modality: tournament?.modality || 'dupla',
-      })
-      
-      // Preencher o mapa de sugestões por fase
-      suggestedMatches.forEach((m) => {
-        if (m.phase) {
-          suggestionsByPhase.set(m.phase, {
-            teamAId: m.team_a_id || null,
-            teamBId: m.team_b_id || null,
-          })
-        }
-      })
-      
-      // Manter array de sugestões para compatibilidade (ordem: 3º lugar, Final)
-      suggestions = suggestedMatches.map((m) => ({
-        teamAId: m.team_a_id || null,
-        teamBId: m.team_b_id || null,
-      }))
-    } catch (error) {
-      console.error('Erro ao buscar sugestões de confrontos:', error)
-      // Continuar sem sugestões se houver erro
-    }
-    
-    // Se não houver seção automática, criar entradas vazias para definição manual
+
     let entries: MatchSetupEntry[]
     if (!section || !section.matches.length) {
-      // Criar entradas básicas para definição manual baseado na fase
       const defaults = getDefaultMatchSettings(nextPhaseLabel)
       const matchCount = getDefaultMatchCountForPhase(nextPhaseLabel)
-      entries = Array.from({ length: matchCount }, (_, index) => {
-        const suggestion = suggestions[index]
-        return {
+      entries = Array.from({ length: matchCount }, (_, index) => ({
         id: `${nextPhaseLabel}-${index + 1}`,
         label: `Jogo ${index + 1}`,
         description: `Defina manualmente os confrontos para ${nextPhaseLabel}`,
         phase: nextPhaseLabel,
-          teamAId: suggestion?.teamAId || '',
-          teamBId: suggestion?.teamBId || '',
+        teamAId: '',
+        teamBId: '',
         bestOf: defaults.bestOf,
         pointsText: defaults.pointsPerSet.join(', '),
         sideSwitchText: defaults.sideSwitchSum.join(', '),
         formatPreset: undefined,
         directWinFormat: false,
-        }
-      })
+      }))
     } else {
       entries = section.matches.map((match, index) => {
         const phaseLabel = match.phaseOverride ?? nextPhaseLabel
         const defaults = getDefaultMatchSettings(phaseLabel)
-        // Usar o mapa por fase para garantir correspondência correta, não por índice
-        const suggestion = suggestionsByPhase.get(phaseLabel) || suggestions[index]
         return {
           id: `${phaseLabel}-${match.label}-${index}`,
           label: match.label,
           description: match.description,
           phase: match.phaseOverride ?? nextPhaseLabel,
-          teamAId: suggestion?.teamAId || '',
-          teamBId: suggestion?.teamBId || '',
+          teamAId: '',
+          teamBId: '',
           bestOf: defaults.bestOf,
           pointsText: defaults.pointsPerSet.join(', '),
           sideSwitchText: defaults.sideSwitchSum.join(', '),
@@ -2696,8 +2676,8 @@ export default function TournamentDetailDB() {
                   </p>
                   {phaseCheckResult.canAdvance && (
                     <p className="text-xs text-white/70">
-                      Ao confirmar, você poderá definir manualmente os confrontos da próxima fase, seguindo
-                      os critérios de cruzamento configurados para o torneio.
+                      Os confrontos da próxima fase serão gerados automaticamente com base nos
+                      resultados. Você ainda pode ajustar manualmente depois, se necessário.
                     </p>
                   )}
                 </div>
@@ -2716,14 +2696,24 @@ export default function TournamentDetailDB() {
               <span className="hidden sm:inline">Cancelar</span>
             </Button>
             {phaseCheckResult?.canAdvance && (
-              <Button
-                onClick={handlePrepareMatchSetup}
-                className="bg-emerald-500/90 text-white hover:bg-emerald-600"
-                aria-label="Definir confrontos"
-              >
-                <ClipboardList className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Definir confrontos</span>
-              </Button>
+              <>
+                <Button
+                  onClick={handleAutoSyncBracket}
+                  className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+                  aria-label="Gerar confrontos automaticamente"
+                >
+                  <ClipboardList className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Gerar confrontos</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrepareMatchSetup}
+                  className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                  aria-label="Configurar confrontos manualmente"
+                >
+                  <span className="hidden sm:inline">Manual</span>
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>

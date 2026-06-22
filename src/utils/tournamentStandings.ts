@@ -35,6 +35,11 @@ type MatchScore = Tables<'match_scores'>
 
 const DEFAULT_GROUP_KEY = '__default__'
 
+const isGroupPhaseMatch = (match: Match) => {
+  const phase = (match.phase ?? '').toLowerCase()
+  return phase.includes('grupo') || match.phase === 'Fase de Grupos'
+}
+
 const getScoresForMatch = (
   source: Map<string, MatchScore[]> | Record<string, MatchScore[]> | undefined,
   matchId: string,
@@ -292,7 +297,9 @@ export const computeStandingsByGroup = ({
 }: StandingsComputationParams): GroupStanding[] => {
   if (!groupAssignments.length) return []
 
-  const completedMatches = matches.filter((match) => isMatchCompleted(match.status))
+  const completedMatches = matches.filter(
+    (match) => isMatchCompleted(match.status) && isGroupPhaseMatch(match),
+  )
 
   return groupAssignments.map((group) => {
     const teamSet = new Set(group.teamIds)
