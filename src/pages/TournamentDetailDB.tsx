@@ -17,8 +17,10 @@ import {
   MapPin,
   Megaphone,
   Play,
+  PenLine,
   Plus,
   Save,
+  Search,
   Settings,
   Share2,
   Trash2,
@@ -83,6 +85,8 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { buildTeamMatchSummaryMap } from '@/utils/teamMatchSummary'
 import { TeamMatchSummaryDialog } from '@/components/tournament/TeamMatchSummaryDialog'
 import { RegulationPdfUpload } from '@/components/tournament/RegulationPdfUpload'
+import { ManualMatchScoreDialog } from '@/components/tournament/ManualMatchScoreDialog'
+import { summarizeMatchScores } from '@/utils/matchScoreDisplay'
 
 type Tournament = Tables<'tournaments'>
 type Team = Tables<'teams'>
@@ -420,6 +424,10 @@ export default function TournamentDetailDB() {
   const [matchSetupError, setMatchSetupError] = useState<string | null>(null)
   const [nextPhaseSection, setNextPhaseSection] = useState<BracketSection | null>(null)
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [scoreDialogMatch, setScoreDialogMatch] = useState<Match | null>(null)
+  const [matchSearchQuery, setMatchSearchQuery] = useState('')
+  const [matchStatusFilter, setMatchStatusFilter] = useState<'all' | 'scheduled' | 'in_progress' | 'completed'>('all')
+  const [showCreateMatchForm, setShowCreateMatchForm] = useState(false)
 
   const loadTournamentTeams = useCallback(async () => {
     if (!tournamentId) return
@@ -596,10 +604,8 @@ export default function TournamentDetailDB() {
       const phases = await getTournamentPhases(tournamentId)
       setAvailablePhases(phases)
       if (phases.length > 0) {
-        const latestPhase = phases[phases.length - 1]
-        // Só define a última fase como padrão na primeira inicialização
         if (!phaseFilterInitialized) {
-          setCurrentPhaseFilter(latestPhase)
+          setCurrentPhaseFilter('')
           setPhaseFilterInitialized(true)
         }
       } else if (currentPhaseFilter) {
@@ -918,6 +924,78 @@ export default function TournamentDetailDB() {
   }, [teams])
 
   const isAdminSistema = roles.includes('admin_sistema')
+
+  const matchStats = useMemo(() => {
+    const total = matches.length
+    const completed = matches.filter((m) => m.status === 'completed').length
+    const inProgress = matches.filter((m) => m.status === 'in_progress').length
+    const pending = matches.filter((m) => m.status === 'scheduled' || !m.status).length
+    return { total, completed, inProgress, pending }
+  }, [matches])
+
+  const filteredMatches = useMemo(() => {
+    const query = matchSearchQuery.trim().toLowerCase()
+
+    return matches.filter((match) => {
+      if (currentPhaseFilter && match.phase !== currentPhaseFilter) return false
+      if (matchStatusFilter !== 'all' && (match.status || 'scheduled') !== matchStatusFilter) return false
+
+      if (!query) return true
+
+      const teamAName = teamNameMap.get(match.team_a_id) ?? ''
+      const teamBName = teamNameMap.get(match.team_b_id) ?? ''
+      const haystack = `${teamAName} ${teamBName} ${match.phase ?? ''} ${match.court ?? ''}`.toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [matches, currentPhaseFilter, matchSearchQuery, matchStatusFilter, teamNameMap])
+
+  const reloadMatchScores = useCallback(async () => {
+    if (!tournamentId) return
+
+    const { data: updatedMatches, error: matchesError } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .order('scheduled_at', { ascending: true })
+
+    if (matchesError) {
+      toast({ title: 'Erro ao recarregar jogos', description: matchesError.message })
+      return
+    }
+
+    setMatches(updatedMatches || [])
+
+    const matchIds = (updatedMatches || []).map((match) => match.id)
+    if (!matchIds.length) {
+      setMatchScores([])
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('match_scores')
+      .select('*')
+      .in('match_id', matchIds)
+
+    if (error) {
+      toast({ title: 'Erro ao recarregar placares', description: error.message })
+      return
+    }
+
+    setMatchScores(data || [])
+  }, [tournamentId, toast])
+
+  const getMatchStatusBadge = (status: string | null) => {
+    switch (status) {
+      case 'completed':
+        return { label: 'Finalizado', className: 'border-emerald-400/50 bg-emerald-500/20 text-emerald-100' }
+      case 'in_progress':
+        return { label: 'Em andamento', className: 'border-blue-400/50 bg-blue-500/20 text-blue-100' }
+      case 'canceled':
+        return { label: 'Cancelado', className: 'border-white/30 bg-white/10 text-white/60' }
+      default:
+        return { label: 'Pendente', className: 'border-amber-400/50 bg-amber-500/20 text-amber-100' }
+    }
+  }
 
   const groupAssignments = useMemo<GroupAssignment[]>(
     () => buildGroupAssignments(teams, teamGroups),
@@ -1581,63 +1659,144 @@ export default function TournamentDetailDB() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="matches" className="mt-0">
+          <TabsContent value="matches" className="mt-0 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+                <CardContent className="p-4">
+                  <p className="text-xs uppercase tracking-wide text-white/50">Total de jogos</p>
+                  <p className="mt-1 text-2xl font-bold">{matchStats.total}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+                <CardContent className="p-4">
+                  <p className="text-xs uppercase tracking-wide text-white/50">Pendentes</p>
+                  <p className="mt-1 text-2xl font-bold text-amber-200">{matchStats.pending}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+                <CardContent className="p-4">
+                  <p className="text-xs uppercase tracking-wide text-white/50">Em andamento</p>
+                  <p className="mt-1 text-2xl font-bold text-blue-200">{matchStats.inProgress}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
+                <CardContent className="p-4">
+                  <p className="text-xs uppercase tracking-wide text-white/50">Finalizados</p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-200">{matchStats.completed}</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <Card className="bg-slate-900/60 border border-white/20 text-white backdrop-blur-xl">
-              <CardHeader>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <CardHeader className="space-y-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <CardTitle className="text-xl">Jogos</CardTitle>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowCreateMatchForm((prev) => !prev)}
+                      className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      {showCreateMatchForm ? 'Ocultar formulário' : 'Novo jogo'}
+                    </Button>
+                    {currentPhaseFilter && (
+                      <Button
+                        onClick={() => handleCheckPhase(currentPhaseFilter)}
+                        className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+                        size="sm"
+                        aria-label={`Finalizar "${currentPhaseFilter}"`}
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        Finalizar fase
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="relative md:col-span-2">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                    <Input
+                      value={matchSearchQuery}
+                      onChange={(e) => setMatchSearchQuery(e.target.value)}
+                      placeholder="Buscar por equipe, fase ou quadra..."
+                      className="bg-white/10 border-white/20 pl-9 text-white placeholder:text-white/50"
+                    />
+                  </div>
+                  <Select
+                    value={matchStatusFilter}
+                    onValueChange={(value) =>
+                      setMatchStatusFilter(value as 'all' | 'scheduled' | 'in_progress' | 'completed')
+                    }
+                  >
+                    <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                      <SelectItem value="all">Todos os status</SelectItem>
+                      <SelectItem value="scheduled">Pendentes</SelectItem>
+                      <SelectItem value="in_progress">Em andamento</SelectItem>
+                      <SelectItem value="completed">Finalizados</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {availablePhases.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-white/70">Fase:</span>
-                      <Select value={currentPhaseFilter || 'all'} onValueChange={(value) => setCurrentPhaseFilter(value === 'all' ? '' : value)}>
-                        <SelectTrigger className="w-[200px] bg-white/10 border-white/20 text-white">
-                          <SelectValue placeholder="Selecionar fase" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-950/95 text-white border-white/20">
-                          <SelectItem value="all">Todas as fases</SelectItem>
-                          {availablePhases.map((phase) => (
-                            <SelectItem key={phase} value={phase}>
-                              {phase}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <Select
+                      value={currentPhaseFilter || 'all'}
+                      onValueChange={(value) => setCurrentPhaseFilter(value === 'all' ? '' : value)}
+                    >
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                        <SelectValue placeholder="Fase" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-950/95 text-white border-white/20">
+                        <SelectItem value="all">Todas as fases</SelectItem>
+                        {availablePhases.map((phase) => (
+                          <SelectItem key={phase} value={phase}>
+                            {phase}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
-                {currentPhaseFilter && (
-                  <div className="mt-4 flex items-center gap-2">
-                    <Button
-                      onClick={() => handleCheckPhase(currentPhaseFilter)}
-                      className="bg-emerald-500/90 text-white hover:bg-emerald-600"
-                      size="sm"
-                      aria-label={`Finalizar "${currentPhaseFilter}"`}
-                    >
-                      <Play className="h-4 w-4 mr-2" />
-                      <span>Finalizar "{currentPhaseFilter}"</span>
-                    </Button>
-                  </div>
-                )}
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {matches
-                    .filter((m) => !currentPhaseFilter || m.phase === currentPhaseFilter)
-                    .map(m => {
-                    const a = teams.find(t => t.id === m.team_a_id)
-                    const b = teams.find(t => t.id === m.team_b_id)
+              <CardContent className="space-y-4">
+                {filteredMatches.length === 0 ? (
+                  <p className="text-sm text-white/70">
+                    {matches.length === 0
+                      ? 'Nenhum jogo cadastrado.'
+                      : 'Nenhum jogo encontrado com os filtros atuais.'}
+                  </p>
+                ) : (
+                  filteredMatches.map((m) => {
+                    const a = teams.find((t) => t.id === m.team_a_id)
+                    const b = teams.find((t) => t.id === m.team_b_id)
+                    const teamAName = a?.name || 'Equipe A'
+                    const teamBName = b?.name || 'Equipe B'
+                    const recordedScores = scoresByMatch.get(m.id) ?? []
+                    const scoreSummary = summarizeMatchScores(recordedScores)
+                    const statusBadge = getMatchStatusBadge(m.status)
+
                     return (
-                      <div key={m.id} className="rounded-lg border border-white/15 bg-white/5 p-3">
+                      <div
+                        key={m.id}
+                        className="rounded-xl border border-white/15 bg-white/5 p-4 transition hover:border-white/25 hover:bg-white/[0.07]"
+                      >
                         {editingMatch?.id === m.id ? (
                           <div className="space-y-3">
-                            <div className="font-semibold text-white">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
+                            <div className="font-semibold text-white">
+                              {teamAName} vs {teamBName}
+                            </div>
                             <div className="grid gap-3 md:grid-cols-3">
                               <div className="space-y-1">
                                 <label className="text-xs text-white/70">Horário agendado</label>
                                 <Input
                                   type="datetime-local"
                                   value={editingMatch.scheduled_at}
-                                  onChange={(e) => setEditingMatch({ ...editingMatch, scheduled_at: e.target.value })}
+                                  onChange={(e) =>
+                                    setEditingMatch({ ...editingMatch, scheduled_at: e.target.value })
+                                  }
                                   className="bg-white/10 border-white/20 text-white"
                                 />
                               </div>
@@ -1645,7 +1804,9 @@ export default function TournamentDetailDB() {
                                 <label className="text-xs text-white/70">Quadra</label>
                                 <Input
                                   value={editingMatch.court}
-                                  onChange={(e) => setEditingMatch({ ...editingMatch, court: e.target.value })}
+                                  onChange={(e) =>
+                                    setEditingMatch({ ...editingMatch, court: e.target.value })
+                                  }
                                   className="bg-white/10 border-white/20 text-white"
                                   placeholder="Ex: 1, A, Central"
                                 />
@@ -1654,20 +1815,30 @@ export default function TournamentDetailDB() {
                                 <label className="text-xs text-white/70">Fase</label>
                                 <Input
                                   value={editingMatch.phase}
-                                  onChange={(e) => setEditingMatch({ ...editingMatch, phase: e.target.value })}
+                                  onChange={(e) =>
+                                    setEditingMatch({ ...editingMatch, phase: e.target.value })
+                                  }
                                   className="bg-white/10 border-white/20 text-white"
                                   placeholder="Ex: Fase de Grupos"
                                 />
                               </div>
-                              <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 p-2">
+                              <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 p-2 md:col-span-3">
                                 <input
                                   type="checkbox"
-                                  id="editingDirectWinFormat"
+                                  id={`editingDirectWinFormat-${m.id}`}
                                   checked={editingMatch?.direct_win_format ?? false}
-                                  onChange={(e) => setEditingMatch({ ...editingMatch, direct_win_format: e.target.checked } as EditingMatch)}
+                                  onChange={(e) =>
+                                    setEditingMatch({
+                                      ...editingMatch,
+                                      direct_win_format: e.target.checked,
+                                    } as EditingMatch)
+                                  }
                                   className="h-4 w-4 rounded border-white/30 bg-white/10 text-blue-600 focus:ring-2 focus:ring-blue-500"
                                 />
-                                <Label htmlFor="editingDirectWinFormat" className="text-xs text-white/90 cursor-pointer">
+                                <Label
+                                  htmlFor={`editingDirectWinFormat-${m.id}`}
+                                  className="text-xs text-white/90 cursor-pointer"
+                                >
                                   Vai a 3 direto
                                 </Label>
                               </div>
@@ -1676,7 +1847,9 @@ export default function TournamentDetailDB() {
                               <label className="text-sm font-medium text-white/90">Formato do Jogo</label>
                               <Select
                                 value={editingMatch.formatPreset || ''}
-                                onValueChange={(value) => handleMatchFormatPresetChange(value as MatchFormatPresetKey)}
+                                onValueChange={(value) =>
+                                  handleMatchFormatPresetChange(value as MatchFormatPresetKey)
+                                }
                               >
                                 <SelectTrigger className="bg-white/10 border-white/20 text-white">
                                   <SelectValue placeholder="Selecione o formato" />
@@ -1692,19 +1865,6 @@ export default function TournamentDetailDB() {
                                   ))}
                                 </SelectContent>
                               </Select>
-                              {editingMatch.formatPreset && (
-                                <div className="rounded-lg bg-white/5 p-3 space-y-1 text-sm">
-                                  <div className="text-white/70">
-                                    <span className="font-medium">Melhor de:</span> {MATCH_FORMAT_PRESETS[editingMatch.formatPreset].bestOf} set{MATCH_FORMAT_PRESETS[editingMatch.formatPreset].bestOf > 1 ? 's' : ''}
-                                  </div>
-                                  <div className="text-white/70">
-                                    <span className="font-medium">Pontos por set:</span> {MATCH_FORMAT_PRESETS[editingMatch.formatPreset].pointsPerSet.join(' / ')}
-                                  </div>
-                                  <div className="text-white/70">
-                                    <span className="font-medium">Troca de quadra:</span> A cada {MATCH_FORMAT_PRESETS[editingMatch.formatPreset].sideSwitchSum.join(', ')} ponto{MATCH_FORMAT_PRESETS[editingMatch.formatPreset].sideSwitchSum[0] > 1 ? 's' : ''}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                             <div className="flex gap-2">
                               <Button
@@ -1729,37 +1889,89 @@ export default function TournamentDetailDB() {
                             </div>
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                              <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
-                                <div className="flex items-center gap-2">
-                                  <Clock size={16} className="text-white/60" />
-                                  {formatDateTimePtBr(m.scheduled_at, { fallback: 'Sem horário agendado' })}
-                                </div>
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex items-center gap-2 text-sm text-white/80">
+                                <Clock size={16} className="text-white/60" />
+                                {formatDateTimePtBr(m.scheduled_at, { fallback: 'Sem horário' })}
+                              </div>
+                              <Badge variant="outline" className="border-white/40 text-white">
+                                {m.phase || 'Jogo'}
+                              </Badge>
+                              {m.court && (
                                 <Badge variant="outline" className="border-white/40 text-white">
-                                  {m.phase || 'Jogo'}
+                                  Quadra {m.court}
                                 </Badge>
-                                {m.court && (
-                                  <Badge variant="outline" className="border-white/40 text-white">
-                                    Quadra {m.court}
-                                  </Badge>
+                              )}
+                              <Badge variant="outline" className={statusBadge.className}>
+                                {statusBadge.label}
+                              </Badge>
+                            </div>
+
+                            <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                              <div
+                                className={cn(
+                                  'rounded-lg px-3 py-2 text-center sm:text-right',
+                                  scoreSummary.winnerSide === 'A'
+                                    ? 'bg-emerald-500/15 font-semibold text-emerald-100'
+                                    : 'bg-white/5 text-white',
+                                )}
+                              >
+                                {teamAName}
+                              </div>
+                              <div className="text-center">
+                                {scoreSummary.hasScores ? (
+                                  <div className="space-y-0.5">
+                                    <div className="text-2xl font-bold tabular-nums">
+                                      {scoreSummary.setsWonA} × {scoreSummary.setsWonB}
+                                    </div>
+                                    {scoreSummary.setDetails.length > 0 && (
+                                      <div className="text-xs text-white/60">
+                                        {scoreSummary.setDetails.join(' · ')}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm font-medium text-white/50">vs</div>
                                 )}
                               </div>
-                              <div>
-                                <div className="font-semibold">{a?.name || 'Equipe A'} vs {b?.name || 'Equipe B'}</div>
-                                <div className="text-xs uppercase tracking-wide text-white/70">{m.status}</div>
+                              <div
+                                className={cn(
+                                  'rounded-lg px-3 py-2 text-center sm:text-left',
+                                  scoreSummary.winnerSide === 'B'
+                                    ? 'bg-emerald-500/15 font-semibold text-emerald-100'
+                                    : 'bg-white/5 text-white',
+                                )}
+                              >
+                                {teamBName}
                               </div>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Select 
-                                value={m.status || 'scheduled'} 
+
+                            <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
+                              <Button
+                                size="sm"
+                                onClick={() => setScoreDialogMatch(m)}
+                                className="bg-emerald-500/90 text-white hover:bg-emerald-600"
+                                aria-label="Lançar placar manual"
+                              >
+                                <PenLine className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">
+                                  {scoreSummary.hasScores ? 'Editar placar' : 'Lançar placar'}
+                                </span>
+                              </Button>
+                              <Select
+                                value={m.status || 'scheduled'}
                                 onValueChange={async (v) => {
                                   await supabase.from('matches').update({ status: v }).eq('id', m.id)
-                                  setMatches(prev => prev.map(x => x.id === m.id ? { ...x, status: v } : x))
+                                  setMatches((prev) =>
+                                    prev.map((x) => (x.id === m.id ? { ...x, status: v } : x)),
+                                  )
                                 }}
                                 disabled={m.status === 'completed' && !isAdminSistema}
                               >
-                                <SelectTrigger className="w-full bg-white/10 border-white/30 text-white sm:w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"><SelectValue placeholder="Status" /></SelectTrigger>
+                                <SelectTrigger className="w-full bg-white/10 border-white/30 text-white sm:w-[150px] disabled:opacity-50">
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
                                 <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
                                   <SelectItem value="scheduled">Pendente</SelectItem>
                                   <SelectItem value="in_progress">Em andamento</SelectItem>
@@ -1770,13 +1982,16 @@ export default function TournamentDetailDB() {
                               {m.status !== 'completed' && (
                                 <Button
                                   size="sm"
-                                  className="bg-amber-500/90 text-white hover:bg-amber-600"
+                                  variant="outline"
+                                  className="border-amber-400/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20"
                                   aria-label="Editar jogo"
                                   onClick={() => {
                                     const detectedPreset = detectFormatPresetFromMatch(m)
                                     setEditingMatch({
                                       id: m.id,
-                                      scheduled_at: m.scheduled_at ? toDatetimeLocalInputValue(m.scheduled_at) : '',
+                                      scheduled_at: m.scheduled_at
+                                        ? toDatetimeLocalInputValue(m.scheduled_at)
+                                        : '',
                                       court: m.court || '',
                                       phase: m.phase || '',
                                       best_of: m.best_of || undefined,
@@ -1794,7 +2009,8 @@ export default function TournamentDetailDB() {
                               <Link to={`/referee/${m.id}`}>
                                 <Button
                                   size="sm"
-                                  className="bg-blue-500/90 text-white hover:bg-blue-600"
+                                  variant="outline"
+                                  className="border-blue-400/40 bg-blue-500/10 text-blue-100 hover:bg-blue-500/20"
                                   aria-label="Abrir mesa do jogo"
                                 >
                                   <ClipboardList className="h-4 w-4 sm:mr-2" />
@@ -1805,7 +2021,8 @@ export default function TournamentDetailDB() {
                                 <Link to={`/spectator/${m.id}`}>
                                   <Button
                                     size="sm"
-                                    className="bg-purple-500/90 text-white hover:bg-purple-600"
+                                    variant="outline"
+                                    className="border-purple-400/40 bg-purple-500/10 text-purple-100 hover:bg-purple-500/20"
                                     aria-label="Abrir visão da torcida"
                                   >
                                     <Megaphone className="h-4 w-4 sm:mr-2" />
@@ -1834,7 +2051,7 @@ export default function TournamentDetailDB() {
                                       toast({ title: 'Erro ao excluir jogo', description: error.message })
                                       return
                                     }
-                                    setMatches(prev => prev.filter(x => x.id !== m.id))
+                                    setMatches((prev) => prev.filter((x) => x.id !== m.id))
                                     toast({ title: 'Jogo removido' })
                                   }}
                                 />
@@ -1844,80 +2061,106 @@ export default function TournamentDetailDB() {
                         )}
                       </div>
                     )
-                  })}
-                  {matches.length === 0 && <p className="text-sm text-white/70">Nenhum jogo.</p>}
+                  })
+                )}
 
-                  <div className="grid gap-3 pt-2 md:grid-cols-6">
-                    <TeamSearchSelect
-                      value={matchForm.teamA}
-                      onChange={(value) => setMatchForm({ ...matchForm, teamA: value })}
-                      placeholder="Equipe A"
-                      options={teamOptions}
-                    />
-                    <TeamSearchSelect
-                      value={matchForm.teamB}
-                      onChange={(value) => setMatchForm({ ...matchForm, teamB: value })}
-                      placeholder="Equipe B"
-                      options={teamOptions}
-                    />
-                    <Input
-                      type="text"
-                      value={matchForm.court}
-                      onChange={(e) => setMatchForm({ ...matchForm, court: e.target.value })}
-                      placeholder="Quadra"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                    />
-                    <Input
-                      type="datetime-local"
-                      value={matchForm.scheduled_at}
-                      onChange={(e) => setMatchForm({ ...matchForm, scheduled_at: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                    />
-                    <Select
-                      value={matchForm.mode}
-                      onValueChange={(value) => setMatchForm({ ...matchForm, mode: value as MatchModeValue })}
-                    >
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                        <SelectValue placeholder="Modo de disputa" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
-                        {MATCH_MODES.map((mode) => (
-                          <SelectItem key={mode.value} value={mode.value}>
-                            {mode.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
-                      aria-label="Criar jogo"
-                      onClick={async () => {
-                        if (!matchForm.teamA || !matchForm.teamB || matchForm.teamA === matchForm.teamB) { toast({ title: 'Selecione equipes diferentes' }); return }
-                        const selectedMode = MATCH_MODES.find((mode) => mode.value === matchForm.mode) ?? MATCH_MODES[0]
-                        const { error } = await supabase.from('matches').insert([{
-                          tournament_id: tournament.id,
-                          team_a_id: matchForm.teamA,
-                          team_b_id: matchForm.teamB,
-                          scheduled_at: matchForm.scheduled_at || null,
-                          court: matchForm.court || null,
-                          status: 'scheduled',
-                          best_of: selectedMode.bestOf,
-                          points_per_set: [...selectedMode.pointsPerSet],
-                          side_switch_sum: [...selectedMode.sideSwitchSum],
-                          direct_win_format: matchForm.directWinFormat,
-                        }])
-                        if (error) { toast({ title: 'Erro ao criar jogo', description: error.message }); return }
-                        const { data: m } = await supabase.from('matches').select('*').eq('tournament_id', tournament.id).order('scheduled_at', { ascending: true })
-                        setMatches(m || [])
-                        setMatchForm({ teamA: '', teamB: '', scheduled_at: '', court: '', mode: MATCH_MODES[0].value, directWinFormat: false })
-                        toast({ title: 'Jogo criado' })
-                      }}
-                    >
-                      <Plus className="h-4 w-4 sm:mr-2" />
-                      <span className="hidden sm:inline">Criar jogo</span>
-                    </Button>
+                {showCreateMatchForm && (
+                  <div className="rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 space-y-3">
+                    <h3 className="text-sm font-medium text-white/90">Adicionar novo jogo</h3>
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <TeamSearchSelect
+                        value={matchForm.teamA}
+                        onChange={(value) => setMatchForm({ ...matchForm, teamA: value })}
+                        placeholder="Equipe A"
+                        options={teamOptions}
+                      />
+                      <TeamSearchSelect
+                        value={matchForm.teamB}
+                        onChange={(value) => setMatchForm({ ...matchForm, teamB: value })}
+                        placeholder="Equipe B"
+                        options={teamOptions}
+                      />
+                      <Input
+                        type="text"
+                        value={matchForm.court}
+                        onChange={(e) => setMatchForm({ ...matchForm, court: e.target.value })}
+                        placeholder="Quadra"
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                      />
+                      <Input
+                        type="datetime-local"
+                        value={matchForm.scheduled_at}
+                        onChange={(e) => setMatchForm({ ...matchForm, scheduled_at: e.target.value })}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                      />
+                      <Select
+                        value={matchForm.mode}
+                        onValueChange={(value) =>
+                          setMatchForm({ ...matchForm, mode: value as MatchModeValue })
+                        }
+                      >
+                        <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                          <SelectValue placeholder="Modo de disputa" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-950/90 border border-white/20 text-white">
+                          {MATCH_MODES.map((mode) => (
+                            <SelectItem key={mode.value} value={mode.value}>
+                              {mode.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        className="bg-emerald-400/90 text-slate-900 hover:bg-emerald-300"
+                        aria-label="Criar jogo"
+                        onClick={async () => {
+                          if (!matchForm.teamA || !matchForm.teamB || matchForm.teamA === matchForm.teamB) {
+                            toast({ title: 'Selecione equipes diferentes' })
+                            return
+                          }
+                          const selectedMode =
+                            MATCH_MODES.find((mode) => mode.value === matchForm.mode) ?? MATCH_MODES[0]
+                          const { error } = await supabase.from('matches').insert([
+                            {
+                              tournament_id: tournament.id,
+                              team_a_id: matchForm.teamA,
+                              team_b_id: matchForm.teamB,
+                              scheduled_at: matchForm.scheduled_at || null,
+                              court: matchForm.court || null,
+                              status: 'scheduled',
+                              best_of: selectedMode.bestOf,
+                              points_per_set: [...selectedMode.pointsPerSet],
+                              side_switch_sum: [...selectedMode.sideSwitchSum],
+                              direct_win_format: matchForm.directWinFormat,
+                            },
+                          ])
+                          if (error) {
+                            toast({ title: 'Erro ao criar jogo', description: error.message })
+                            return
+                          }
+                          const { data: updatedMatches } = await supabase
+                            .from('matches')
+                            .select('*')
+                            .eq('tournament_id', tournament.id)
+                            .order('scheduled_at', { ascending: true })
+                          setMatches(updatedMatches || [])
+                          setMatchForm({
+                            teamA: '',
+                            teamB: '',
+                            scheduled_at: '',
+                            court: '',
+                            mode: MATCH_MODES[0].value,
+                            directWinFormat: false,
+                          })
+                          toast({ title: 'Jogo criado' })
+                        }}
+                      >
+                        <Plus className="h-4 w-4 sm:mr-2" />
+                        Criar jogo
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -2686,6 +2929,25 @@ export default function TournamentDetailDB() {
         </DialogContent>
       </Dialog>
       
+      <ManualMatchScoreDialog
+        open={scoreDialogMatch !== null}
+        onOpenChange={(open) => {
+          if (!open) setScoreDialogMatch(null)
+        }}
+        match={scoreDialogMatch}
+        teamAName={
+          scoreDialogMatch ? teamNameMap.get(scoreDialogMatch.team_a_id) ?? 'Equipe A' : ''
+        }
+        teamBName={
+          scoreDialogMatch ? teamNameMap.get(scoreDialogMatch.team_b_id) ?? 'Equipe B' : ''
+        }
+        existingScores={scoreDialogMatch ? scoresByMatch.get(scoreDialogMatch.id) ?? [] : []}
+        onSaved={async () => {
+          await reloadMatchScores()
+          toast({ title: 'Placar salvo com sucesso' })
+        }}
+      />
+
       <TeamMatchSummaryDialog
         open={selectedTeamId !== null}
         onOpenChange={(open) => {

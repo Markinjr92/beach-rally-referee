@@ -98,13 +98,29 @@ async function deleteExistingByName(name) {
   if (!existing?.length) return
 
   for (const row of existing) {
+    const { data: matchRows } = await supabase
+      .from('matches')
+      .select('id, team_a_id, team_b_id')
+      .eq('tournament_id', row.id)
+    const matchIds = (matchRows || []).map((m) => m.id)
+    const matchTeamIds = [
+      ...new Set(
+        (matchRows || []).flatMap((m) => [m.team_a_id, m.team_b_id]).filter(Boolean),
+      ),
+    ]
+
+    if (matchIds.length) {
+      await supabase.from('match_scores').delete().in('match_id', matchIds)
+      await supabase.from('match_states').delete().in('match_id', matchIds)
+      await supabase.from('matches').delete().in('id', matchIds)
+    }
+
     const { data: tt } = await supabase
       .from('tournament_teams')
       .select('team_id')
       .eq('tournament_id', row.id)
-    const teamIds = [...new Set((tt || []).map((t) => t.team_id))]
+    const teamIds = [...new Set([...(tt || []).map((t) => t.team_id), ...matchTeamIds])]
 
-    await supabase.from('matches').delete().eq('tournament_id', row.id)
     await supabase.from('tournament_teams').delete().eq('tournament_id', row.id)
     await supabase.from('tournaments').delete().eq('id', row.id)
 
@@ -150,7 +166,7 @@ async function createTournamentRecord(config) {
       match_format_semifinals: 'melhorDe3_15_10',
       match_format_final: 'melhorDe3_15_10',
       match_format_third_place: 'melhorDe3_15_10',
-      has_statistics: true,
+      has_statistics: config.hasStatistics ?? true,
     })
     .select('id')
     .single()
@@ -179,6 +195,10 @@ async function insertMatches(tournamentId, matches, nameToId, modality) {
     const teamBId = typeof m.teamB === 'string' ? nameToId.get(m.teamB) : m.teamB
     const config = m.finals ? FINALS_MATCH_CONFIG : GROUP_MATCH_CONFIG
 
+    if (!teamAId || !teamBId) {
+      throw new Error(`Equipe não encontrada para o jogo ${m.gameNumber}: ${m.teamA} x ${m.teamB}`)
+    }
+
     return {
       tournament_id: tournamentId,
       team_a_id: teamAId,
@@ -192,8 +212,11 @@ async function insertMatches(tournamentId, matches, nameToId, modality) {
     }
   })
 
-  const { error } = await supabase.from('matches').insert(payload)
+  const { data, error } = await supabase.from('matches').insert(payload).select('id, phase, scheduled_at')
   if (error) throw error
+
+  const groupCount = data.filter((m) => m.phase === 'Fase de Grupos').length
+  console.log(`  Inseridos ${data.length} jogos (${groupCount} na fase de grupos)`)
 }
 
 const MASCULINO_TEAMS = [
@@ -309,6 +332,7 @@ async function seedMisto() {
     name,
     category: 'Misto',
     formatId: 'groups_and_knockout',
+    hasStatistics: false,
   })
   const nameToId = await linkTeams(tournamentId, MISTO_TEAMS, createdTeams)
   await insertMatches(tournamentId, MISTO_MATCHES, nameToId, 'dupla')
@@ -317,12 +341,25 @@ async function seedMisto() {
 }
 
 async function main() {
+  const onlyMasculino = process.argv.includes('--masculino')
+  const onlyMisto = process.argv.includes('--misto')
+
   console.log('Criando torneios Cascatinha no Supabase...')
-  const masculinoId = await seedMasculino()
-  const mistoId = await seedMisto()
+
+  let masculinoId
+  let mistoId
+
+  if (!onlyMisto) {
+    masculinoId = await seedMasculino()
+  }
+
+  if (!onlyMasculino) {
+    mistoId = await seedMisto()
+  }
+
   console.log('\nConcluído!')
-  console.log(`  Masculino: ${masculinoId}`)
-  console.log(`  Misto:     ${mistoId}`)
+  if (masculinoId) console.log(`  Masculino: ${masculinoId}`)
+  if (mistoId) console.log(`  Misto:     ${mistoId}`)
 }
 
 main().catch((err) => {
