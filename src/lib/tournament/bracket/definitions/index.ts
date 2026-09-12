@@ -15,6 +15,7 @@ import {
   qf2Groups5,
   qf4Groups3344,
   qf4GroupsClassic,
+  knockout8FullPlacement,
   qfStd,
   seed,
   semiCross2,
@@ -200,6 +201,12 @@ const specialFormats: FormatBracketDefinition[] = [
       m({ key: 'FP', phase: P.FINAL_SILVER, label: 'Final Prata', a: w('SFP1'), b: w('SFP2'), config: 'final' }),
     ],
     { globalRankingRequiresAllGroups: true },
+  ),
+  def(
+    '8_knockout_full_placement',
+    '8 equipes — eliminatória com 1º a 8º',
+    [P.QUARTERFINALS, P.SEMIFINALS, P.FINALS],
+    knockout8FullPlacement(),
   ),
   def(
     'single_elimination',

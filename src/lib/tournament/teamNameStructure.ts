@@ -546,6 +546,7 @@ export function getTeamNameStructure(formatId: TournamentFormatId, teamCount: nu
     case 'single_elimination':
     case 'double_elimination':
     case 'series_gold_silver':
+    case '8_knockout_full_placement':
       // Formatos sem grupos - usar ordem sequencial de seeds
       return {
         type: 'seeds',

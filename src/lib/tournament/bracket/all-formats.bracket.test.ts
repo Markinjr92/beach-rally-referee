@@ -8,7 +8,7 @@ const ALL_FORMAT_IDS = allBracketDefinitions.map((d) => d.formatId);
 
 describe('simulação E2E — todos os formatos de torneio', () => {
   it('possui definição e contagem de equipes para cada formato', () => {
-    assert.equal(ALL_FORMAT_IDS.length, 24);
+    assert.equal(ALL_FORMAT_IDS.length, 25);
     for (const formatId of ALL_FORMAT_IDS) {
       assert.ok(FORMAT_TEAM_COUNT[formatId], `FORMAT_TEAM_COUNT ausente: ${formatId}`);
       assert.ok(FORMAT_TEAM_COUNT[formatId] >= 4);
@@ -55,5 +55,12 @@ describe('simulação E2E — cenários específicos de classificação', () => 
   it('double_elimination: fluxo completo até grande final', () => {
     const result = simulateAndValidateFormat('double_elimination');
     assert.equal(result.ok, true);
+  });
+
+  it('8_knockout_full_placement: 12 jogos até classificação 1º–8º', () => {
+    const result = simulateAndValidateFormat('8_knockout_full_placement');
+    assert.equal(result.ok, true);
+    assert.equal(result.resolvedCount, 12);
+    assert.equal(result.expectedCount, 12);
   });
 });

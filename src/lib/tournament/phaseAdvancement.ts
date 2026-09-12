@@ -4,6 +4,7 @@ import { TournamentFormatId, TieBreakerCriterion } from '@/types/volleyball';
 import { isMatchCompleted } from '@/utils/matchStatus';
 import { getMatchConfigFromFormat } from '@/utils/matchConfig';
 import { phaseSequences } from './phaseConfig';
+import { normalizePhaseName } from './bracket/phases';
 import {
   buildBracketContext,
   resolveBracketMatches,
@@ -192,8 +193,13 @@ export const suggestNextPhaseMatches = async (
 
   const resolved = resolveBracketMatches(ctx);
   const existingKeys = new Set(ctx.matchByKey.keys());
+  const nextPhase = sequence[currentIndex + 1];
 
-  const pending = resolved.filter((m) => !existingKeys.has(m.key));
+  const pending = resolved.filter((m) => {
+    if (existingKeys.has(m.key)) return false;
+    if (!nextPhase) return true;
+    return normalizePhaseName(m.phase) === normalizePhaseName(nextPhase);
+  });
   return resolvedToInsert(options, pending);
 };
 

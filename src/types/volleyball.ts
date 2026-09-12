@@ -22,7 +22,8 @@ export type TournamentFormatId =
   | '2_groups_5_semis'
   | '3_groups_4_repechage_quarterfinals'
   | '2_groups_cross_full_repechage_semis'
-  | '2_groups_double_bracket_final';
+  | '2_groups_double_bracket_final'
+  | '8_knockout_full_placement';
 
 export type TieBreakerCriterion =
   | 'head_to_head'
@@ -76,6 +77,7 @@ export interface TournamentMatch extends Game {
   scheduledAt?: string;
   teamAId?: string;
   teamBId?: string;
+  matchKey?: string;
   result?: TournamentMatchResult;
 }
 

@@ -81,6 +81,7 @@ describe('novos formatos de torneio', () => {
       { formatId: '2_groups_cross_full_repechage_semis', teams: 7 },
       { formatId: '2_groups_4_quarterfinals', teams: 7 },
       { formatId: '2_groups_double_bracket_final', teams: 7 },
+      { formatId: '8_knockout_full_placement', teams: 7 },
     ];
 
     invalidFormats.forEach(({ formatId, teams }) => {
@@ -114,6 +115,26 @@ describe('novos formatos de torneio', () => {
     assert.deepEqual(
       getFormatsByTeamCount(8).includes('2_groups_double_bracket_final'),
       true,
+    );
+    assert.deepEqual(
+      getFormatsByTeamCount(8).includes('8_knockout_full_placement'),
+      true,
+    );
+  });
+
+  it('gera apenas as quartas do formato 8_knockout_full_placement', () => {
+    const structure = generateTournamentStructure({
+      tournamentId: 't-8-ko',
+      formatId: '8_knockout_full_placement',
+      teams: buildTeams(8),
+    });
+
+    assert.equal(structure.groups.length, 0);
+    assert.equal(structure.matches.length, 4);
+    assert.equal(structure.matches.every((match) => match.phaseName === 'Quartas de final'), true);
+    assert.deepEqual(
+      structure.matches.map((match) => match.matchKey),
+      ['QF1', 'QF2', 'QF3', 'QF4'],
     );
   });
 

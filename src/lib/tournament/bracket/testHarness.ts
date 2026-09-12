@@ -46,6 +46,7 @@ export const FORMAT_TEAM_COUNT: Record<TournamentFormatId, number> = {
   '2_groups_4_semis': 8,
   '2_groups_5_4_semis': 9,
   '2_groups_5_semis': 10,
+  '8_knockout_full_placement': 8,
 };
 
 const buildTeams = (count: number): TournamentTeam[] =>
@@ -108,7 +109,7 @@ const structureToDbMatches = (
   const playable = structure.matches.filter((m) => m.teamAId && m.teamBId);
 
   playable.forEach((m) => {
-    let matchKey: string | null = KEY_FROM_TITLE[m.title] ?? null;
+    let matchKey: string | null = m.matchKey ?? KEY_FROM_TITLE[m.title] ?? null;
 
     if (!matchKey && formatId === 'single_elimination') {
       r1Counter += 1;
@@ -333,7 +334,11 @@ export const simulateAndValidateFormat = (
     matchLosers.set(m.match_key, winner === m.team_a_id ? m.team_b_id : m.team_a_id);
   });
 
-  const seedOnlyFormats: TournamentFormatId[] = ['single_elimination', 'double_elimination'];
+  const seedOnlyFormats: TournamentFormatId[] = [
+    'single_elimination',
+    'double_elimination',
+    '8_knockout_full_placement',
+  ];
   const skipGroupValidation = seedOnlyFormats.includes(formatId);
 
   if (!skipGroupValidation && structure.groups.length > 0) {

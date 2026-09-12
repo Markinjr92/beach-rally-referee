@@ -814,10 +814,11 @@ export default function TournamentDetailDB() {
 
   const getDefaultMatchCountForPhase = useCallback((phaseLabel: string): number => {
     const normalized = phaseLabel.trim().toLowerCase()
+    if (normalized === 'finais') return 4
     if (normalized.includes('quartas')) return 4
     if (normalized.includes('semifinal')) return 2
     if (normalized.includes('final')) return 1
-    return 1 // Default para outras fases
+    return 1
   }, [])
 
   const detectFormatPreset = useCallback((entry: MatchSetupEntry): MatchFormatPresetKey | undefined => {
@@ -1019,7 +1020,7 @@ export default function TournamentDetailDB() {
   const eliminationSummaries = useMemo(() => {
     if (!matches.length) return []
 
-    const eliminationPhaseOrder = ['Quartas de final', 'Semifinal', 'Disputa 3º lugar', 'Final']
+    const eliminationPhaseOrder = ['Quartas de final', 'Semifinal', 'Finais', 'Disputa 3º lugar', 'Final']
     const statusLabels: Record<string, string> = {
       scheduled: 'Agendado',
       in_progress: 'Em andamento',

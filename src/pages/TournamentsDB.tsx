@@ -324,6 +324,12 @@ export default function TournamentsDB() {
         { key: 'final', label: 'Final' },
         { key: 'thirdPlace', label: 'Disputa 3º lugar' },
       ],
+      '8_knockout_full_placement': [
+        { key: 'quarterfinals', label: 'Quartas (Jogos 1–4)' },
+        { key: 'semifinals', label: 'Semifinais (Jogos 5, 6, 9 e 10)' },
+        { key: 'final', label: 'Disputa de 1º lugar (Jogo 7)' },
+        { key: 'thirdPlace', label: 'Disputas de 3º, 5º e 7º (Jogos 8, 11 e 12)' },
+      ],
       '6_teams_round_robin': [
         { key: 'groups', label: 'Fase de Grupos' },
         { key: 'final', label: 'Final' },
@@ -390,6 +396,7 @@ export default function TournamentsDB() {
       '3_groups_4_repechage_quarterfinals': 12,
       '2_groups_cross_full_repechage_semis': 8,
       '2_groups_double_bracket_final': 8,
+      '8_knockout_full_placement': 8,
     }
     return teamCounts[formatId] || 12
   }
@@ -581,6 +588,7 @@ export default function TournamentsDB() {
               points_per_set: match.pointsPerSet,
               side_switch_sum: match.sideSwitchSum,
               best_of: match.pointsPerSet.length,
+              match_key: match.matchKey ?? null,
             } as TablesInsert<'matches'>
           })
           .filter((entry): entry is TablesInsert<'matches'> => entry !== null)

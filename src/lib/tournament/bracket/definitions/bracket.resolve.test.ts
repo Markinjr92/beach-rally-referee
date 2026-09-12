@@ -59,8 +59,8 @@ const baseCtx = (
 };
 
 describe('motor de bracket — definições', () => {
-  it('cobre todos os 24 formatos do sistema', () => {
-    assert.equal(allBracketDefinitions.length, 24);
+  it('cobre todos os 25 formatos do sistema', () => {
+    assert.equal(allBracketDefinitions.length, 25);
   });
 
   it('2_groups_5_semis gera semis cruzadas quando grupos completos', () => {

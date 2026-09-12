@@ -206,6 +206,7 @@ const createMatch = (
     tableId?: string;
     scheduledAt?: string;
     customId?: string;
+    matchKey?: string;
     configType?: TournamentPhaseConfigType;
     configOverride?: Partial<GameConfiguration>;
   },
@@ -254,6 +255,7 @@ const createMatch = (
     scheduledAt: params.scheduledAt,
     teamAId: params.teamAId,
     teamBId: params.teamBId,
+    matchKey: params.matchKey,
   };
 
   return match;
@@ -2941,6 +2943,56 @@ const formatDefinitions: Record<TournamentFormatId, FormatDefinition> = {
       );
 
       return { phases: [phaseInitial, phaseKnockout], groups, matches: [...initialMatches, ...knockoutMatches] };
+    },
+  },
+  '8_knockout_full_placement': {
+    id: '8_knockout_full_placement',
+    name: '8 equipes — eliminatória com 1º a 8º',
+    description:
+      'Chave única de 8 equipes, sem grupos. Quartas (Jogos 1–4), semifinais de vencedores e perdedores (Jogos 5, 6, 9 e 10) e finais de 1º, 3º, 5º e 7º (Jogos 7, 8, 11 e 12).',
+    generate: (options) => {
+      ensureEightTeams(options.teams);
+      resetMatchCounter();
+      const teamsBySeed = mapTeamsBySeed(options.teams);
+
+      const phaseQuarterfinals: TournamentPhase = {
+        id: 'quartas-de-final',
+        name: 'Quartas de final',
+        order: 1,
+        type: 'knockout',
+      };
+
+      const pairs: Array<{ key: string; title: string; seedA: number; seedB: number }> = [
+        { key: 'QF1', title: 'Jogo 1', seedA: 1, seedB: 2 },
+        { key: 'QF2', title: 'Jogo 2', seedA: 3, seedB: 4 },
+        { key: 'QF3', title: 'Jogo 3', seedA: 5, seedB: 6 },
+        { key: 'QF4', title: 'Jogo 4', seedA: 7, seedB: 8 },
+      ];
+
+      const matches = pairs.map((pair) => {
+        const teamA = teamsBySeed.get(pair.seedA);
+        const teamB = teamsBySeed.get(pair.seedB);
+        if (!teamA || !teamB) {
+          throw new Error(`Seeds ${pair.seedA} e ${pair.seedB} são obrigatórios neste formato.`);
+        }
+        return createMatch(options, phaseQuarterfinals, {
+          round: 1,
+          title: pair.title,
+          teamA: teamA.team,
+          teamB: teamB.team,
+          teamAId: teamA.id,
+          teamBId: teamB.id,
+          matchKey: pair.key,
+          configType: 'quarterfinals',
+          customId: `${options.tournamentId}-${pair.key}`,
+        });
+      });
+
+      return {
+        phases: [phaseQuarterfinals],
+        groups: [],
+        matches,
+      };
     },
   },
 };
