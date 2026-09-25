@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { LogIn, UserPlus, Loader2, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
 
@@ -156,6 +157,7 @@ export const LoginForm = () => {
   };
 
   return (
+    <>
     <Card className="w-full max-w-md mx-auto bg-card/80 backdrop-blur-sm border-border/50">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl font-bold">Acesso ao Sistema</CardTitle>
@@ -358,5 +360,17 @@ export const LoginForm = () => {
         />
       )}
     </Card>
+    <div className="mt-4 space-y-2 text-center">
+      <Link
+        to="/avulso"
+        className="block w-full rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white font-semibold py-3"
+      >
+        Criar jogo avulso (sem login)
+      </Link>
+      <Link to="/avulsos" className="block text-white/80 text-sm underline">
+        Ver jogos avulsos públicos
+      </Link>
+    </div>
+    </>
   );
 };

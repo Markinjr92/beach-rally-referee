@@ -109,6 +109,15 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
     roles: ["atleta", "arbitro", "organizador", "admin_sistema", "publico"],
     iconClass: "text-purple-300",
   },
+  {
+    key: "public-avulso",
+    title: "Jogo avulso público",
+    description: "Crie e veja jogos avulsos sem login (servidor VPS)",
+    to: "/avulso",
+    icon: Gamepad2,
+    roles: ["atleta", "arbitro", "organizador", "admin_sistema", "publico"],
+    iconClass: "text-emerald-300",
+  },
 ];
 
 const Index = () => {

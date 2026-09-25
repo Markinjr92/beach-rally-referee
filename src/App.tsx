@@ -23,6 +23,9 @@ import Dashboard from "./pages/Dashboard";
 import CasualMatches from "./pages/CasualMatches";
 import CreateCasualMatch from "./pages/CreateCasualMatch";
 import CasualMatchDetail from "./pages/CasualMatchDetail";
+import PublicCasualCreate from "./pages/PublicCasualCreate";
+import PublicCasualPlay from "./pages/PublicCasualPlay";
+import PublicCasualList from "./pages/PublicCasualList";
 import UserProfile from "./pages/UserProfile";
 import SystemData from "./pages/SystemData";
 import SystemAllGames from "./pages/SystemAllGames";
@@ -57,6 +60,9 @@ const App = () => (
               <Route path="/casual-matches/create" element={<CreateCasualMatch />} />
               <Route path="/casual-matches/:id" element={<CasualMatchDetail />} />
               <Route path="/casual-matches/:id/referee" element={<RefereeDesk />} />
+              <Route path="/avulso" element={<PublicCasualCreate />} />
+              <Route path="/avulsos" element={<PublicCasualList />} />
+              <Route path="/avulso/:id" element={<PublicCasualPlay />} />
               <Route path="/profile" element={<UserProfile />} />
               <Route path="/system-data" element={<SystemData />} />
               <Route path="/system-data/all-games" element={<SystemAllGames />} />
