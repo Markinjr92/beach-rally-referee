@@ -362,6 +362,12 @@ export const LoginForm = () => {
     </Card>
     <div className="mt-4 space-y-2 text-center">
       <Link
+        to="/avulsos?filtro=ao-vivo"
+        className="block w-full rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold py-3"
+      >
+        Jogos em tempo real
+      </Link>
+      <Link
         to="/avulso"
         className="block w-full rounded-lg bg-emerald-500/90 hover:bg-emerald-500 text-white font-semibold py-3"
       >

@@ -1,31 +1,21 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { listBeachPublicMatches, beachWhatsappText, type BeachPublicMatch } from '@/lib/beachPublicApi';
+import { PublicAvulsoLiveBoard } from '@/components/PublicAvulsoLiveBoard';
 import { ArrowLeft, Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-function when(iso: string) {
-  try {
-    return new Date(iso).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
+const FILTERS = [
+  { id: 'live', label: 'Ao vivo' },
+  { id: 'completed', label: 'Finalizados' },
+  { id: 'all', label: 'Todos' },
+] as const;
 
 export default function PublicCasualList() {
-  const [rows, setRows] = useState<BeachPublicMatch[]>([]);
-  const [err, setErr] = useState('');
-
-  useEffect(() => {
-    listBeachPublicMatches({ limit: 100 })
-      .then((d) => setRows(d.matches || []))
-      .catch((e) => setErr(e.message || 'Falha ao carregar'));
-  }, []);
+  const [params, setParams] = useSearchParams();
+  const raw = params.get('filtro') || 'live';
+  const filtro = raw === 'finalizados' || raw === 'completed' ? 'completed'
+    : raw === 'todos' || raw === 'all' ? 'all'
+      : 'live';
 
   return (
     <div className="min-h-screen bg-gradient-ocean text-white">
@@ -43,43 +33,25 @@ export default function PublicCasualList() {
           </Link>
         </div>
         <h1 className="text-2xl font-bold mb-1">Jogos avulsos públicos</h1>
-        <p className="text-white/70 text-sm mb-5">Partidas criadas nesta página, sem login, gravadas no servidor.</p>
-        {err && <p className="text-red-300 mb-4">{err}</p>}
-        <div className="space-y-3">
-          {rows.map((m) => {
-            const wa = m.status === 'completed'
-              ? `https://wa.me/?text=${encodeURIComponent(beachWhatsappText(m))}`
-              : null;
-            return (
-              <div
-                key={m.id}
-                className="block rounded-xl border border-white/20 bg-white/10 p-4 hover:bg-white/15"
-              >
-                <Link to={`/avulso/${m.id}`} className="block">
-                <div className="flex justify-between gap-2 text-xs text-white/60 mb-1">
-                  <span>{when(m.created_at)}</span>
-                  <span>{m.status === 'completed' ? 'Finalizado' : 'Em jogo'}</span>
-                </div>
-                <div className="font-semibold">
-                  {m.team_a_name} {m.sets_won_a} x {m.sets_won_b} {m.team_b_name}
-                </div>
-                <div className="text-sm text-white/70">Árbitro: {m.referee_name}</div>
-                </Link>
-                {wa && (
-                  <a
-                    href={wa}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-emerald-300 text-sm underline mt-1 inline-block"
-                  >
-                    WhatsApp
-                  </a>
-                )}
-              </div>
-            );
-          })}
-          {!rows.length && !err && <p className="text-white/60">Ainda não há jogos públicos.</p>}
+        <p className="text-white/70 text-sm mb-4">
+          Placares ao vivo. Encerrados ficam aqui por 2 minutos com o resultado final.
+        </p>
+        <div className="flex gap-2 mb-5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setParams(f.id === 'live' ? { filtro: 'ao-vivo' } : { filtro: f.id === 'completed' ? 'finalizados' : 'todos' })}
+              className={cn(
+                'flex-1 rounded-lg py-2 text-sm font-semibold',
+                filtro === f.id ? 'bg-emerald-500 text-white' : 'bg-white/10 text-white/80 hover:bg-white/15',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
+        <PublicAvulsoLiveBoard filter={filtro} pollMs={filtro === 'live' ? 2000 : 8000} />
       </div>
     </div>
   );

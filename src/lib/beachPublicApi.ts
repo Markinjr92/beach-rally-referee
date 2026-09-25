@@ -59,6 +59,9 @@ export type BeachPublicMatch = {
   finished_at: string | null;
   created_at: string;
   updated_at?: string;
+  elapsed_sec?: number;
+  clock_started_at?: string | null;
+  clock_running?: boolean;
   game_state?: GameState | null;
 };
 
@@ -96,6 +99,40 @@ export const listBeachPublicMatches = (qs: { limit?: number; status?: string } =
   const q = p.toString();
   return request<{ matches: BeachPublicMatch[] }>(`/beach/public-matches${q ? `?${q}` : ''}`);
 };
+
+export function formatMatchClock(totalSec: number) {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(sec).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+export function liveElapsedSec(m: Pick<BeachPublicMatch, 'elapsed_sec' | 'clock_started_at' | 'clock_running' | 'status'>, now = Date.now()) {
+  let sec = Number(m.elapsed_sec) || 0;
+  if (m.clock_running && m.clock_started_at) {
+    const started = new Date(m.clock_started_at).getTime();
+    if (Number.isFinite(started)) sec += Math.max(0, Math.floor((now - started) / 1000));
+  }
+  return sec;
+}
+
+export function isGraceFinished(m: BeachPublicMatch, now = Date.now()) {
+  if (m.status !== 'completed' || !m.finished_at) return false;
+  const end = new Date(m.finished_at).getTime();
+  return Number.isFinite(end) && now - end < 120000;
+}
+
+export function isLivePublicMatch(m: BeachPublicMatch, now = Date.now()) {
+  return m.status === 'in_progress' || isGraceFinished(m, now);
+}
+
+export function currentSetLine(m: BeachPublicMatch) {
+  const setNo = (Number(m.current_set) || 0) + 1;
+  return `Set ${setNo}: ${m.score_a}–${m.score_b}`;
+}
 
 export const saveBeachPublicMatchState = (id: string, state: GameState) =>
   request<{ match: BeachPublicMatch }>(`/beach/public-matches/${encodeURIComponent(id)}/state`, {

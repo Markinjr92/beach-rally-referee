@@ -11,6 +11,7 @@ import { useUserRoles } from "@/hooks/useUserRoles";
 import { useAccessExpiration } from "@/hooks/useAccessExpiration";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { PublicAvulsoLiveBoard } from "@/components/PublicAvulsoLiveBoard";
 // Logos VB Jukin
 const VB_JUKIN_LOGO = "https://i.postimg.cc/SQHJ2c0V/vb-jukin-logo.png"; // Logo com imagem e escrito
 const VB_JUKIN_LOGO_TEXT_ONLY = "https://i.postimg.cc/NFZYK85C/vb-jukin-logo-sem-imagem.png"; // Logo só com escrito
@@ -111,12 +112,21 @@ const MODULE_DEFINITIONS: ModuleDefinition[] = [
   },
   {
     key: "public-avulso",
-    title: "Jogo avulso público",
-    description: "Crie e veja jogos avulsos sem login (servidor VPS)",
-    to: "/avulso",
+    title: "Jogos Avulsos ao vivo",
+    description: "Placares públicos em tempo real (sem login)",
+    to: "/avulsos?filtro=ao-vivo",
     icon: Gamepad2,
     roles: ["atleta", "arbitro", "organizador", "admin_sistema", "publico"],
     iconClass: "text-emerald-300",
+  },
+  {
+    key: "public-avulso-create",
+    title: "Criar jogo avulso público",
+    description: "Monte a partida sem login",
+    to: "/avulso",
+    icon: Gamepad2,
+    roles: ["atleta", "arbitro", "organizador", "admin_sistema", "publico"],
+    iconClass: "text-lime-200",
   },
 ];
 
@@ -221,6 +231,14 @@ const Index = () => {
               
               {/* Right: Info Section */}
               <div className="text-white space-y-6">
+                <PublicAvulsoLiveBoard
+                  filter="live"
+                  compact
+                  title="Jogos avulsos ao vivo"
+                />
+                <Link to="/avulsos?filtro=ao-vivo" className="inline-block text-emerald-300 text-sm underline">
+                  Abrir placares em tempo real
+                </Link>
                 <div>
                   <h2 className="text-3xl lg:text-4xl font-bold mb-4">
                     Plataforma completa para gestão e transmissão de jogos
@@ -268,6 +286,14 @@ const Index = () => {
           </div>
         ) : (
           <>
+            <div className="max-w-3xl mx-auto mb-10">
+              <PublicAvulsoLiveBoard filter="live" compact title="Jogos avulsos ao vivo" />
+              <div className="mt-3">
+                <Link to="/avulsos?filtro=ao-vivo" className="text-emerald-300 text-sm underline">
+                  Ver todos os jogos em tempo real
+                </Link>
+              </div>
+            </div>
             {/* Aviso de acesso próximo de expirar */}
             {user && !isExpired && daysRemaining !== null && daysRemaining <= 3 && daysRemaining > 0 && (
               <div className="max-w-2xl mx-auto mb-6">

@@ -33,6 +33,9 @@ import {
   getBeachPublicMatch,
   resolvePublicGameState,
   saveBeachPublicMatchState,
+  formatMatchClock,
+  liveElapsedSec,
+  type BeachPublicMatch,
 } from "@/lib/beachPublicApi";
 import { TablesInsert, TablesUpdate, Database } from "@/integrations/supabase/types";
 import {
@@ -130,6 +133,8 @@ export default function RefereeDesk() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isApplyingSetConfig, setIsApplyingSetConfig] = useState(false);
   const [usingMatchStateFallback, setUsingMatchStateFallback] = useState(false);
+  const [publicClock, setPublicClock] = useState<Pick<BeachPublicMatch, 'elapsed_sec' | 'clock_started_at' | 'clock_running' | 'status'> | null>(null);
+  const [clockTick, setClockTick] = useState(0);
   const flipIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -588,6 +593,12 @@ export default function RefereeDesk() {
 
   const coinResultLabel = useMemo(() => (coinResult ? coinLabels[coinResult] : null), [coinResult]);
 
+  useEffect(() => {
+    if (!isPublicCasual || !publicClock?.clock_running) return;
+    const id = window.setInterval(() => setClockTick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [isPublicCasual, publicClock?.clock_running]);
+
   const snapshotState = useCallback((state: GameState): GameState => {
     return JSON.parse(JSON.stringify(state)) as GameState;
   }, []);
@@ -603,7 +614,8 @@ export default function RefereeDesk() {
       setIsSyncing(true);
       try {
         if (isPublicCasual) {
-          await saveBeachPublicMatchState(newState.gameId, newState);
+          const { match } = await saveBeachPublicMatchState(newState.gameId, newState);
+          setPublicClock(match);
           setUsingMatchStateFallback(false);
           fallbackWarningDisplayed.current = false;
           offlineNoticeDisplayed.current = false;
@@ -848,6 +860,7 @@ export default function RefereeDesk() {
             const resolvedState = resolvePublicGameState(match, publicGame);
             setGameState(resolvedState);
             saveLocalMatchState(resolvedState);
+            setPublicClock(match);
             setUsingMatchStateFallback(false);
           } catch (error) {
             if (applyLocalFallback()) {
@@ -2720,8 +2733,18 @@ export default function RefereeDesk() {
               >
                 {setConfigButtonLabel}
               </Button>
+              {isPublicCasual && publicClock && (
+                <div className="md:hidden ml-auto rounded-md bg-black/35 px-3 py-1 font-mono text-lg tabular-nums">
+                  {formatMatchClock(liveElapsedSec(publicClock, Date.now() + clockTick * 0))}
+                </div>
+              )}
             </div>
-            <div className="hidden md:block md:text-right">
+            <div className="hidden md:flex md:flex-col md:items-end md:gap-1">
+              {isPublicCasual && publicClock && (
+                <div className="rounded-md bg-black/35 px-3 py-1 font-mono text-xl tabular-nums tracking-wide">
+                  {formatMatchClock(liveElapsedSec(publicClock, Date.now() + clockTick * 0))}
+                </div>
+              )}
               <h1 className="text-3xl font-bold">{game.title}</h1>
               <p className="text-white/70">{game.category} • {game.modality} • {game.format}</p>
               {game.notes && <p className="text-white/60 text-sm">{game.notes}</p>}
