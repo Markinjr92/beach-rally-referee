@@ -1,4 +1,6 @@
 import { MATCH_FORMAT_PRESETS } from '@/utils/matchConfig';
+import { createDefaultGameState } from '@/lib/matchState';
+import type { Game, GameState } from '@/types/volleyball';
 
 const DEFAULT_API = 'https://api-bolao.markinjr92.com.br/v1';
 
@@ -39,6 +41,7 @@ export type BeachPublicMatch = {
   format_preset: string;
   best_of: number;
   points_per_set: number[];
+  side_switch_sum?: number[];
   direct_win_format: boolean;
   team_a_name: string;
   team_a_players: string[];
@@ -55,6 +58,8 @@ export type BeachPublicMatch = {
   started_at: string;
   finished_at: string | null;
   created_at: string;
+  updated_at?: string;
+  game_state?: GameState | null;
 };
 
 export type BeachPublicCreateBody = {
@@ -92,11 +97,92 @@ export const listBeachPublicMatches = (qs: { limit?: number; status?: string } =
   return request<{ matches: BeachPublicMatch[] }>(`/beach/public-matches${q ? `?${q}` : ''}`);
 };
 
-export const addBeachPublicPoint = (id: string, team: 'A' | 'B', delta: 1 | -1 = 1) =>
-  request<{ match: BeachPublicMatch }>(`/beach/public-matches/${encodeURIComponent(id)}/point`, {
-    method: 'POST',
-    body: JSON.stringify({ team, delta }),
+export const saveBeachPublicMatchState = (id: string, state: GameState) =>
+  request<{ match: BeachPublicMatch }>(`/beach/public-matches/${encodeURIComponent(id)}/state`, {
+    method: 'PUT',
+    body: JSON.stringify({ state }),
   });
+
+export function beachPublicMatchToGame(m: BeachPublicMatch): Game {
+  const namesA = Array.isArray(m.team_a_players) ? m.team_a_players : [];
+  const namesB = Array.isArray(m.team_b_players) ? m.team_b_players : [];
+  const toPlayers = (names: string[]) => names.map((name, i) => ({ name, number: i + 1 }));
+  const preset = MATCH_FORMAT_PRESETS[m.format_preset as keyof typeof MATCH_FORMAT_PRESETS];
+  return {
+    id: m.id,
+    tournamentId: '',
+    title: `${m.team_a_name} vs ${m.team_b_name}`,
+    category: m.category,
+    modality: m.modality === 'quarteto' ? 'quarteto' : 'dupla',
+    format: m.best_of === 1 ? 'melhorDe1' : 'melhorDe3',
+    teamA: { name: m.team_a_name, players: toPlayers(namesA) },
+    teamB: { name: m.team_b_name, players: toPlayers(namesB) },
+    pointsPerSet: Array.isArray(m.points_per_set) ? m.points_per_set : (preset?.pointsPerSet || [21, 21, 15]),
+    needTwoPointLead: true,
+    directWinFormat: m.direct_win_format ?? false,
+    sideSwitchSum: Array.isArray(m.side_switch_sum) && m.side_switch_sum.length
+      ? m.side_switch_sum
+      : (preset?.sideSwitchSum || [7, 7, 5]),
+    hasTechnicalTimeout: false,
+    technicalTimeoutSum: 0,
+    teamTimeoutsPerSet: 2,
+    teamTimeoutDurationSec: 30,
+    coinTossMode: 'initialThenAlternate',
+    notes: m.referee_name ? `Árbitro: ${m.referee_name}` : undefined,
+    status: m.status === 'completed' ? 'finalizado' : 'em_andamento',
+    createdAt: m.created_at,
+    updatedAt: m.updated_at || m.created_at,
+    hasStatistics: false,
+  };
+}
+
+export function resolvePublicGameState(match: BeachPublicMatch, game: Game): GameState {
+  const defaults = createDefaultGameState(game);
+  const raw = match.game_state;
+  if (raw && typeof raw === 'object' && (raw as GameState).gameId) {
+    return {
+      ...defaults,
+      ...raw,
+      gameId: game.id,
+      id: `${game.id}-state`,
+    };
+  }
+  const sets = Array.isArray(match.sets) ? match.sets : [];
+  sets.forEach((s, i) => {
+    if (defaults.scores.teamA[i] !== undefined) {
+      defaults.scores.teamA[i] = Number(s.a) || 0;
+      defaults.scores.teamB[i] = Number(s.b) || 0;
+    }
+  });
+  const idx = Math.max(0, Number(match.current_set) || 0);
+  if (defaults.scores.teamA[idx] !== undefined) {
+    defaults.scores.teamA[idx] = Number(match.score_a) || 0;
+    defaults.scores.teamB[idx] = Number(match.score_b) || 0;
+  }
+  defaults.setsWon = {
+    teamA: Number(match.sets_won_a) || 0,
+    teamB: Number(match.sets_won_b) || 0,
+  };
+  defaults.currentSet = idx + 1;
+  defaults.isGameEnded = match.status === 'completed';
+  return defaults;
+}
+
+export function beachWhatsappTextFromGame(game: Game, state: GameState, refereeName?: string) {
+  const sets = (state.scores.teamA || []).map((a, i) => {
+    const b = state.scores.teamB[i] ?? 0;
+    return `${a}-${b}`;
+  }).filter((_, i) => i < state.currentSet || state.isGameEnded).join('  ·  ');
+  const winnerName = state.setsWon.teamA >= state.setsWon.teamB ? game.teamA.name : game.teamB.name;
+  return [
+    '🏐 Jogo avulso — VB Jukin',
+    `${game.teamA.name} ${state.setsWon.teamA} x ${state.setsWon.teamB} ${game.teamB.name}`,
+    sets ? `Sets: ${sets}` : '',
+    state.isGameEnded ? `Vencedor: ${winnerName}` : '',
+    refereeName ? `Árbitro: ${refereeName}` : (game.notes || ''),
+    `${game.modality === 'quarteto' ? 'Quarteto' : 'Dupla'} · ${game.category === 'M' ? 'Masculino' : game.category === 'F' ? 'Feminino' : game.category}`,
+  ].filter(Boolean).join('\n');
+}
 
 export const finishBeachPublicMatch = (id: string) =>
   request<{ match: BeachPublicMatch }>(`/beach/public-matches/${encodeURIComponent(id)}/finish`, {

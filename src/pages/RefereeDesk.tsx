@@ -27,6 +27,13 @@ import { mockGames } from "@/data/mockData";
 import { supabase } from "@/integrations/supabase/client";
 import { onMatchCompleted } from "@/lib/tournament/phaseAdvancement";
 import { getCasualMatch, casualMatchToGame, updateCasualMatch } from "@/lib/casualMatches";
+import {
+  beachPublicMatchToGame,
+  beachWhatsappTextFromGame,
+  getBeachPublicMatch,
+  resolvePublicGameState,
+  saveBeachPublicMatchState,
+} from "@/lib/beachPublicApi";
 import { TablesInsert, TablesUpdate, Database } from "@/integrations/supabase/types";
 import {
   CoinChoice,
@@ -106,6 +113,7 @@ export default function RefereeDesk() {
   // Suporta tanto /referee/:gameId quanto /casual-matches/:id/referee
   const gameId = params.gameId || params.id;
   const isCasualMatch = location.pathname.includes('/casual-matches/');
+  const isPublicCasual = location.pathname.includes('/avulso/');
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -486,7 +494,7 @@ export default function RefereeDesk() {
   }, [game, showOfflineSyncNotice]);
 
   const ensureRefereeAssigned = useCallback(async () => {
-    if (!game?.id || !user?.id || isCasualMatch) {
+    if (!game?.id || !user?.id || isCasualMatch || isPublicCasual) {
       return;
     }
 
@@ -509,7 +517,7 @@ export default function RefereeDesk() {
         console.error('Failed to assign referee to match', error);
       }
     }
-  }, [game?.id, isCasualMatch, showOfflineSyncNotice, user?.id]);
+  }, [game?.id, isCasualMatch, isPublicCasual, showOfflineSyncNotice, user?.id]);
 
   const getCompletedMatchUpdatePayload = useCallback((): TablesUpdate<'matches'> => {
     const payload: TablesUpdate<'matches'> = { status: 'completed' };
@@ -594,9 +602,16 @@ export default function RefereeDesk() {
 
       setIsSyncing(true);
       try {
+        if (isPublicCasual) {
+          await saveBeachPublicMatchState(newState.gameId, newState);
+          setUsingMatchStateFallback(false);
+          fallbackWarningDisplayed.current = false;
+          offlineNoticeDisplayed.current = false;
+          return;
+        }
         await ensureRefereeAssigned();
-        const isCasualMatch = !game?.tournamentId || game.tournamentId === '';
-        const { usedFallback } = await saveMatchState(newState, isCasualMatch);
+        const isCasualMatchPersist = !game?.tournamentId || game.tournamentId === '';
+        const { usedFallback } = await saveMatchState(newState, isCasualMatchPersist);
         if (usedFallback) {
           notifyFallbackActivated();
         } else {
@@ -632,6 +647,8 @@ export default function RefereeDesk() {
       snapshotState,
       toast,
       ensureRefereeAssigned,
+      game?.tournamentId,
+      isPublicCasual,
     ]
   );
 
@@ -644,7 +661,7 @@ export default function RefereeDesk() {
       metadata?: Record<string, unknown>;
       setNumber?: number;
     }) => {
-      if (!gameId) return;
+      if (!gameId || isPublicCasual) return;
       const { eventType, team, pointCategory, description, metadata, setNumber } = params;
       const payload: TablesInsert<'match_events'> = {
         match_id: isCasualMatch ? null : gameId,
@@ -671,7 +688,7 @@ export default function RefereeDesk() {
         }
       }
     },
-    [gameId, gameState?.currentSet, showOfflineSyncNotice, isCasualMatch]
+    [gameId, gameState?.currentSet, showOfflineSyncNotice, isCasualMatch, isPublicCasual]
   );
 
   const finalizeTimeout = useCallback(
@@ -687,6 +704,7 @@ export default function RefereeDesk() {
       }
 
       const endedAt = new Date().toISOString();
+      if (!isPublicCasual) {
       try {
         const { error } = await supabase
           .from('match_timeouts')
@@ -702,6 +720,7 @@ export default function RefereeDesk() {
         } else {
           console.error('Failed to close timeout record', error);
         }
+      }
       }
 
       const updatedState: GameState = {
@@ -723,7 +742,7 @@ export default function RefereeDesk() {
         // Errors already surfaced in persistState
       }
     },
-    [gameState, logMatchEvent, persistState, showOfflineSyncNotice, snapshotState]
+    [gameState, logMatchEvent, persistState, showOfflineSyncNotice, snapshotState, isPublicCasual]
   );
 
   // Function to refresh team names from database
@@ -734,7 +753,7 @@ export default function RefereeDesk() {
     
     try {
       // Para casual matches, não precisa buscar nomes (já estão no game)
-      if (isCasualMatch) {
+      if (isCasualMatch || isPublicCasual) {
         return;
       }
       
@@ -781,7 +800,7 @@ export default function RefereeDesk() {
     } catch (error) {
       console.error('Failed to refresh team names', error);
     }
-  }, [gameId, game, isCasualMatch]);
+  }, [gameId, game, isCasualMatch, isPublicCasual]);
 
   useEffect(() => {
     const foundGame = mockGames.find(g => g.id === gameId);
@@ -820,6 +839,31 @@ export default function RefereeDesk() {
       };
 
       try {
+        if (isPublicCasual) {
+          try {
+            const { match } = await getBeachPublicMatch(gameId);
+            const publicGame = beachPublicMatchToGame(match);
+            setGame(publicGame);
+            saveLocalGameConfig(publicGame);
+            const resolvedState = resolvePublicGameState(match, publicGame);
+            setGameState(resolvedState);
+            saveLocalMatchState(resolvedState);
+            setUsingMatchStateFallback(false);
+          } catch (error) {
+            if (applyLocalFallback()) {
+              showOfflineSyncNotice();
+            } else {
+              toast({
+                title: 'Jogo não encontrado',
+                description: error instanceof Error ? error.message : 'O jogo solicitado não foi encontrado.',
+                variant: 'destructive',
+              });
+            }
+          }
+          setIsLoading(false);
+          return;
+        }
+
         // Primeiro, tentar carregar como casual match
         let isCasualMatch = false;
         if (user && gameId) {
@@ -1020,13 +1064,15 @@ export default function RefereeDesk() {
     };
 
     void loadFromDB();
-  }, [gameId, notifyFallbackActivated, showOfflineSyncNotice, user?.id]);
+  }, [gameId, notifyFallbackActivated, showOfflineSyncNotice, user?.id, isPublicCasual, toast]);
 
   useEffect(() => {
     if (!gameId || !game) return;
 
     // Determinar se é casual match (jogos avulsos não têm tournamentId)
     const isCasualMatch = !game.tournamentId || game.tournamentId === '';
+
+    if (isPublicCasual) return;
 
     const unsubscribe = subscribeToMatchState(gameId, game, newState => {
       setGameState(snapshotState(newState));
@@ -1035,7 +1081,7 @@ export default function RefereeDesk() {
     return () => {
       unsubscribe?.();
     };
-  }, [gameId, game, snapshotState, usingMatchStateFallback]);
+  }, [gameId, game, snapshotState, usingMatchStateFallback, isPublicCasual]);
 
   useEffect(() => {
     if (game) {
@@ -1184,8 +1230,11 @@ export default function RefereeDesk() {
         await persistState(updatedState);
         if (needsEndUpdate && game.status !== 'finalizado') {
           // Marcar o jogo como finalizado no banco
-          if (isCasualMatch && user) {
+          if (isPublicCasual) {
+            setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
+          } else if (isCasualMatch && user) {
             await updateCasualMatch(game.id, user.id, { status: 'completed' });
+            setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
           } else {
             const { error: matchUpdateError } = await supabase
               .from('matches')
@@ -1194,8 +1243,8 @@ export default function RefereeDesk() {
             if (matchUpdateError) {
               throw matchUpdateError;
             }
+            setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
           }
-          setGame(prev => (prev ? { ...prev, status: 'finalizado' } : prev));
           toast({
             title: 'Jogo finalizado automaticamente',
             description: 'O sistema detectou que o jogo já havia terminado e foi marcado como finalizado.',
@@ -1209,7 +1258,7 @@ export default function RefereeDesk() {
         isFinalizingRef.current = false;
       }
     })();
-  }, [game, gameState, getCompletedMatchUpdatePayload, isCasualMatch, user, persistState, toast]);
+  }, [game, gameState, getCompletedMatchUpdatePayload, isCasualMatch, isPublicCasual, user, persistState, toast]);
 
   useEffect(() => {
     if (!setConfigDialogOpen || !game || !gameState) {
@@ -1595,7 +1644,9 @@ export default function RefereeDesk() {
       if (shouldUpdateMatchRecord && game.status !== 'finalizado') {
         isFinalizingRef.current = true;
         try {
-          if (isCasualMatch && user) {
+          if (isPublicCasual) {
+            // status completed já vai no game_state da VPS
+          } else if (isCasualMatch && user) {
             await updateCasualMatch(game.id, user.id, { status: 'completed' });
           } else {
           const { error: matchUpdateError } = await supabase
@@ -1606,12 +1657,14 @@ export default function RefereeDesk() {
             throw matchUpdateError;
             }
           }
-          if (!isCasualMatch && game.tournamentId) {
+          if (!isPublicCasual && !isCasualMatch && game.tournamentId) {
             void onMatchCompleted(game.tournamentId);
           }
         } catch (error) {
           if (isLikelyOfflineError(error)) {
-            if (isCasualMatch) {
+            if (isPublicCasual) {
+              showOfflineSyncNotice();
+            } else if (isCasualMatch) {
               enqueueOfflineOperation('updateCasualMatch', { matchId: game.id, values: { status: 'completed' } });
             } else {
             enqueueOfflineOperation('updateMatch', {
@@ -2097,6 +2150,13 @@ export default function RefereeDesk() {
     const startedAt = new Date().toISOString();
 
     let timeoutRecord: { id: string; started_at: string } | null = null;
+    if (isPublicCasual) {
+      const fallbackId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `timeout-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      timeoutRecord = { id: fallbackId, started_at: startedAt };
+    } else {
     try {
       const timeoutPayload: TablesInsert<'match_timeouts'> = {
         match_id: isCasualMatch ? null : game.id,
@@ -2145,6 +2205,9 @@ export default function RefereeDesk() {
         return;
       }
     }
+    }
+
+    if (!timeoutRecord) return;
 
     lastCompletedTimeoutId.current = null;
 
@@ -2191,10 +2254,12 @@ export default function RefereeDesk() {
       });
     } catch (error) {
       setGameHistory(prev => prev.slice(0, -1));
+      if (!isPublicCasual) {
       await supabase
         .from('match_timeouts')
         .update({ ended_at: new Date().toISOString() })
         .eq('id', timeoutRecord.id);
+      }
     }
   };
 
@@ -2629,7 +2694,7 @@ export default function RefereeDesk() {
               <Button
                 variant="outline"
                 className="w-fit bg-amber-400 text-slate-900 font-semibold border-transparent hover:bg-amber-300 md:border-white/30 md:bg-transparent md:text-white md:hover:bg-white/20"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate(isPublicCasual ? '/avulsos' : -1)}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Voltar
@@ -2659,13 +2724,24 @@ export default function RefereeDesk() {
             <div className="hidden md:block md:text-right">
               <h1 className="text-3xl font-bold">{game.title}</h1>
               <p className="text-white/70">{game.category} • {game.modality} • {game.format}</p>
+              {game.notes && <p className="text-white/60 text-sm">{game.notes}</p>}
             </div>
           </div>
           {gameIsEnded && (
             <Alert className="border-emerald-300/50 bg-emerald-500/10 text-emerald-100">
               <AlertTitle>Partida finalizada</AlertTitle>
-              <AlertDescription>
+              <AlertDescription className="space-y-3">
                 Os controles foram bloqueados e a partida está encerrada. Revise os resultados acima.
+                {isPublicCasual && (
+                  <a
+                    className="inline-flex"
+                    href={`https://wa.me/?text=${encodeURIComponent(beachWhatsappTextFromGame(game, gameState, game.notes?.replace('Árbitro: ', '')))}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Button className="bg-emerald-500 hover:bg-emerald-600 text-white">Compartilhar no WhatsApp</Button>
+                  </a>
+                )}
               </AlertDescription>
             </Alert>
           )}
