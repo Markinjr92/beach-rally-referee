@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 import { MATCH_FORMAT_PRESETS, type MatchFormatPresetKey } from '@/utils/matchConfig';
@@ -191,36 +190,39 @@ export default function PublicCasualCreate() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-white">Modalidade</Label>
-                  <Select value={form.modality} onValueChange={(v) => setForm({ ...form, modality: v as 'dupla' | 'quarteto' })}>
-                    <SelectTrigger className="bg-white/10 border-white/30 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-slate-950/95 border-white/20 text-white">
-                      <SelectItem value="dupla">Dupla</SelectItem>
-                      <SelectItem value="quarteto">Quarteto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <select
+                    value={form.modality}
+                    onChange={(e) => setForm({ ...form, modality: e.target.value as 'dupla' | 'quarteto' })}
+                    className="flex h-10 w-full rounded-md border border-white/30 bg-white/10 px-3 text-sm text-white"
+                  >
+                    <option value="dupla" className="text-slate-900">Dupla</option>
+                    <option value="quarteto" className="text-slate-900">Quarteto</option>
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-white">Categoria</Label>
-                  <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v as 'M' | 'F' | 'Misto' })}>
-                    <SelectTrigger className="bg-white/10 border-white/30 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-slate-950/95 border-white/20 text-white">
-                      <SelectItem value="M">Masculino</SelectItem>
-                      <SelectItem value="F">Feminino</SelectItem>
-                      <SelectItem value="Misto">Misto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <select
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value as 'M' | 'F' | 'Misto' })}
+                    className="flex h-10 w-full rounded-md border border-white/30 bg-white/10 px-3 text-sm text-white"
+                  >
+                    <option value="M" className="text-slate-900">Masculino</option>
+                    <option value="F" className="text-slate-900">Feminino</option>
+                    <option value="Misto" className="text-slate-900">Misto</option>
+                  </select>
                 </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-white">Formato</Label>
-                <Select value={form.format_preset} onValueChange={(v) => setForm({ ...form, format_preset: v as MatchFormatPresetKey })}>
-                  <SelectTrigger className="bg-white/10 border-white/30 text-white"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-slate-950/95 border-white/20 text-white">
-                    {Object.entries(MATCH_FORMAT_PRESETS).map(([key, preset]) => (
-                      <SelectItem key={key} value={key}>{preset.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={form.format_preset}
+                  onChange={(e) => setForm({ ...form, format_preset: e.target.value as MatchFormatPresetKey })}
+                  className="flex h-10 w-full rounded-md border border-white/30 bg-white/10 px-3 text-sm text-white"
+                >
+                  {Object.entries(MATCH_FORMAT_PRESETS).map(([key, preset]) => (
+                    <option key={key} value={key} className="text-slate-900">{preset.label}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-white/20 bg-white/5 p-3">
                 <Switch id="dw" checked={form.direct_win_format} onCheckedChange={(c) => setForm({ ...form, direct_win_format: c })} />
