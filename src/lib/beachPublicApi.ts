@@ -134,6 +134,12 @@ export function currentSetLine(m: BeachPublicMatch) {
   return `Set ${setNo}: ${m.score_a}–${m.score_b}`;
 }
 
+export const deleteBeachPublicMatch = (id: string, password: string) =>
+  request<{ ok?: boolean }>(`/beach/public-matches/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  });
+
 export const saveBeachPublicMatchState = (id: string, state: GameState) =>
   request<{ match: BeachPublicMatch }>(`/beach/public-matches/${encodeURIComponent(id)}/state`, {
     method: 'PUT',

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   listBeachPublicMatches,
+  deleteBeachPublicMatch,
   beachWhatsappText,
   formatMatchClock,
   liveElapsedSec,
@@ -18,8 +19,12 @@ function setsMini(m: BeachPublicMatch) {
   return m.sets.map((s) => `${s.a}-${s.b}`).join(' · ');
 }
 
-function MatchCard({ m, compact }: { m: BeachPublicMatch; compact?: boolean }) {
+function MatchCard({ m, compact, onDeleted }: { m: BeachPublicMatch; compact?: boolean; onDeleted?: (id: string) => void }) {
   const [tick, setTick] = useState(0);
+  const [askPass, setAskPass] = useState(false);
+  const [password, setPassword] = useState('');
+  const [delErr, setDelErr] = useState('');
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!m.clock_running && m.status !== 'in_progress') return;
     const id = window.setInterval(() => setTick((n) => n + 1), 1000);
@@ -32,9 +37,23 @@ function MatchCard({ m, compact }: { m: BeachPublicMatch; compact?: boolean }) {
     ? `https://wa.me/?text=${encodeURIComponent(beachWhatsappText(m))}`
     : null;
 
+  const remove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setDelErr('');
+    try {
+      await deleteBeachPublicMatch(m.id, password);
+      onDeleted?.(m.id);
+    } catch (err) {
+      setDelErr(err instanceof Error ? err.message : 'Não excluiu');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className={cn(
-      'rounded-xl border p-4',
+      'relative rounded-xl border p-4',
       live && m.status === 'in_progress'
         ? 'border-emerald-400/50 bg-emerald-500/10'
         : live
@@ -42,8 +61,19 @@ function MatchCard({ m, compact }: { m: BeachPublicMatch; compact?: boolean }) {
           : 'border-white/20 bg-white/10',
     )}
     >
+      <button
+        type="button"
+        title="Excluir"
+        className="absolute top-1.5 right-1.5 z-10 text-white/30 hover:text-white/80 text-[10px] leading-none w-4 h-4"
+        onClick={() => {
+          setAskPass((v) => !v);
+          setDelErr('');
+        }}
+      >
+        ×
+      </button>
       <Link to={`/avulso/${m.id}`} className="block">
-        <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center justify-between gap-2 mb-2 pr-4">
           <span className={cn(
             'text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full',
             m.status === 'in_progress' ? 'bg-emerald-400 text-slate-900' : 'bg-white/20 text-white',
@@ -83,6 +113,27 @@ function MatchCard({ m, compact }: { m: BeachPublicMatch; compact?: boolean }) {
           WhatsApp
         </a>
       )}
+      {askPass && (
+        <form onSubmit={remove} className="mt-2 flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="Senha"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-24 h-6 rounded bg-black/30 border border-white/20 px-1.5 text-[11px] text-white placeholder:text-white/40"
+          />
+          <button
+            type="submit"
+            disabled={busy || !password}
+            className="h-6 px-1.5 text-[11px] rounded bg-white/15 hover:bg-white/25 disabled:opacity-40"
+          >
+            {busy ? '…' : 'Ok'}
+          </button>
+        </form>
+      )}
+      {delErr && <p className="text-right text-[11px] text-red-300 mt-1">{delErr}</p>}
     </div>
   );
 }
@@ -128,7 +179,9 @@ export function PublicAvulsoLiveBoard({
     <div className="space-y-3">
       {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
       {err && <p className="text-red-300 text-sm">{err}</p>}
-      {rows.map((m) => <MatchCard key={m.id} m={m} compact={compact} />)}
+      {rows.map((m) => (
+        <MatchCard key={m.id} m={m} compact={compact} onDeleted={(id) => setRows((prev) => prev.filter((r) => r.id !== id))} />
+      ))}
       {!rows.length && !err && (
         <p className="text-white/60 text-sm">
           {filter === 'live' ? 'Nenhum jogo ao vivo no momento.' : 'Nenhum jogo neste filtro.'}
